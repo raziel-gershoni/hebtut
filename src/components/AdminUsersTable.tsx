@@ -28,7 +28,10 @@ export function AdminUsersTable({ jwt }: { jwt: string }) {
   const [filter, setFilter] = useState("");
 
   const load = useCallback(async () => {
-    const r = await fetch("/api/admin/users", { headers: { Authorization: `Bearer ${jwt}` } });
+    const r = await fetch("/api/admin/users", {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${jwt}` },
+    });
     const d = (await r.json()) as { users: AdminUser[] };
     setUsers(d.users);
     setLoaded(true);
@@ -36,6 +39,20 @@ export function AdminUsersTable({ jwt }: { jwt: string }) {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  // Re-fetch when the Mini App returns to foreground (covers TG webview cache,
+  // OS-level backgrounding, network drops, etc.).
+  useEffect(() => {
+    function onVisibility() {
+      if (document.visibilityState === "visible") void load();
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onVisibility);
+    };
   }, [load]);
 
   async function changeRole(id: number, role: AdminUser["role"]) {
@@ -67,9 +84,16 @@ export function AdminUsersTable({ jwt }: { jwt: string }) {
 
   return (
     <section>
-      <header className="flex items-baseline justify-between mb-3">
+      <header className="flex items-baseline justify-between gap-3 mb-3">
         <h2 className="text-lg font-semibold tracking-tight">Пользователи</h2>
-        <span className="text-xs text-tg-text-hint tabular-nums">{users.length}</span>
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="text-xs text-tg-text-link tracking-wider uppercase tabular-nums transition-opacity active:opacity-60"
+          aria-label="Обновить список"
+        >
+          ↻ {users.length}
+        </button>
       </header>
 
       <input

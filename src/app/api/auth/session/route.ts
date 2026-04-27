@@ -4,9 +4,11 @@ import { serverEnv } from "@/lib/env";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { ensureBootstrapAdmin } from "@/server/bootstrap";
 import { readJsonBody } from "@/lib/http";
+import { noStoreHeaders } from "@/lib/no-cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function POST(req: NextRequest) {
   const body = await readJsonBody<{ initData?: string }>(req);
@@ -64,8 +66,11 @@ export async function POST(req: NextRequest) {
   }
 
   const jwt = await mintSupabaseJwt(parsed.user.id, userRow.role);
-  return Response.json({
-    jwt,
-    user: { id: userRow.id, role: userRow.role, name: userRow.name },
-  });
+  return Response.json(
+    {
+      jwt,
+      user: { id: userRow.id, role: userRow.role, name: userRow.name },
+    },
+    { headers: noStoreHeaders },
+  );
 }

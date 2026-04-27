@@ -1,9 +1,11 @@
 import type { NextRequest } from "next/server";
 import { authFromRequest, requireRole } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
+import { noStoreHeaders } from "@/lib/no-cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
   const user = await authFromRequest(req);
@@ -14,5 +16,5 @@ export async function GET(req: NextRequest) {
     .select("id, tg_user_id, name, role, status, created_at, role_changed_at")
     .order("created_at", { ascending: false });
   if (error) return new Response(error.message, { status: 500 });
-  return Response.json({ users: data });
+  return Response.json({ users: data }, { headers: noStoreHeaders });
 }

@@ -39,6 +39,7 @@ export function useInitDataAuth(): AuthStatus {
     }
     fetch("/api/auth/session", {
       method: "POST",
+      cache: "no-store",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ initData }),
     })

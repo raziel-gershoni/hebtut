@@ -11,7 +11,10 @@ export function AdminLinksPanel({ jwt }: { jwt: string }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void fetch("/api/admin/users", { headers: { Authorization: `Bearer ${jwt}` } })
+    void fetch("/api/admin/users", {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${jwt}` },
+    })
       .then((r) => r.json() as Promise<{ users: LinkUser[] }>)
       .then((d) => setUsers(d.users));
   }, [jwt]);

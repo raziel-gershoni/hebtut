@@ -16,7 +16,10 @@ export function ThreadView({ jwt, studentId }: { jwt: string; studentId: number 
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    void fetch(`/api/threads/${studentId}`, { headers: { Authorization: `Bearer ${jwt}` } })
+    void fetch(`/api/threads/${studentId}`, {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${jwt}` },
+    })
       .then((r) => r.json() as Promise<{ messages: ThreadMsg[] }>)
       .then((d) => {
         setMessages(d.messages);

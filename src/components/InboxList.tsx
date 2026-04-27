@@ -19,7 +19,10 @@ export function InboxList({ jwt }: { jwt: string }) {
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
-    const r = await fetch("/api/inbox", { headers: { Authorization: `Bearer ${jwt}` } });
+    const r = await fetch("/api/inbox", {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${jwt}` },
+    });
     if (!r.ok) {
       setLoaded(true);
       return;

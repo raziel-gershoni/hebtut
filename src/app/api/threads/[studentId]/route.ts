@@ -1,9 +1,11 @@
 import type { NextRequest } from "next/server";
 import { authFromRequest, requireRole } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
+import { noStoreHeaders } from "@/lib/no-cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(req: NextRequest, { params }: { params: { studentId: string } }) {
   const user = await authFromRequest(req);
@@ -31,5 +33,5 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
     .in("status", ["pending", "claimed", "answered", "expired"])
     .order("created_at", { ascending: true });
   if (error) return new Response(error.message, { status: 500 });
-  return Response.json({ messages: data });
+  return Response.json({ messages: data }, { headers: noStoreHeaders });
 }
