@@ -1,0 +1,137 @@
+import type { Context } from "grammy";
+import { getServiceRoleClient } from "@/lib/supabase-server";
+import { getBot } from "@/lib/tg";
+import { ru } from "@/lib/i18n";
+import { editAllNotificationsForMessage } from "@/server/notifications";
+
+export interface ReplyContext {
+  replyToMessageId: number;
+  teacherId: number;
+}
+export interface PromptCandidate {
+  tg_prompt_message_id: number;
+  teacher_id: number;
+}
+
+export function matchesPrompt(reply: ReplyContext, prompt: PromptCandidate): boolean {
+  return (
+    prompt.tg_prompt_message_id === reply.replyToMessageId &&
+    prompt.teacher_id === reply.teacherId
+  );
+}
+
+export async function handleTeacherReply(ctx: Context): Promise<boolean> {
+  const msg = ctx.message;
+  if (!msg || !ctx.from) return false;
+  const voice = msg.voice;
+  const note = msg.video_note;
+  if (!voice && !note) return false;
+
+  const replyTo = msg.reply_to_message;
+
+  const sb = getServiceRoleClient();
+  const { data: teacher } = await sb
+    .from("users")
+    .select("id, role, name")
+    .eq("tg_user_id", ctx.from.id)
+    .maybeSingle();
+  if (!teacher || (teacher.role !== "teacher" && teacher.role !== "admin")) {
+    return false; // not a teacher → not our route, fall through to student-message
+  }
+
+  if (!replyTo) {
+    await ctx.reply(ru.teacherReplyMissingContext);
+    return true;
+  }
+
+  const { data: prompt } = await sb
+    .from("prompts")
+    .select("id, student_message_id, teacher_id, tg_prompt_message_id")
+    .eq("teacher_id", teacher.id)
+    .eq("tg_prompt_message_id", replyTo.message_id)
+    .maybeSingle();
+  if (!prompt) {
+    await ctx.reply(ru.teacherReplyMissingContext);
+    return true;
+  }
+
+  if (
+    !matchesPrompt(
+      { replyToMessageId: replyTo.message_id, teacherId: teacher.id },
+      { tg_prompt_message_id: prompt.tg_prompt_message_id, teacher_id: prompt.teacher_id },
+    )
+  ) {
+    await ctx.reply(ru.teacherReplyMissingContext);
+    return true;
+  }
+
+  const { data: original } = await sb
+    .from("messages")
+    .select("id, student_id, claimed_by_teacher_id, status")
+    .eq("id", prompt.student_message_id)
+    .single();
+  if (!original || original.claimed_by_teacher_id !== teacher.id) {
+    await ctx.reply(ru.teacherReplyFailed);
+    return true;
+  }
+
+  const { data: student } = await sb
+    .from("users")
+    .select("tg_chat_id")
+    .eq("id", original.student_id)
+    .single();
+  if (!student) {
+    await ctx.reply(ru.teacherReplyFailed);
+    return true;
+  }
+
+  const bot = getBot();
+  const kind: "voice" | "video_note" = voice ? "voice" : "video_note";
+  const fileId = (voice?.file_id ?? note?.file_id) as string;
+  const duration = (voice?.duration ?? note?.duration ?? 0) as number;
+
+  let newFileId = fileId;
+  let newFileUniqueId: string | null = null;
+  let sentMessageId: number;
+  try {
+    if (kind === "voice") {
+      const sent = await bot.api.sendVoice(student.tg_chat_id, fileId);
+      newFileId = sent.voice?.file_id ?? fileId;
+      newFileUniqueId = sent.voice?.file_unique_id ?? null;
+      sentMessageId = sent.message_id;
+    } else {
+      const sent = await bot.api.sendVideoNote(student.tg_chat_id, fileId);
+      newFileId = sent.video_note?.file_id ?? fileId;
+      newFileUniqueId = sent.video_note?.file_unique_id ?? null;
+      sentMessageId = sent.message_id;
+    }
+  } catch (e) {
+    console.error("relay to student failed", e);
+    await ctx.reply(ru.teacherReplyFailed);
+    return true;
+  }
+
+  await sb.from("messages").insert({
+    student_id: original.student_id,
+    direction: "out",
+    teacher_id: teacher.id,
+    kind,
+    file_id: newFileId,
+    file_unique_id: newFileUniqueId,
+    duration,
+    status: "answered",
+    reply_to_id: original.id,
+    tg_message_id_in_student_chat: sentMessageId,
+  });
+
+  await sb
+    .from("messages")
+    .update({ status: "answered", answered_at: new Date().toISOString() })
+    .eq("id", original.id);
+
+  const teacherName = teacher.name ?? "Преподаватель";
+  await editAllNotificationsForMessage(original.id, ru.teacherNotificationTaken(teacherName));
+
+  await ctx.reply(ru.teacherReplyDelivered);
+  return true;
+}
