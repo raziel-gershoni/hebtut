@@ -1,5 +1,5 @@
-import { jwtVerify } from "jose";
-import { serverEnv } from "./env";
+import { jwtVerify, createRemoteJWKSet, type JWTPayload } from "jose";
+import { publicEnv } from "./env";
 import { getServiceRoleClient } from "./supabase-server";
 import type { UserRole } from "@/types/database";
 
@@ -10,6 +10,16 @@ export interface AuthedUser {
   name: string | null;
 }
 
+let cachedJwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+function getJwks(): ReturnType<typeof createRemoteJWKSet> {
+  if (cachedJwks) return cachedJwks;
+  // Supabase publishes the active and accepted-for-rotation public keys here.
+  // Project Settings → JWT Keys controls which keys are published.
+  const jwksUrl = new URL(`${publicEnv.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/.well-known/jwks.json`);
+  cachedJwks = createRemoteJWKSet(jwksUrl);
+  return cachedJwks;
+}
+
 export async function authFromRequest(req: Request): Promise<AuthedUser | null> {
   const auth = req.headers.get("authorization") ?? "";
   const m = /^Bearer (.+)$/.exec(auth);
@@ -17,14 +27,14 @@ export async function authFromRequest(req: Request): Promise<AuthedUser | null> 
   const token = m?.[1] ?? url.searchParams.get("token");
   if (!token) return null;
 
-  const secret = new TextEncoder().encode(serverEnv.SUPABASE_JWT_SECRET);
-  let sub: string | undefined;
+  let payload: JWTPayload;
   try {
-    const v = await jwtVerify(token, secret);
-    sub = (v.payload as { sub?: string }).sub;
+    const v = await jwtVerify(token, getJwks());
+    payload = v.payload;
   } catch {
     return null;
   }
+  const sub = payload.sub;
   if (!sub) return null;
   const tgUserId = Number(sub);
   if (!Number.isFinite(tgUserId)) return null;

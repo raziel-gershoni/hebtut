@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { SignJWT } from "jose";
+import { SignJWT, importJWK, type JWK } from "jose";
 import { serverEnv } from "./env";
 
 export type InitDataMap = Map<string, string>;
@@ -71,12 +71,38 @@ export function parseInitData(data: InitDataMap): ParsedInitData {
   };
 }
 
-export async function mintSupabaseJwt(tgUserId: number, appRole: string): Promise<string> {
-  const secret = new TextEncoder().encode(serverEnv.SUPABASE_JWT_SECRET);
+export interface SigningKey {
+  jwk: JWK & { kid: string; alg: string };
+}
+
+export async function mintJwtWithKey(
+  key: SigningKey,
+  tgUserId: number,
+  appRole: string,
+): Promise<string> {
+  const privateKey = await importJWK(key.jwk, key.jwk.alg);
   return await new SignJWT({ role: "authenticated", app_role: appRole })
-    .setProtectedHeader({ alg: "HS256" })
+    .setProtectedHeader({ alg: key.jwk.alg, kid: key.jwk.kid, typ: "JWT" })
     .setSubject(String(tgUserId))
     .setIssuedAt()
     .setExpirationTime("1h")
-    .sign(secret);
+    .sign(privateKey);
+}
+
+let cachedKey: SigningKey | null = null;
+function getEnvSigningKey(): SigningKey {
+  if (cachedKey) return cachedKey;
+  const jwk = JSON.parse(serverEnv.SUPABASE_JWT_PRIVATE_KEY) as JWK & {
+    kid?: string;
+    alg?: string;
+  };
+  if (!jwk.kid || !jwk.alg) {
+    throw new Error("SUPABASE_JWT_PRIVATE_KEY missing kid or alg");
+  }
+  cachedKey = { jwk: jwk as JWK & { kid: string; alg: string } };
+  return cachedKey;
+}
+
+export async function mintSupabaseJwt(tgUserId: number, appRole: string): Promise<string> {
+  return mintJwtWithKey(getEnvSigningKey(), tgUserId, appRole);
 }

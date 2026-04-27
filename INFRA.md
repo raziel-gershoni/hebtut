@@ -11,13 +11,39 @@ End-to-end, ~30 min. PoC only — prod = dev = test.
 
 ## 2. Supabase project
 
+> **Heads up — Supabase dashboard changed in late 2025.** The API page split into separate **API Keys** and **JWT Keys** sections, and projects created after November 2025 use the new `sb_publishable_...` / `sb_secret_...` key formats instead of legacy `anon` / `service_role`. The new keys are drop-in replacements for our app — only the value strings changed, not how `@supabase/supabase-js` consumes them.
+
 1. Create a new project at [supabase.com](https://supabase.com) (e.g. `hebtutbot-dev`). Wait ~2 min for it to provision.
-2. From **Project Settings → API** copy:
-   - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
-   - `anon` `public` key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `service_role` `secret` key → `SUPABASE_SERVICE_ROLE_KEY`
-3. From **Project Settings → API → JWT Settings** copy the **JWT Secret** → `SUPABASE_JWT_SECRET`.
-4. From the project page tap **Connect** → **ORMs** (or **Database → Connection string**) → copy the **Direct connection** URI (host `db.<ref>.supabase.co:5432`, NOT the pooler at 6543). Replace `[YOUR-PASSWORD]` with the database password you set on creation. Save as `SUPABASE_DB_URL`.
+
+2. **Project URL & API keys.** Open **Project Settings → API Keys** (or click the **Connect** button at the top of the project page). Copy:
+   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+   - **Publishable key** (`sb_publishable_...`, or `anon` on legacy projects) → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - **Secret key** (`sb_secret_...`, or `service_role` on legacy projects) → `SUPABASE_SERVICE_ROLE_KEY`
+
+3. **JWT signing key (modern asymmetric flow).** The app mints custom JWTs (after validating Telegram `initData`) and the Supabase REST/Realtime API verifies them via the published JWKS endpoint. We use **ES256** asymmetric keys — the modern flow Supabase recommends, and the only flow available on new projects without re-enabling legacy HS256.
+
+   1. **Generate a key pair locally** (the private half stays on your laptop / in Vercel env, never in Supabase):
+      ```bash
+      pnpm exec supabase gen signing-key --algorithm ES256
+      ```
+      This prints a single-line JWK JSON object to stdout. Example shape:
+      ```json
+      {"kty":"EC","kid":"86b038f9-…","use":"sig","key_ops":["sign","verify"],"alg":"ES256","ext":true,"d":"…","crv":"P-256","x":"…","y":"…"}
+      ```
+      Copy **the entire one-line JSON** as the value of `SUPABASE_JWT_PRIVATE_KEY`. Do not split, do not pretty-print, do not strip fields. The `d` field is the private exponent — treat it as a secret.
+
+   2. **Import the public half into Supabase** (so its API will verify our tokens):
+      - Open **Project Settings → JWT Keys** (`/dashboard/project/<ref>/settings/jwt`).
+      - Click **Add new standby key** → paste the same JWK JSON you just generated → save. Supabase strips the private fields and stores only the public half.
+      - Click **Rotate keys** to promote the standby key to active. Supabase keeps the previous key in "previously used" state for ~5 min so in-flight tokens don't fail.
+
+   3. **Verify the JWKS endpoint** is publishing the new key:
+      ```bash
+      curl https://<your-project-ref>.supabase.co/auth/v1/.well-known/jwks.json
+      ```
+      You should see your `kid` in the `keys` array.
+
+4. **Direct DB connection.** Click **Connect** at the top of the project page → **ORMs** tab → copy the **Direct connection** URI (host `db.<ref>.supabase.co:5432`, NOT the Transaction Pooler at 6543, NOT the Session Pooler at 5432 with `pooler.supabase.com` host). Replace `[YOUR-PASSWORD]` with the database password you set on creation. Save as `SUPABASE_DB_URL`.
 
    Migrations are applied automatically on every Vercel deploy via `pnpm vercel-build`, which runs `supabase db push --db-url "$SUPABASE_DB_URL" --include-all && next build`. No manual `supabase link` / `supabase db push` is required.
 
@@ -38,9 +64,9 @@ TELEGRAM_WEBHOOK_SECRET=<openssl rand -hex 32>
 TELEGRAM_BOT_USERNAME=<your bot username, no @>
 
 NEXT_PUBLIC_SUPABASE_URL=<from step 2>
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<from step 2>
-SUPABASE_SERVICE_ROLE_KEY=<from step 2>
-SUPABASE_JWT_SECRET=<from step 2>
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<from step 2 — sb_publishable_... or legacy anon>
+SUPABASE_SERVICE_ROLE_KEY=<from step 2 — sb_secret_... or legacy service_role>
+SUPABASE_JWT_PRIVATE_KEY=<one-line JWK JSON from `supabase gen signing-key`>
 SUPABASE_DB_URL=<from step 2 — direct, port 5432>
 
 APP_BASE_URL=http://localhost:3000

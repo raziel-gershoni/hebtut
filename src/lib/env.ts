@@ -5,7 +5,20 @@ const ServerSchema = z.object({
   TELEGRAM_WEBHOOK_SECRET: z.string().min(8),
   TELEGRAM_BOT_USERNAME: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
-  SUPABASE_JWT_SECRET: z.string().min(20),
+  // Single-line JWK JSON of the ES256 (or RS256) private signing key whose public
+  // half has been imported into Supabase Dashboard → JWT Keys.
+  // Generate with: `pnpm exec supabase gen signing-key --algorithm ES256`
+  SUPABASE_JWT_PRIVATE_KEY: z.string().refine(
+    (s) => {
+      try {
+        const k = JSON.parse(s) as { kty?: string; kid?: string; alg?: string };
+        return !!(k.kty && k.kid && k.alg);
+      } catch {
+        return false;
+      }
+    },
+    { message: "must be a JWK JSON string with kty, kid, alg fields" },
+  ),
   APP_BASE_URL: z.string().url(),
   BOOTSTRAP_ADMIN_TG_USER_ID: z.coerce.number().int().positive(),
   DAILY_QUOTA_SECONDS: z.coerce.number().int().positive().default(300),
