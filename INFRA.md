@@ -48,7 +48,13 @@ End-to-end, ~30 min. PoC only — prod = dev = test.
       ```
       You should see your `kid` in the `keys` array.
 
-4. **Direct DB connection.** Click **Connect** at the top of the project page → **ORMs** tab → copy the **Direct connection** URI (host `db.<ref>.supabase.co:5432`, NOT the Transaction Pooler at 6543, NOT the Session Pooler at 5432 with `pooler.supabase.com` host). Replace `[YOUR-PASSWORD]` with the database password you set on creation. Save as `SUPABASE_DB_URL`.
+4. **DB connection (Session Pooler — IPv4).** Click **Connect** at the top of the project page → copy the **Session pooler** URI.
+
+   Format: `postgresql://postgres.<project-ref>:[YOUR-PASSWORD]@aws-0-<region>.pooler.supabase.com:5432/postgres`. Replace `[YOUR-PASSWORD]` with the database password you set on creation. Save as `SUPABASE_DB_URL`.
+
+   ⚠ Don't use **Direct connection** (`db.<ref>.supabase.co:5432`) for `SUPABASE_DB_URL` — Direct is IPv6-by-default, and **Vercel's build runners are IPv4-only**, so the deploy-time `supabase db push` would fail with `network is unreachable`. The Session Pooler is IPv4-compatible and supports DDL + session-level features that migrations rely on.
+
+   ⚠ Don't use **Transaction Pooler** (port `6543`) either — transaction-mode pooling doesn't support migrations.
 
    Migrations are applied automatically on every Vercel deploy via `pnpm vercel-build`, which runs `supabase db push --db-url "$SUPABASE_DB_URL" --include-all && next build`. No manual `supabase link` / `supabase db push` is required.
 
@@ -73,7 +79,7 @@ A `.env.local` file has been generated in the repo root with the auto-generatabl
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase API Keys (§2.2, `sb_publishable_…` or legacy `anon`) | **fill in** |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase API Keys (§2.2, `sb_secret_…` or legacy `service_role`) | **fill in** |
 | `SUPABASE_JWT_PRIVATE_KEY` | `supabase gen signing-key` (§2.3) | ✅ pre-filled — also paste this same value into the Supabase JWT Keys import modal |
-| `SUPABASE_DB_URL` | Supabase Connect → ORMs → Direct (§2.4) | **fill in** |
+| `SUPABASE_DB_URL` | Supabase Connect → **Session pooler** (port 5432, `pooler.supabase.com` host) — see §2.4 for why **not** Direct/Transaction pooler | **fill in** |
 | `APP_BASE_URL` | `http://localhost:3000` for local dev | ✅ pre-filled |
 | `DAILY_QUOTA_SECONDS`, `CLAIM_TTL_MINUTES`, `DEFAULT_TZ` | defaults | ✅ pre-filled |
 | `CRON_SECRET` | random hex | ✅ pre-filled |
