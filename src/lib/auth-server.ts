@@ -34,7 +34,8 @@ export async function authFromRequest(req: Request): Promise<AuthedUser | null> 
       issuer: `${publicEnv.NEXT_PUBLIC_SUPABASE_URL}/auth/v1`,
     });
     payload = v.payload;
-  } catch {
+  } catch (e) {
+    console.warn("JWT verify failed", { reason: (e as Error).message });
     return null;
   }
   const sub = payload.sub;

@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { authFromRequest, requireRole } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
+import { readJsonBody } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +15,7 @@ const Body = z.object({
 export async function POST(req: NextRequest) {
   const user = await authFromRequest(req);
   if (!requireRole(user, ["admin"])) return new Response("forbidden", { status: 403 });
-  const parsed = Body.safeParse(await req.json().catch(() => ({})));
+  const parsed = Body.safeParse(await readJsonBody(req));
   if (!parsed.success) return new Response("bad body", { status: 400 });
   const sb = getServiceRoleClient();
   const { error } = await sb.from("student_teachers").insert({
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const user = await authFromRequest(req);
   if (!requireRole(user, ["admin"])) return new Response("forbidden", { status: 403 });
-  const parsed = Body.safeParse(await req.json().catch(() => ({})));
+  const parsed = Body.safeParse(await readJsonBody(req));
   if (!parsed.success) return new Response("bad body", { status: 400 });
   const sb = getServiceRoleClient();
   const { error } = await sb

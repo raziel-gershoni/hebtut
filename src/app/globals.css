@@ -2,11 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Telegram's web-app SDK (telegram-web-app.js) injects CSS variables prefixed
+ * with `--tg-theme-*` onto the documentElement, and updates them on the
+ * `themeChanged` event. We map them to shorter semantic aliases used across
+ * Tailwind tokens (see tailwind.config.ts). Fallbacks let the app remain
+ * legible when opened outside Telegram (local dev, etc.).
+ */
 :root {
-  color-scheme: light;
+  --tg-bg: var(--tg-theme-bg-color, #ffffff);
+  --tg-bg-secondary: var(--tg-theme-secondary-bg-color, #f3f4f6);
+  --tg-bg-section: var(--tg-theme-section-bg-color, #ffffff);
+  --tg-bg-header: var(--tg-theme-header-bg-color, #ffffff);
+  --tg-text: var(--tg-theme-text-color, #111827);
+  --tg-text-hint: var(--tg-theme-hint-color, #6b7280);
+  --tg-text-subtitle: var(--tg-theme-subtitle-text-color, #6b7280);
+  --tg-text-link: var(--tg-theme-link-color, #2563eb);
+  --tg-text-accent: var(--tg-theme-accent-text-color, #2563eb);
+  --tg-text-destructive: var(--tg-theme-destructive-text-color, #dc2626);
+  --tg-text-section-header: var(--tg-theme-section-header-text-color, #6b7280);
+  --tg-button: var(--tg-theme-button-color, #2563eb);
+  --tg-button-text: var(--tg-theme-button-text-color, #ffffff);
 }
 
+html,
 body {
-  background-color: var(--tg-theme-bg-color, #ffffff);
-  color: var(--tg-theme-text-color, #000000);
+  background-color: var(--tg-bg);
+  color: var(--tg-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv11";
 }

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 type AdminUser = {
@@ -14,14 +14,24 @@ type AdminUser = {
 
 const ROLES: AdminUser["role"][] = ["pending", "student", "teacher", "admin"];
 
+const ROLE_PILL: Record<AdminUser["role"], string> = {
+  pending: "bg-tg-bg-secondary text-tg-text-hint",
+  student: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  teacher: "bg-tg-button/15 text-tg-text-accent",
+  admin: "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-400",
+};
+
 export function AdminUsersTable({ jwt }: { jwt: string }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [pending, setPending] = useState<{ id: number; role: AdminUser["role"] } | null>(null);
+  const [filter, setFilter] = useState("");
 
   const load = useCallback(async () => {
     const r = await fetch("/api/admin/users", { headers: { Authorization: `Bearer ${jwt}` } });
     const d = (await r.json()) as { users: AdminUser[] };
     setUsers(d.users);
+    setLoaded(true);
   }, [jwt]);
 
   useEffect(() => {
@@ -44,47 +54,84 @@ export function AdminUsersTable({ jwt }: { jwt: string }) {
     return false;
   }
 
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter(
+      (u) =>
+        (u.name ?? "").toLowerCase().includes(q) ||
+        String(u.tg_user_id).includes(q) ||
+        u.role.includes(q),
+    );
+  }, [users, filter]);
+
   return (
     <section>
-      <h2 className="text-lg font-semibold mb-2">Пользователи</h2>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-gray-500">
-              <th className="py-2 pr-2">Имя</th>
-              <th className="py-2 pr-2">TG id</th>
-              <th className="py-2 pr-2">Роль</th>
-              <th className="py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id} className="border-t">
-                <td className="py-2 pr-2">{u.name ?? "—"}</td>
-                <td className="py-2 pr-2">{u.tg_user_id}</td>
-                <td className="py-2 pr-2">{u.role}</td>
-                <td className="py-2">
-                  <select
-                    className="border rounded px-2 py-1"
-                    value={u.role}
-                    onChange={(e) => {
-                      const next = e.target.value as AdminUser["role"];
-                      if (isDestructive(u.role, next)) setPending({ id: u.id, role: next });
-                      else void changeRole(u.id, next);
-                    }}
-                  >
-                    {ROLES.map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <header className="flex items-baseline justify-between mb-3">
+        <h2 className="text-lg font-semibold tracking-tight">Пользователи</h2>
+        <span className="text-xs text-tg-text-hint tabular-nums">{users.length}</span>
+      </header>
+
+      <input
+        type="search"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder="Поиск по имени, ID или роли"
+        className="w-full mb-3 h-10 px-3 rounded-xl bg-tg-bg-secondary text-tg-text placeholder:text-tg-text-hint outline-none focus:ring-2 focus:ring-tg-button/40"
+      />
+
+      {!loaded && (
+        <ul className="space-y-2 animate-pulse">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <li key={i} className="h-16 rounded-2xl bg-tg-bg-secondary" />
+          ))}
+        </ul>
+      )}
+
+      {loaded && filtered.length === 0 && (
+        <div className="rounded-2xl bg-tg-bg-section p-6 text-center text-sm text-tg-text-hint">
+          Никого не нашлось.
+        </div>
+      )}
+
+      <ul className="space-y-2">
+        {filtered.map((u) => (
+          <li
+            key={u.id}
+            className="rounded-2xl bg-tg-bg-section p-3 flex items-center gap-3"
+          >
+            <Avatar name={u.name ?? String(u.tg_user_id)} />
+            <div className="min-w-0 flex-1">
+              <div className="font-medium truncate">{u.name ?? "—"}</div>
+              <div className="text-xs text-tg-text-hint tabular-nums">
+                ID {u.tg_user_id}
+              </div>
+            </div>
+            <span
+              className={`shrink-0 inline-flex items-center h-6 px-2 rounded-full text-[11px] font-medium uppercase tracking-wider ${ROLE_PILL[u.role]}`}
+            >
+              {u.role}
+            </span>
+            <select
+              aria-label="Изменить роль"
+              className="shrink-0 h-9 px-2 rounded-lg bg-tg-bg-secondary text-tg-text text-sm outline-none focus:ring-2 focus:ring-tg-button/40"
+              value={u.role}
+              onChange={(e) => {
+                const next = e.target.value as AdminUser["role"];
+                if (next === u.role) return;
+                if (isDestructive(u.role, next)) setPending({ id: u.id, role: next });
+                else void changeRole(u.id, next);
+              }}
+            >
+              {ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </li>
+        ))}
+      </ul>
 
       <ConfirmDialog
         open={!!pending}
@@ -97,5 +144,22 @@ export function AdminUsersTable({ jwt }: { jwt: string }) {
         }}
       />
     </section>
+  );
+}
+
+function Avatar({ name }: { name: string }) {
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]!.toUpperCase())
+    .join("");
+  return (
+    <div
+      className="shrink-0 w-9 h-9 rounded-full bg-tg-bg-secondary text-tg-text flex items-center justify-center text-xs font-semibold tracking-tight"
+      aria-hidden
+    >
+      {initials || "?"}
+    </div>
   );
 }

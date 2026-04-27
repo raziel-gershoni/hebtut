@@ -5,16 +5,23 @@ import { ThreadView } from "@/components/ThreadView";
 export default function StudentThreadPage({ params }: { params: { id: string } }) {
   const studentId = Number(params.id);
   return (
-    <AppShell>
+    <AppShell title="Диалог" back="/inbox">
       {({ jwt, role }) => {
-        if (role !== "teacher" && role !== "admin") return <p>Только для преподавателей.</p>;
-        if (!Number.isInteger(studentId)) return <p>Неверный идентификатор ученика.</p>;
-        return (
-          <>
-            <h1 className="text-xl font-semibold mb-4">Диалог</h1>
-            <ThreadView jwt={jwt} studentId={studentId} />
-          </>
-        );
+        if (role !== "teacher" && role !== "admin") {
+          return (
+            <div className="rounded-2xl bg-tg-bg-section p-6 text-sm text-tg-text-hint">
+              Только для преподавателей.
+            </div>
+          );
+        }
+        if (!Number.isInteger(studentId)) {
+          return (
+            <div className="rounded-2xl bg-tg-bg-section p-6 text-sm text-tg-text-destructive">
+              Неверный идентификатор ученика.
+            </div>
+          );
+        }
+        return <ThreadView jwt={jwt} studentId={studentId} />;
       }}
     </AppShell>
   );

@@ -3,12 +3,13 @@ import { verifyInitData, parseInitData, mintSupabaseJwt } from "@/lib/auth";
 import { serverEnv } from "@/lib/env";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { ensureBootstrapAdmin } from "@/server/bootstrap";
+import { readJsonBody } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => ({}))) as { initData?: string };
+  const body = await readJsonBody<{ initData?: string }>(req);
   const initData = body.initData ?? "";
   const v = verifyInitData(initData, serverEnv.TELEGRAM_BOT_TOKEN);
   if (!v.ok) return Response.json({ error: v.reason }, { status: 401 });
@@ -16,6 +17,14 @@ export async function POST(req: NextRequest) {
   const parsed = parseInitData(v.data);
   await ensureBootstrapAdmin();
   const sb = getServiceRoleClient();
+
+  // Display name derived from validated initData. Used both for INSERT on first
+  // sight and to refresh the row if the stored name has drifted (incl. clearing
+  // the bootstrap.ts placeholder of NULL on first Mini App load by an admin).
+  const display =
+    [parsed.user.first_name, parsed.user.last_name].filter(Boolean).join(" ").trim() ||
+    parsed.user.username ||
+    `user ${parsed.user.id}`;
 
   const { data: existing } = await sb
     .from("users")
@@ -25,10 +34,6 @@ export async function POST(req: NextRequest) {
 
   let userRow: { id: number; role: string; name: string | null };
   if (!existing) {
-    const display =
-      [parsed.user.first_name, parsed.user.last_name].filter(Boolean).join(" ").trim() ||
-      parsed.user.username ||
-      `user ${parsed.user.id}`;
     const { data, error } = await sb
       .from("users")
       .insert({
@@ -41,6 +46,19 @@ export async function POST(req: NextRequest) {
       .single();
     if (error || !data) return Response.json({ error: error?.message ?? "insert failed" }, { status: 500 });
     userRow = data;
+  } else if (existing.name !== display) {
+    const { data, error } = await sb
+      .from("users")
+      .update({ name: display })
+      .eq("id", existing.id)
+      .select("id, role, name")
+      .single();
+    if (error || !data) {
+      console.warn("name refresh failed", { reason: error?.message });
+      userRow = existing;
+    } else {
+      userRow = data;
+    }
   } else {
     userRow = existing;
   }

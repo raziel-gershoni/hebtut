@@ -7,7 +7,8 @@ export function AdminLinksPanel({ jwt }: { jwt: string }) {
   const [users, setUsers] = useState<LinkUser[]>([]);
   const [studentId, setStudentId] = useState<number | null>(null);
   const [teacherId, setTeacherId] = useState<number | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     void fetch("/api/admin/users", { headers: { Authorization: `Bearer ${jwt}` } })
@@ -20,62 +21,116 @@ export function AdminLinksPanel({ jwt }: { jwt: string }) {
 
   async function link(action: "POST" | "DELETE") {
     if (!studentId || !teacherId) {
-      setFeedback("Выбери студента и преподавателя.");
+      setFeedback({ tone: "err", text: "Выбери студента и преподавателя." });
       return;
     }
+    setBusy(true);
     setFeedback(null);
-    const r = await fetch("/api/admin/links", {
-      method: action,
-      headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId, teacherId }),
-    });
-    if (!r.ok) {
-      setFeedback(`Ошибка: ${await r.text()}`);
-      return;
+    try {
+      const r = await fetch("/api/admin/links", {
+        method: action,
+        headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId, teacherId }),
+      });
+      if (!r.ok) {
+        setFeedback({ tone: "err", text: `Ошибка: ${await r.text()}` });
+        return;
+      }
+      setFeedback({
+        tone: "ok",
+        text: action === "POST" ? "Связаны." : "Связь удалена.",
+      });
+    } finally {
+      setBusy(false);
     }
-    setFeedback(action === "POST" ? "Связаны." : "Связь удалена.");
   }
 
   return (
     <section className="mt-8">
-      <h2 className="text-lg font-semibold mb-2">Связи студент ↔ преподаватель</h2>
-      <div className="flex flex-wrap gap-2 items-center">
-        <select
-          className="border rounded px-2 py-1"
-          onChange={(e) => setStudentId(e.target.value ? Number(e.target.value) : null)}
-          value={studentId ?? ""}
-        >
-          <option value="">— студент —</option>
-          {students.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name ?? s.id}
-            </option>
-          ))}
-        </select>
-        <span>↔</span>
-        <select
-          className="border rounded px-2 py-1"
-          onChange={(e) => setTeacherId(e.target.value ? Number(e.target.value) : null)}
-          value={teacherId ?? ""}
-        >
-          <option value="">— преподаватель —</option>
-          {teachers.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name ?? t.id}
-            </option>
-          ))}
-        </select>
-        <button
-          className="px-3 py-2 rounded bg-blue-600 text-white"
-          onClick={() => void link("POST")}
-        >
-          Привязать
-        </button>
-        <button className="px-3 py-2 rounded bg-gray-200" onClick={() => void link("DELETE")}>
-          Отвязать
-        </button>
+      <header className="mb-3">
+        <h2 className="text-lg font-semibold tracking-tight">Связи студент ↔ преподаватель</h2>
+        <p className="text-sm text-tg-text-hint mt-1">
+          Сначала назначь роли в списке выше, потом свяжи здесь.
+        </p>
+      </header>
+
+      <div className="rounded-2xl bg-tg-bg-section p-4 space-y-3">
+        <PickerRow
+          label="Студент"
+          options={students}
+          value={studentId}
+          onChange={setStudentId}
+        />
+        <PickerRow
+          label="Преподаватель"
+          options={teachers}
+          value={teacherId}
+          onChange={setTeacherId}
+        />
+
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            disabled={busy || !studentId || !teacherId}
+            onClick={() => void link("POST")}
+            className="flex-1 min-h-10 h-10 rounded-full bg-tg-button text-tg-button-text text-sm font-medium tracking-tight transition-transform active:scale-95 disabled:opacity-50"
+          >
+            Привязать
+          </button>
+          <button
+            type="button"
+            disabled={busy || !studentId || !teacherId}
+            onClick={() => void link("DELETE")}
+            className="flex-1 min-h-10 h-10 rounded-full bg-tg-bg-secondary text-tg-text text-sm font-medium tracking-tight transition-transform active:scale-95 disabled:opacity-50"
+          >
+            Отвязать
+          </button>
+        </div>
+
+        {feedback && (
+          <p
+            className={
+              feedback.tone === "ok"
+                ? "text-sm text-emerald-600 dark:text-emerald-400"
+                : "text-sm text-tg-text-destructive"
+            }
+          >
+            {feedback.text}
+          </p>
+        )}
       </div>
-      {feedback && <p className="text-sm mt-2 text-gray-600">{feedback}</p>}
     </section>
+  );
+}
+
+function PickerRow({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: LinkUser[];
+  value: number | null;
+  onChange: (id: number | null) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-xs uppercase tracking-wider text-tg-text-hint mb-1">
+        {label}
+      </span>
+      <select
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+        className="w-full h-10 px-3 rounded-xl bg-tg-bg-secondary text-tg-text outline-none focus:ring-2 focus:ring-tg-button/40"
+      >
+        <option value="">— не выбрано —</option>
+        {options.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.name ?? `ID ${u.id}`}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

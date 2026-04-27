@@ -4,15 +4,16 @@ import { InboxList } from "@/components/InboxList";
 
 export default function InboxPage() {
   return (
-    <AppShell>
+    <AppShell title="Входящие" back="/">
       {({ jwt, role }) => {
-        if (role !== "teacher" && role !== "admin") return <p>Только для преподавателей.</p>;
-        return (
-          <>
-            <h1 className="text-xl font-semibold mb-4">Входящие</h1>
-            <InboxList jwt={jwt} />
-          </>
-        );
+        if (role !== "teacher" && role !== "admin") {
+          return (
+            <div className="rounded-2xl bg-tg-bg-section p-6 text-sm text-tg-text-hint">
+              Только для преподавателей.
+            </div>
+          );
+        }
+        return <InboxList jwt={jwt} />;
       }}
     </AppShell>
   );

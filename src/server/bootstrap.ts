@@ -16,11 +16,13 @@ export async function ensureBootstrapAdmin(): Promise<void> {
       .maybeSingle();
 
     if (!data) {
+      // name=null on bootstrap; auth/session and /start populate the real
+      // TG display name on first contact.
       await sb.from("users").insert({
         tg_user_id: tgId,
         tg_chat_id: tgId,
         role: "admin",
-        name: "bootstrap admin",
+        name: null,
         role_changed_at: new Date().toISOString(),
       });
     } else if (data.role !== "admin") {
