@@ -34,8 +34,13 @@ End-to-end, ~30 min. PoC only — prod = dev = test.
 
    2. **Import the public half into Supabase** (so its API will verify our tokens):
       - Open **Project Settings → JWT Keys** (`/dashboard/project/<ref>/settings/jwt`).
-      - Click **Add new standby key** → paste the same JWK JSON you just generated → save. Supabase strips the private fields and stores only the public half.
-      - Click **Rotate keys** to promote the standby key to active. Supabase keeps the previous key in "previously used" state for ~5 min so in-flight tokens don't fail.
+      - Click **"Create new standby key"**.
+      - **Important**: the modal opens with the default mode **"Generate a new key"**. *Do not use this mode* — it asks Supabase to generate a brand-new keypair server-side, and the private half never leaves Supabase. That doesn't fit our flow (we need the private key in our env to mint JWTs).
+      - Toggle the mode to **"Import an existing key"**. A JSON paste field appears.
+      - Paste the **single one-line JWK JSON** from step 1 (same value you saved as `SUPABASE_JWT_PRIVATE_KEY` in `.env.local`).
+      - Click **Create**. The key lands as a Standby key.
+      - Click **"Rotate keys"** to promote Standby → Active. Supabase keeps the previous Active key in "Previously used" state for ~5 min so any in-flight tokens still verify.
+      - If the Standby slot is already occupied (e.g. you accidentally clicked Generate first), use the kebab menu on that row → **"Move to previously used"** before importing the new one.
 
    3. **Verify the JWKS endpoint** is publishing the new key:
       ```bash
@@ -54,29 +59,26 @@ End-to-end, ~30 min. PoC only — prod = dev = test.
    pnpm db:types
    ```
 
-## 3. Local `.env.local`
+## 3. Local `.env.local` (already pre-filled)
 
-Copy `.env.example` → `.env.local` and fill in:
+A `.env.local` file has been generated in the repo root with the auto-generatable values pre-filled. It's gitignored (`.env*.local`) and stays on your machine. You only need to fill in the values that come from external systems.
 
-```dotenv
-TELEGRAM_BOT_TOKEN=<from step 1>
-TELEGRAM_WEBHOOK_SECRET=<openssl rand -hex 32>
-TELEGRAM_BOT_USERNAME=<your bot username, no @>
+| Variable | Source | Status |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | BotFather (§1) | **fill in** |
+| `TELEGRAM_BOT_USERNAME` | BotFather (§1, no leading `@`) | **fill in** |
+| `BOOTSTRAP_ADMIN_TG_USER_ID` | @userinfobot (§1) | **fill in** |
+| `TELEGRAM_WEBHOOK_SECRET` | random hex | ✅ pre-filled |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase API page (§2.2) | **fill in** |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase API Keys (§2.2, `sb_publishable_…` or legacy `anon`) | **fill in** |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase API Keys (§2.2, `sb_secret_…` or legacy `service_role`) | **fill in** |
+| `SUPABASE_JWT_PRIVATE_KEY` | `supabase gen signing-key` (§2.3) | ✅ pre-filled — also paste this same value into the Supabase JWT Keys import modal |
+| `SUPABASE_DB_URL` | Supabase Connect → ORMs → Direct (§2.4) | **fill in** |
+| `APP_BASE_URL` | `http://localhost:3000` for local dev | ✅ pre-filled |
+| `DAILY_QUOTA_SECONDS`, `CLAIM_TTL_MINUTES`, `DEFAULT_TZ` | defaults | ✅ pre-filled |
+| `CRON_SECRET` | random hex | ✅ pre-filled |
 
-NEXT_PUBLIC_SUPABASE_URL=<from step 2>
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<from step 2 — sb_publishable_... or legacy anon>
-SUPABASE_SERVICE_ROLE_KEY=<from step 2 — sb_secret_... or legacy service_role>
-SUPABASE_JWT_PRIVATE_KEY=<one-line JWK JSON from `supabase gen signing-key`>
-SUPABASE_DB_URL=<from step 2 — direct, port 5432>
-
-APP_BASE_URL=http://localhost:3000
-BOOTSTRAP_ADMIN_TG_USER_ID=<from step 1>
-DAILY_QUOTA_SECONDS=300
-CLAIM_TTL_MINUTES=15
-DEFAULT_TZ=Asia/Jerusalem
-
-CRON_SECRET=<openssl rand -hex 32>
-```
+> ⚠ The pre-filled secrets (`TELEGRAM_WEBHOOK_SECRET`, `CRON_SECRET`, `SUPABASE_JWT_PRIVATE_KEY`) **must also be added to Vercel → Project Settings → Environment Variables** with the same values. Same for the values you fill in. Local + Vercel must match.
 
 ## 4. Vercel deploy
 

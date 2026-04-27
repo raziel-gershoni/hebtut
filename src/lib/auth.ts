@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { SignJWT, importJWK, type JWK } from "jose";
-import { serverEnv } from "./env";
+import { serverEnv, publicEnv } from "./env";
 
 export type InitDataMap = Map<string, string>;
 
@@ -79,11 +79,14 @@ export async function mintJwtWithKey(
   key: SigningKey,
   tgUserId: number,
   appRole: string,
+  issuer: string,
 ): Promise<string> {
   const privateKey = await importJWK(key.jwk, key.jwk.alg);
   return await new SignJWT({ role: "authenticated", app_role: appRole })
     .setProtectedHeader({ alg: key.jwk.alg, kid: key.jwk.kid, typ: "JWT" })
     .setSubject(String(tgUserId))
+    .setAudience("authenticated")
+    .setIssuer(issuer)
     .setIssuedAt()
     .setExpirationTime("1h")
     .sign(privateKey);
@@ -104,5 +107,6 @@ function getEnvSigningKey(): SigningKey {
 }
 
 export async function mintSupabaseJwt(tgUserId: number, appRole: string): Promise<string> {
-  return mintJwtWithKey(getEnvSigningKey(), tgUserId, appRole);
+  const issuer = `${publicEnv.NEXT_PUBLIC_SUPABASE_URL}/auth/v1`;
+  return mintJwtWithKey(getEnvSigningKey(), tgUserId, appRole, issuer);
 }

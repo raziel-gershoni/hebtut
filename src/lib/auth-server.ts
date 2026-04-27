@@ -29,7 +29,10 @@ export async function authFromRequest(req: Request): Promise<AuthedUser | null> 
 
   let payload: JWTPayload;
   try {
-    const v = await jwtVerify(token, getJwks());
+    const v = await jwtVerify(token, getJwks(), {
+      audience: "authenticated",
+      issuer: `${publicEnv.NEXT_PUBLIC_SUPABASE_URL}/auth/v1`,
+    });
     payload = v.payload;
   } catch {
     return null;
