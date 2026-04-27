@@ -17,15 +17,14 @@ End-to-end, ~30 min. PoC only — prod = dev = test.
    - `anon` `public` key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` `secret` key → `SUPABASE_SERVICE_ROLE_KEY`
 3. From **Project Settings → API → JWT Settings** copy the **JWT Secret** → `SUPABASE_JWT_SECRET`.
-4. Apply migrations:
+4. From the project page tap **Connect** → **ORMs** (or **Database → Connection string**) → copy the **Direct connection** URI (host `db.<ref>.supabase.co:5432`, NOT the pooler at 6543). Replace `[YOUR-PASSWORD]` with the database password you set on creation. Save as `SUPABASE_DB_URL`.
+
+   Migrations are applied automatically on every Vercel deploy via `pnpm vercel-build`, which runs `supabase db push --db-url "$SUPABASE_DB_URL" --include-all && next build`. No manual `supabase link` / `supabase db push` is required.
+
+5. (Optional, only if you want to regenerate `src/types/database.ts` from the live schema):
    ```bash
-   brew install supabase/tap/supabase   # if not already installed
-   supabase login                       # browser flow
-   supabase link --project-ref <ref>    # ref = subdomain of your Supabase URL
-   supabase db push                     # applies supabase/migrations/*
-   ```
-5. (Optional) Regenerate types from the live schema:
-   ```bash
+   supabase login
+   supabase link --project-ref <ref>
    pnpm db:types
    ```
 
@@ -42,6 +41,7 @@ NEXT_PUBLIC_SUPABASE_URL=<from step 2>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<from step 2>
 SUPABASE_SERVICE_ROLE_KEY=<from step 2>
 SUPABASE_JWT_SECRET=<from step 2>
+SUPABASE_DB_URL=<from step 2 — direct, port 5432>
 
 APP_BASE_URL=http://localhost:3000
 BOOTSTRAP_ADMIN_TG_USER_ID=<from step 1>
@@ -56,8 +56,8 @@ CRON_SECRET=<openssl rand -hex 32>
 
 1. Push the repo to GitHub.
 2. Import the repo into Vercel (Framework: Next.js, defaults are fine).
-3. Add every variable from `.env.local` to **Vercel → Project Settings → Environment Variables**, set for all environments. Set `APP_BASE_URL` to the production URL Vercel gives you (e.g. `https://hebtutbot.vercel.app`).
-4. Deploy.
+3. Add every variable from `.env.local` to **Vercel → Project Settings → Environment Variables**, set for all environments. Set `APP_BASE_URL` to the production URL Vercel gives you (e.g. `https://hebtutbot.vercel.app`). `SUPABASE_DB_URL` must be set or the build will fail.
+4. Deploy. The build runs `supabase db push` against `SUPABASE_DB_URL` before `next build` — migrations land before any request hits the new code. Re-deploys are idempotent (Supabase tracks applied migrations in the `supabase_migrations.schema_migrations` table).
 5. Smoke check: `curl https://<your-domain>/api/ping` → `{"ok":true,...}`.
 
 ## 5. Wire the Telegram webhook
