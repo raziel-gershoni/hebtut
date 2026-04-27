@@ -1,5 +1,24 @@
 import { z } from "zod";
 
+/**
+ * Parse the comma-separated `BOOTSTRAP_ADMIN_TG_USER_IDS` env value into a
+ * deduped, ordered list of positive Telegram user ids. Throws on bad input.
+ * Exported so it can be unit-tested independently of the env Proxy.
+ */
+export function parseAdminIds(raw: string): number[] {
+  const parts = raw.split(",").map((p) => p.trim()).filter(Boolean);
+  if (parts.length === 0) throw new Error("BOOTSTRAP_ADMIN_TG_USER_IDS is empty");
+  const ids: number[] = [];
+  for (const p of parts) {
+    const n = Number(p);
+    if (!Number.isInteger(n) || n <= 0) {
+      throw new Error(`BOOTSTRAP_ADMIN_TG_USER_IDS: "${p}" is not a positive integer`);
+    }
+    ids.push(n);
+  }
+  return Array.from(new Set(ids));
+}
+
 const ServerSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(20),
   TELEGRAM_WEBHOOK_SECRET: z.string().min(8),
@@ -20,7 +39,20 @@ const ServerSchema = z.object({
     { message: "must be a JWK JSON string with kty, kid, alg fields" },
   ),
   APP_BASE_URL: z.string().url(),
-  BOOTSTRAP_ADMIN_TG_USER_ID: z.coerce.number().int().positive(),
+  // Comma-separated list of Telegram numeric user ids that should be auto-promoted
+  // to `admin` on first webhook hit. Accepts a single id or many (e.g. "12345" or
+  // "12345,67890"). Whitespace tolerated.
+  BOOTSTRAP_ADMIN_TG_USER_IDS: z.string().min(1).transform((s, ctx) => {
+    try {
+      return parseAdminIds(s);
+    } catch (e) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: (e as Error).message,
+      });
+      return z.NEVER;
+    }
+  }),
   DAILY_QUOTA_SECONDS: z.coerce.number().int().positive().default(300),
   CLAIM_TTL_MINUTES: z.coerce.number().int().positive().default(15),
   DEFAULT_TZ: z.string().default("Asia/Jerusalem"),

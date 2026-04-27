@@ -6,7 +6,7 @@ End-to-end, ~30 min. PoC only — prod = dev = test.
 
 1. Open [@BotFather](https://t.me/BotFather) in Telegram.
 2. `/newbot` → pick a name and username (e.g. `hebtut_bot`). Save the **token**.
-3. Get your own numeric Telegram user id from [@userinfobot](https://t.me/userinfobot). Save it as `BOOTSTRAP_ADMIN_TG_USER_ID`.
+3. Get your own numeric Telegram user id from [@userinfobot](https://t.me/userinfobot). Save it as `BOOTSTRAP_ADMIN_TG_USER_IDS`. **You can list multiple ids comma-separated** (e.g. `12345,67890`) — every listed id is auto-promoted to `admin` on first webhook hit.
 4. (Skip the Mini-App URL for now — we'll set it after the Vercel deploy.)
 
 ## 2. Supabase project
@@ -73,7 +73,7 @@ A `.env.local` file has been generated in the repo root with the auto-generatabl
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | BotFather (§1) | **fill in** |
 | `TELEGRAM_BOT_USERNAME` | BotFather (§1, no leading `@`) | **fill in** |
-| `BOOTSTRAP_ADMIN_TG_USER_ID` | @userinfobot (§1) | **fill in** |
+| `BOOTSTRAP_ADMIN_TG_USER_IDS` | @userinfobot (§1) — single id or comma-separated (`12345,67890`) | **fill in** |
 | `TELEGRAM_WEBHOOK_SECRET` | random hex | ✅ pre-filled |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase API page (§2.2) | **fill in** |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase API Keys (§2.2, `sb_publishable_…` or legacy `anon`) | **fill in** |
