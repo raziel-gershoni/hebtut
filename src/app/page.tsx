@@ -11,7 +11,7 @@ const ROLE_LABEL: Record<string, string> = {
 
 export default function Home() {
   return (
-    <AppShell title="Hebtutbot">
+    <AppShell>
       {({ role, name }) => (
         <div className="space-y-6">
           <section className="rounded-2xl bg-tg-bg-section p-5">
