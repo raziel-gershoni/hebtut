@@ -12,7 +12,7 @@ Voice / video-note Telegram tutoring loop for Russian-speaking students learning
 - grammY (Telegram bot, webhook mode)
 - Supabase (Postgres + Realtime + RLS)
 - Tailwind CSS (Mini App)
-- Vercel (hosting + Cron)
+- Vercel (hosting), Upstash QStash (claim-expiry schedule, every 5 min)
 - Vitest (16 tests covering HMAC, quota math, claim state machine, reply routing)
 
 ## Project layout

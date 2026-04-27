@@ -8,7 +8,7 @@ import { ru } from "@/lib/i18n";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+async function handler(req: NextRequest): Promise<Response> {
   const auth = req.headers.get("authorization");
   if (auth !== `Bearer ${serverEnv.CRON_SECRET}`) {
     return new Response("forbidden", { status: 403 });
@@ -51,3 +51,6 @@ export async function GET(req: NextRequest) {
   }
   return Response.json({ released });
 }
+
+// QStash schedules POST by default. GET kept for manual `curl` testing.
+export { handler as GET, handler as POST };

@@ -60,7 +60,32 @@ CRON_SECRET=<openssl rand -hex 32>
 4. Deploy. The build runs `supabase db push` against `SUPABASE_DB_URL` before `next build` — migrations land before any request hits the new code. Re-deploys are idempotent (Supabase tracks applied migrations in the `supabase_migrations.schema_migrations` table).
 5. Smoke check: `curl https://<your-domain>/api/ping` → `{"ok":true,...}`.
 
-## 5. Wire the Telegram webhook
+## 5. Schedule the claim-expiry cron via Upstash QStash
+
+Vercel Hobby caps cron at once-per-day, which is too slow for a 15-minute claim TTL. We run the schedule on Upstash QStash instead (free tier — 5-min cadence = 288 msgs/day, well under the 500/day cap).
+
+1. Sign in to [console.upstash.com](https://console.upstash.com) → **QStash**. Free tier, no credit card.
+2. **Schedules** → **Create schedule**:
+   - **Destination**: `https://<your-vercel-domain>/api/cron/expire-claims`
+   - **Method**: `POST`
+   - **Cron**: `*/5 * * * *` (every 5 minutes)
+   - **Headers** → add one:
+     - Name: `Authorization`
+     - Value: `Bearer <CRON_SECRET>` (use the exact `CRON_SECRET` value you set in Vercel env)
+   - **Retries**: leave default
+3. Save. Within ~5 min the schedule's **Events** tab should show a `200` for the first invocation. A `200` body of `{"released": 0}` means there were no stale claims — that's the expected steady state.
+
+Manual sanity check from your terminal:
+
+```bash
+curl -X POST -H "Authorization: Bearer <CRON_SECRET>" \
+  https://<your-vercel-domain>/api/cron/expire-claims
+# → {"released":0}
+```
+
+If you get `403 forbidden`, the bearer doesn't match `CRON_SECRET`.
+
+## 6. Wire the Telegram webhook
 
 After the first successful deploy:
 
@@ -82,7 +107,7 @@ curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"
 
 `url` should be set, `last_error_message` should be `null`.
 
-## 6. Wire the Mini App
+## 7. Wire the Mini App
 
 Back in [@BotFather](https://t.me/BotFather):
 
@@ -92,7 +117,7 @@ Back in [@BotFather](https://t.me/BotFather):
 
 (Equivalent CLI flow: `/setmenubutton`.)
 
-## 7. End-to-end smoke test
+## 8. End-to-end smoke test
 
 With three Telegram accounts (or a friend + a second device):
 
@@ -112,12 +137,14 @@ With three Telegram accounts (or a friend + a second device):
 
 If any step fails, check Vercel function logs and Supabase tables.
 
-## 8. Optional: reduce CLAIM_TTL for testing the cron
+## 9. Optional: reduce CLAIM_TTL for testing the cron
 
-Temporarily set `CLAIM_TTL_MINUTES=1` in Vercel env, redeploy, claim a message, wait ~2 min:
+Temporarily set `CLAIM_TTL_MINUTES=1` in Vercel env, redeploy, claim a message, then wait up to `CLAIM_TTL_MINUTES + 5` minutes (1 min for the claim to go stale + up to 5 min for the next QStash tick):
 
 - Prompt edits to `⚠️ Время на ответ истекло…`.
 - Other teachers' notifications revert to actionable.
 - Inbox entry returns to `pending`.
+
+Or trigger the sweep immediately from the QStash dashboard (**Schedules → … → Run now**) or via curl to skip the wait.
 
 Restore `CLAIM_TTL_MINUTES=15` after.
