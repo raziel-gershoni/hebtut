@@ -20,8 +20,9 @@ export function ClaimButton({
       onClick={async () => {
         setBusy(true);
         try {
-          const r = await fetch("/api/claim", {
+          const r = await fetch("/api/replies/start", {
             method: "POST",
+            cache: "no-store",
             headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
             body: JSON.stringify({ messageId }),
           });

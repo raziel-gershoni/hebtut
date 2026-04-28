@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { MessageBubble } from "./MessageBubble";
 
 type ThreadMsg = {
@@ -11,21 +11,79 @@ type ThreadMsg = {
   created_at: string;
 };
 
-export function ThreadView({ jwt, studentId }: { jwt: string; studentId: number }) {
+interface ClaimInfo {
+  teacher_id: number;
+  teacher_name: string;
+  expires_at: string;
+}
+
+export function ThreadView({
+  jwt,
+  studentId,
+  myUserId,
+}: {
+  jwt: string;
+  studentId: number;
+  myUserId: number;
+}) {
   const [messages, setMessages] = useState<ThreadMsg[]>([]);
+  const [claim, setClaim] = useState<ClaimInfo | null>(null);
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    void fetch(`/api/threads/${studentId}`, {
+  const load = useCallback(async () => {
+    const r = await fetch(`/api/threads/${studentId}`, {
       cache: "no-store",
       headers: { Authorization: `Bearer ${jwt}` },
-    })
-      .then((r) => r.json() as Promise<{ messages: ThreadMsg[] }>)
-      .then((d) => {
-        setMessages(d.messages);
-        setLoaded(true);
-      });
+    });
+    if (!r.ok) {
+      setLoaded(true);
+      return;
+    }
+    const d = (await r.json()) as { messages: ThreadMsg[]; claim?: ClaimInfo | null };
+    setMessages(d.messages);
+    setClaim(d.claim ?? null);
+    setLoaded(true);
   }, [jwt, studentId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    function onVisibility() {
+      if (document.visibilityState === "visible") void load();
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onVisibility);
+    };
+  }, [load]);
+
+  const replyDisabledReason =
+    claim && claim.teacher_id !== myUserId
+      ? `Берёт ${claim.teacher_name}`
+      : null;
+
+  const onReply = useCallback(
+    async (messageId: number): Promise<{ ok: boolean; reason?: string }> => {
+      const r = await fetch("/api/replies/start", {
+        method: "POST",
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId }),
+      });
+      const d = (await r.json().catch(() => ({}))) as { ok?: true; kind?: string; error?: string };
+      if (r.ok && d.ok) {
+        // Re-fetch so we pick up the new claim state.
+        void load();
+        return { ok: true };
+      }
+      return { ok: false, reason: d.error ?? `http-${r.status}` };
+    },
+    [jwt, load],
+  );
 
   if (!loaded) {
     return (
@@ -47,8 +105,19 @@ export function ThreadView({ jwt, studentId }: { jwt: string; studentId: number 
 
   return (
     <div className="flex flex-col gap-1">
+      {claim && claim.teacher_id === myUserId && (
+        <div className="text-xs text-tg-text-hint mb-2">
+          Активная сессия с этим учеником — отвечай в чате.
+        </div>
+      )}
       {messages.map((m) => (
-        <MessageBubble key={m.id} msg={m} jwt={jwt} />
+        <MessageBubble
+          key={m.id}
+          msg={m}
+          jwt={jwt}
+          onReply={onReply}
+          replyDisabledReason={replyDisabledReason}
+        />
       ))}
     </div>
   );

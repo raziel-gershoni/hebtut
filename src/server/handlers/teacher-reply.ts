@@ -1,6 +1,7 @@
 import type { Context } from "grammy";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { getBot } from "@/lib/tg";
+import { serverEnv } from "@/lib/env";
 import { ru } from "@/lib/i18n";
 import { editAllNotificationsForMessage } from "@/server/notifications";
 
@@ -67,12 +68,40 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
 
   const { data: original } = await sb
     .from("messages")
-    .select("id, student_id, claimed_by_teacher_id, status")
+    .select("id, student_id, status, direction, tg_message_id_in_student_chat")
     .eq("id", prompt.student_message_id)
     .single();
-  if (!original || original.claimed_by_teacher_id !== teacher.id) {
+  if (!original || original.direction !== "in" || original.status === "orphaned") {
     await ctx.reply(ru.teacherReplyFailed);
     return true;
+  }
+
+  // Ensure the (S, T) link still holds.
+  const { data: link } = await sb
+    .from("student_teachers")
+    .select("teacher_id")
+    .eq("student_id", original.student_id)
+    .eq("teacher_id", teacher.id)
+    .maybeSingle();
+  if (!link) {
+    await ctx.reply(ru.teacherReplyFailed);
+    return true;
+  }
+
+  // For pending/expired messages we require an active claim by this teacher.
+  // For already-answered messages we allow follow-ups without a live claim.
+  if (original.status !== "answered") {
+    const { data: claim } = await sb
+      .from("claims")
+      .select("teacher_id, expires_at")
+      .eq("student_id", original.student_id)
+      .maybeSingle();
+    const claimActive =
+      !!claim && new Date(claim.expires_at).getTime() > Date.now() && claim.teacher_id === teacher.id;
+    if (!claimActive) {
+      await ctx.reply(ru.teacherReplyFailed);
+      return true;
+    }
   }
 
   const { data: student } = await sb
@@ -90,17 +119,30 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
   const fileId = (voice?.file_id ?? note?.file_id) as string;
   const duration = (voice?.duration ?? note?.duration ?? 0) as number;
 
+  // TG-reply to the student's original message. allow_sending_without_reply
+  // means: if the student deleted the original, the bot still delivers (just
+  // un-threaded). If the whole chat is gone, the catch below handles it.
+  const replyParams =
+    original.tg_message_id_in_student_chat != null
+      ? {
+          reply_parameters: {
+            message_id: original.tg_message_id_in_student_chat,
+            allow_sending_without_reply: true,
+          },
+        }
+      : {};
+
   let newFileId = fileId;
   let newFileUniqueId: string | null = null;
   let sentMessageId: number;
   try {
     if (kind === "voice") {
-      const sent = await bot.api.sendVoice(student.tg_chat_id, fileId);
+      const sent = await bot.api.sendVoice(student.tg_chat_id, fileId, replyParams);
       newFileId = sent.voice?.file_id ?? fileId;
       newFileUniqueId = sent.voice?.file_unique_id ?? null;
       sentMessageId = sent.message_id;
     } else {
-      const sent = await bot.api.sendVideoNote(student.tg_chat_id, fileId);
+      const sent = await bot.api.sendVideoNote(student.tg_chat_id, fileId, replyParams);
       newFileId = sent.video_note?.file_id ?? fileId;
       newFileUniqueId = sent.video_note?.file_unique_id ?? null;
       sentMessageId = sent.message_id;
@@ -124,13 +166,34 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     tg_message_id_in_student_chat: sentMessageId,
   });
 
-  await sb
-    .from("messages")
-    .update({ status: "answered", answered_at: new Date().toISOString() })
-    .eq("id", original.id);
+  const isFirstAnswer = original.status !== "answered";
+  if (isFirstAnswer) {
+    await sb
+      .from("messages")
+      .update({
+        status: "answered",
+        answered_at: new Date().toISOString(),
+        claimed_by_teacher_id: teacher.id,
+      })
+      .eq("id", original.id);
+    const teacherName = teacher.name ?? "Преподаватель";
+    await editAllNotificationsForMessage(original.id, ru.teacherNotificationTaken(teacherName));
+  }
 
-  const teacherName = teacher.name ?? "Преподаватель";
-  await editAllNotificationsForMessage(original.id, ru.teacherNotificationTaken(teacherName));
+  // Refresh the (S, T) session — the teacher is engaged.
+  const ttlMs = serverEnv.CLAIM_TTL_MINUTES * 60_000;
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+  await sb
+    .from("claims")
+    .upsert(
+      {
+        student_id: original.student_id,
+        teacher_id: teacher.id,
+        claimed_at: new Date().toISOString(),
+        expires_at: expiresAt,
+      },
+      { onConflict: "student_id" },
+    );
 
   await ctx.reply(ru.teacherReplyDelivered);
   return true;

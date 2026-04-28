@@ -1,67 +1,128 @@
 import { getBot } from "@/lib/tg";
 import { getServiceRoleClient } from "@/lib/supabase-server";
+import { serverEnv } from "@/lib/env";
 import { ru, formatDuration } from "@/lib/i18n";
 import { editAllNotificationsForMessage } from "./notifications";
+import type { MessageDirection, MessageStatus } from "@/types/database";
 
-export interface ClaimableMessage {
-  status: string;
-  claimed_by_teacher_id: number | null;
+export type ReplyKind = "claim" | "session-refresh" | "followup";
+
+export type StartDecision =
+  | { ok: true; kind: ReplyKind }
+  | { ok: false; reason: "taken-by-other" | "orphaned" | "outbound" };
+
+export interface DecideInput {
+  msgDirection: MessageDirection;
+  msgStatus: MessageStatus;
+  /** null when there is no claim, or when the existing claim is expired. */
+  activeClaimTeacherId: number | null;
+  teacherId: number;
 }
 
-export function canClaim(msg: ClaimableMessage, teacherId: number): boolean {
-  if (msg.status === "pending") return true;
-  if (msg.status === "claimed" && msg.claimed_by_teacher_id === teacherId) return true;
-  return false;
+/**
+ * Pure decision rule — keeps the whole policy testable without DB or TG mocks.
+ */
+export function decideReplyKind(input: DecideInput): StartDecision {
+  if (input.msgDirection === "out") return { ok: false, reason: "outbound" };
+  if (input.msgStatus === "orphaned") return { ok: false, reason: "orphaned" };
+
+  // Other-teacher block (regardless of message status).
+  if (
+    input.activeClaimTeacherId !== null &&
+    input.activeClaimTeacherId !== input.teacherId
+  ) {
+    return { ok: false, reason: "taken-by-other" };
+  }
+
+  if (input.msgStatus === "answered") return { ok: true, kind: "followup" };
+
+  // pending or expired — claim or refresh by self
+  return {
+    ok: true,
+    kind: input.activeClaimTeacherId === input.teacherId ? "session-refresh" : "claim",
+  };
 }
 
-export type ClaimResult =
-  | { ok: true; promptMessageId: number }
-  | { ok: false; reason: "race" | "fatal" | "not-allowed" };
+export type StartReplyResult =
+  | { ok: true; kind: ReplyKind; promptMessageId: number }
+  | {
+      ok: false;
+      reason: "taken-by-other" | "orphaned" | "outbound" | "not-found" | "not-allowed" | "fatal";
+    };
 
-export async function claimMessage(messageId: number, teacherId: number): Promise<ClaimResult> {
+/**
+ * Orchestrates "start a reply for this message" — the single entry point for
+ * both the inbox claim flow and the per-thread "Ответить" button.
+ */
+export async function startReply(messageId: number, teacherId: number): Promise<StartReplyResult> {
   const sb = getServiceRoleClient();
 
-  // Verify the teacher is linked to this student before attempting transition.
-  const { data: msgRow } = await sb
+  const { data: msg } = await sb
     .from("messages")
-    .select("id, student_id, status, claimed_by_teacher_id")
+    .select("id, direction, status, student_id, kind, duration")
     .eq("id", messageId)
     .single();
-  if (!msgRow) return { ok: false, reason: "fatal" };
-  if (!canClaim(msgRow, teacherId)) return { ok: false, reason: "race" };
+  if (!msg) return { ok: false, reason: "not-found" };
 
+  // Verify the teacher is linked to this student.
   const { data: link } = await sb
     .from("student_teachers")
     .select("teacher_id")
-    .eq("student_id", msgRow.student_id)
+    .eq("student_id", msg.student_id)
     .eq("teacher_id", teacherId)
     .maybeSingle();
   if (!link) return { ok: false, reason: "not-allowed" };
 
-  // Atomic transition: only update if still pending OR already by us.
-  // We pre-checked but a race is still possible — the .or filter prevents us from stealing
-  // a claim made between the two queries.
-  const { data: updated } = await sb
-    .from("messages")
-    .update({
-      status: "claimed",
-      claimed_by_teacher_id: teacherId,
-      claimed_at: new Date().toISOString(),
-    })
-    .eq("id", messageId)
-    .or(`status.eq.pending,and(status.eq.claimed,claimed_by_teacher_id.eq.${teacherId})`)
-    .select("id, kind, duration, student_id")
+  // Read the active claim (if any) for this student.
+  const { data: claim } = await sb
+    .from("claims")
+    .select("teacher_id, expires_at")
+    .eq("student_id", msg.student_id)
     .maybeSingle();
-  if (!updated) return { ok: false, reason: "race" };
+  const claimActive =
+    !!claim && new Date(claim.expires_at).getTime() > Date.now();
+  const activeClaimTeacherId = claimActive ? claim.teacher_id : null;
 
+  const decision = decideReplyKind({
+    msgDirection: msg.direction,
+    msgStatus: msg.status,
+    activeClaimTeacherId,
+    teacherId,
+  });
+  if (!decision.ok) return decision;
+
+  // Atomic claim upsert (PK on student_id ⇒ at most one teacher per student).
+  const ttlMs = serverEnv.CLAIM_TTL_MINUTES * 60_000;
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+  const { error: upsertErr } = await sb
+    .from("claims")
+    .upsert(
+      {
+        student_id: msg.student_id,
+        teacher_id: teacherId,
+        claimed_at: new Date().toISOString(),
+        expires_at: expiresAt,
+      },
+      { onConflict: "student_id" },
+    );
+  if (upsertErr) {
+    console.error("claim upsert failed", upsertErr.message);
+    return { ok: false, reason: "fatal" };
+  }
+
+  // Send prompt DM to the teacher.
   const [{ data: student }, { data: teacher }] = await Promise.all([
-    sb.from("users").select("name").eq("id", updated.student_id).single(),
+    sb.from("users").select("name").eq("id", msg.student_id).single(),
     sb.from("users").select("tg_chat_id, name").eq("id", teacherId).single(),
   ]);
   if (!teacher) return { ok: false, reason: "fatal" };
 
-  const studentName = student?.name ?? `student ${updated.student_id}`;
-  const promptText = ru.teacherClaimPrompt(studentName, formatDuration(updated.duration));
+  const studentName = student?.name ?? `student ${msg.student_id}`;
+  const dur = formatDuration(msg.duration);
+  const promptText =
+    decision.kind === "followup"
+      ? ru.teacherFollowupPrompt(studentName, dur)
+      : ru.teacherClaimPrompt(studentName, dur);
   const sent = await getBot().api.sendMessage(teacher.tg_chat_id, promptText);
 
   await sb.from("prompts").insert({
@@ -71,30 +132,21 @@ export async function claimMessage(messageId: number, teacherId: number): Promis
     tg_prompt_message_id: sent.message_id,
   });
 
-  const teacherName = teacher.name ?? "Преподаватель";
-  await editAllNotificationsForMessage(messageId, ru.teacherNotificationTaken(teacherName));
+  // For a fresh "claim", edit other teachers' notifications for this student's
+  // pending messages so they see "T handling". On session-refresh / followup
+  // these notifications are already in that state; calling the helper is a
+  // safe no-op (TG returns 400 'message is not modified', which we swallow).
+  if (decision.kind === "claim") {
+    const teacherName = teacher.name ?? "Преподаватель";
+    const { data: pendingMsgs } = await sb
+      .from("messages")
+      .select("id")
+      .eq("student_id", msg.student_id)
+      .eq("status", "pending");
+    for (const m of pendingMsgs ?? []) {
+      await editAllNotificationsForMessage(m.id, ru.teacherNotificationTaken(teacherName));
+    }
+  }
 
-  return { ok: true, promptMessageId: sent.message_id };
-}
-
-export async function releaseClaim(messageId: number): Promise<void> {
-  const sb = getServiceRoleClient();
-  await sb
-    .from("messages")
-    .update({ status: "pending", claimed_by_teacher_id: null, claimed_at: null })
-    .eq("id", messageId);
-
-  const { data: msg } = await sb
-    .from("messages")
-    .select("kind, duration, student_id")
-    .eq("id", messageId)
-    .single();
-  if (!msg) return;
-  const { data: student } = await sb.from("users").select("name").eq("id", msg.student_id).single();
-  const studentName = student?.name ?? "ученик";
-  const kindLabel = msg.kind === "voice" ? "голосовое" : "круглое видео";
-  await editAllNotificationsForMessage(
-    messageId,
-    ru.teacherNotificationActionable(studentName, kindLabel, formatDuration(msg.duration)),
-  );
+  return { ok: true, kind: decision.kind, promptMessageId: sent.message_id };
 }

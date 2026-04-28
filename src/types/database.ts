@@ -7,7 +7,7 @@ export type UserRole = "pending" | "student" | "teacher";
 export type UserStatus = "active" | "paused";
 export type MessageDirection = "in" | "out";
 export type MessageKind = "voice" | "video_note";
-export type MessageStatus = "pending" | "claimed" | "answered" | "expired" | "orphaned";
+export type MessageStatus = "pending" | "answered" | "expired" | "orphaned";
 
 export interface Database {
   public: {
@@ -130,6 +130,22 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["prompts"]["Insert"]>;
+        Relationships: [];
+      };
+      claims: {
+        Row: {
+          student_id: number;
+          teacher_id: number;
+          claimed_at: string;
+          expires_at: string;
+        };
+        Insert: {
+          student_id: number;
+          teacher_id: number;
+          claimed_at?: string;
+          expires_at: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["claims"]["Insert"]>;
         Relationships: [];
       };
       quota_usage: {

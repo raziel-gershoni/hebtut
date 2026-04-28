@@ -16,6 +16,8 @@ export const ru = {
   teacherReplyFailed: "Не удалось отправить ответ. Попробуй ещё раз через мини-приложение.",
   teacherClaimPrompt: (studentName: string, dur: string) =>
     `📩 Ответь ${studentName} — голосовое ${dur}. Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
+  teacherFollowupPrompt: (studentName: string, dur: string) =>
+    `📩 Доп. ответ для ${studentName} — голосовое ${dur}. Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
   teacherNotificationActionable: (studentName: string, kindLabel: string, durationLabel: string) =>
     `🔔 ${studentName} прислал(а) ${kindLabel} ${durationLabel}. Открой мини-приложение, чтобы взять в работу.`,
   teacherNotificationTaken: (handler: string) => `✓ ${handler} взял(а) сообщение в работу.`,

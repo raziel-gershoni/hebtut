@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 
 type Msg = {
   id: number;
@@ -8,7 +9,14 @@ type Msg = {
   created_at: string;
 };
 
-export function MessageBubble({ msg, jwt }: { msg: Msg; jwt: string }) {
+interface MessageBubbleProps {
+  msg: Msg;
+  jwt: string;
+  onReply?: (messageId: number) => Promise<{ ok: boolean; reason?: string }>;
+  replyDisabledReason?: string | null;
+}
+
+export function MessageBubble({ msg, jwt, onReply, replyDisabledReason }: MessageBubbleProps) {
   const min = Math.floor(msg.duration / 60);
   const sec = (msg.duration % 60).toString().padStart(2, "0");
   const isIn = msg.direction === "in";
@@ -23,6 +31,27 @@ export function MessageBubble({ msg, jwt }: { msg: Msg; jwt: string }) {
     hour: "2-digit",
     minute: "2-digit",
   });
+
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  async function handleReply() {
+    if (!onReply) return;
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const r = await onReply(msg.id);
+      if (r.ok) {
+        setFeedback("✓ Свайпни по приглашению в чате");
+      } else if (r.reason === "taken-by-other") {
+        setFeedback("Берёт другой преподаватель");
+      } else {
+        setFeedback(`Ошибка: ${r.reason ?? "неизвестная"}`);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className={`flex ${align}`}>
@@ -46,6 +75,24 @@ export function MessageBubble({ msg, jwt }: { msg: Msg; jwt: string }) {
             className="rounded-xl max-w-full"
             src={src}
           />
+        )}
+        {isIn && onReply && (
+          <div className="mt-2 flex items-center gap-3">
+            <button
+              type="button"
+              disabled={busy || !!replyDisabledReason}
+              onClick={() => void handleReply()}
+              className="text-xs font-medium tracking-tight text-tg-text-link disabled:text-tg-text-hint disabled:cursor-not-allowed"
+            >
+              {busy ? "…" : "Ответить"}
+            </button>
+            {replyDisabledReason && (
+              <span className="text-xs text-tg-text-hint">{replyDisabledReason}</span>
+            )}
+            {feedback && !replyDisabledReason && (
+              <span className="text-xs text-tg-text-hint">{feedback}</span>
+            )}
+          </div>
         )}
       </div>
     </div>
