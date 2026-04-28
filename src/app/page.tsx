@@ -85,7 +85,7 @@ function ActionCard({
   return (
     <Link
       href={href}
-      className="block rounded-2xl bg-tg-bg-section p-4 transition-transform active:scale-[0.99]"
+      className="block rounded-2xl bg-tg-bg-section p-4 shadow-lg shadow-black/20 ring-1 ring-inset ring-white/[0.04] transition-all duration-150 active:scale-[0.99] active:shadow-md active:shadow-black/15"
     >
       <div className="flex items-center gap-4">
         <div
