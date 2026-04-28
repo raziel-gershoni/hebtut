@@ -104,8 +104,9 @@ Vercel Hobby caps cron at once-per-day, which is too slow for a 15-minute claim 
    - **Method**: `POST`
    - **Cron**: `*/5 * * * *` (every 5 minutes)
    - **Headers** → add one:
-     - Name: `Authorization`
+     - Name: `Upstash-Forward-Authorization`
      - Value: `Bearer <CRON_SECRET>` (use the exact `CRON_SECRET` value you set in Vercel env)
+     - QStash reserves the bare `Authorization` header for its own signature, so you must use the `Upstash-Forward-` prefix. QStash strips that prefix when delivering, so our route still sees a normal `Authorization: Bearer …` header.
    - **Retries**: leave default
 3. Save. Within ~5 min the schedule's **Events** tab should show a `200` for the first invocation. A `200` body of `{"released": 0}` means there were no stale claims — that's the expected steady state.
 
