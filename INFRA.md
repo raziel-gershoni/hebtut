@@ -140,9 +140,33 @@ If you'd rather create the schedule by hand (and skip `QSTASH_TOKEN`): in QStash
 
 If you rotate `CRON_SECRET` later, the script will **not** update the forwarded header on an existing schedule. Either delete the schedule manually in QStash and re-deploy (the script will recreate with the new secret), or edit the schedule's header in the dashboard.
 
-## 6. Wire the Telegram webhook
+## 6. Wire the Telegram webhook (auto-managed)
 
-After the first successful deploy:
+The webhook is set automatically on every production deploy by
+`scripts/sync-tg-webhook.mjs`, using `TELEGRAM_BOT_TOKEN`,
+`TELEGRAM_WEBHOOK_SECRET`, and `APP_BASE_URL` from your Vercel env.
+The script runs unconditionally (idempotent), so a rotated webhook
+secret in env propagates on the next deploy automatically. Look in
+the deploy log for one of:
+
+```
+[tg-webhook] no webhook set — installing https://<your-domain>/api/webhook
+[tg-webhook] setWebhook ok → https://<your-domain>/api/webhook
+```
+
+### Verify
+
+```bash
+curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"
+```
+
+`url` should match `https://<your-domain>/api/webhook`, `last_error_message`
+should be `null` (or absent).
+
+### Manual fallback
+
+If you need to set or reset the webhook without a deploy (e.g. token rotation
+mid-debug):
 
 ```bash
 curl -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
@@ -153,14 +177,6 @@ curl -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
     "allowed_updates": ["message","callback_query"]
   }'
 ```
-
-Verify:
-
-```bash
-curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"
-```
-
-`url` should be set, `last_error_message` should be `null`.
 
 ## 7. Wire the Mini App
 

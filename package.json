@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "vercel-build": "node scripts/db-push.mjs && node scripts/sync-qstash.mjs && next build",
+    "vercel-build": "node scripts/db-push.mjs && node scripts/sync-qstash.mjs && node scripts/sync-tg-webhook.mjs && next build",
     "db:push": "supabase db push --db-url \"$SUPABASE_DB_URL\" --include-all",
     "start": "next start",
     "lint": "next lint",
