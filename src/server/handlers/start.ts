@@ -16,7 +16,7 @@ export async function handleStart(ctx: Context): Promise<void> {
 
   const { data: existing } = await sb
     .from("users")
-    .select("id, role, tz")
+    .select("id, role, is_admin, tz")
     .eq("tg_user_id", from.id)
     .maybeSingle();
 
@@ -34,18 +34,19 @@ export async function handleStart(ctx: Context): Promise<void> {
   // Refresh chat_id and name (the user may have re-/started or changed display name).
   await sb.from("users").update({ tg_chat_id: chat.id, name: display }).eq("id", existing.id);
 
-  switch (existing.role) {
-    case "pending":
-      await ctx.reply(ru.greetingRegistered);
-      return;
-    case "teacher":
-    case "admin":
-      await ctx.reply(ru.greetingTeacher);
-      return;
-    case "student": {
-      const remaining = await getRemainingForToday(existing.id, existing.tz);
-      await ctx.reply(ru.greetingStudent(formatDuration(remaining)));
-      return;
-    }
+  // Greeting precedence:
+  //   admin (with or without a working role) → teacher/admin greeting
+  //   role=teacher → teacher/admin greeting
+  //   role=student → student greeting with quota
+  //   role=pending && !is_admin → wait-for-admin greeting
+  if (existing.is_admin || existing.role === "teacher") {
+    await ctx.reply(ru.greetingTeacher);
+    return;
   }
+  if (existing.role === "student") {
+    const remaining = await getRemainingForToday(existing.id, existing.tz);
+    await ctx.reply(ru.greetingStudent(formatDuration(remaining)));
+    return;
+  }
+  await ctx.reply(ru.greetingRegistered);
 }

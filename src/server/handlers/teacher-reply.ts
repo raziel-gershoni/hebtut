@@ -35,7 +35,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     .select("id, role, name")
     .eq("tg_user_id", ctx.from.id)
     .maybeSingle();
-  if (!teacher || (teacher.role !== "teacher" && teacher.role !== "admin")) {
+  if (!teacher || teacher.role !== "teacher") {
     return false; // not a teacher → not our route, fall through to student-message
   }
 

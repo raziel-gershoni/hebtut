@@ -6,25 +6,29 @@ type AdminUser = {
   id: number;
   tg_user_id: number;
   name: string | null;
-  role: "pending" | "student" | "teacher" | "admin";
+  role: "pending" | "student" | "teacher";
+  is_admin: boolean;
   status: string;
   created_at: string;
   role_changed_at: string | null;
 };
 
-const ROLES: AdminUser["role"][] = ["pending", "student", "teacher", "admin"];
+const ROLES: AdminUser["role"][] = ["pending", "student", "teacher"];
 
 const ROLE_PILL: Record<AdminUser["role"], string> = {
   pending: "bg-tg-bg-secondary text-tg-text-hint",
   student: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
   teacher: "bg-tg-button/15 text-tg-text-accent",
-  admin: "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-400",
 };
+
+type PendingChange =
+  | { kind: "role"; id: number; role: AdminUser["role"] }
+  | { kind: "admin"; id: number; is_admin: boolean };
 
 export function AdminUsersTable({ jwt }: { jwt: string }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [pending, setPending] = useState<{ id: number; role: AdminUser["role"] } | null>(null);
+  const [pending, setPending] = useState<PendingChange | null>(null);
   const [filter, setFilter] = useState("");
 
   const load = useCallback(async () => {
@@ -41,8 +45,6 @@ export function AdminUsersTable({ jwt }: { jwt: string }) {
     void load();
   }, [load]);
 
-  // Re-fetch when the Mini App returns to foreground (covers TG webview cache,
-  // OS-level backgrounding, network drops, etc.).
   useEffect(() => {
     function onVisibility() {
       if (document.visibilityState === "visible") void load();
@@ -55,19 +57,19 @@ export function AdminUsersTable({ jwt }: { jwt: string }) {
     };
   }, [load]);
 
-  async function changeRole(id: number, role: AdminUser["role"]) {
+  async function patch(id: number, body: { role?: AdminUser["role"]; is_admin?: boolean }) {
     await fetch(`/api/admin/users/${id}/role`, {
       method: "PATCH",
+      cache: "no-store",
       headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ role }),
+      body: JSON.stringify(body),
     });
     await load();
   }
 
-  function isDestructive(current: AdminUser["role"], next: AdminUser["role"]): boolean {
-    if (current === "admin" && next !== "admin") return true;
-    if (current === "teacher" && (next === "pending" || next === "student")) return true;
-    if (current === "student" && (next === "pending" || next === "teacher")) return true;
+  function isDestructiveRole(current: AdminUser["role"], next: AdminUser["role"]): boolean {
+    if (current === next) return false;
+    if (current === "teacher" || current === "student") return true;
     return false;
   }
 
@@ -122,11 +124,18 @@ export function AdminUsersTable({ jwt }: { jwt: string }) {
         {filtered.map((u) => (
           <li
             key={u.id}
-            className="rounded-2xl bg-tg-bg-section p-3 flex items-center gap-3"
+            className="rounded-2xl bg-tg-bg-section p-3 flex items-center gap-3 flex-wrap"
           >
             <Avatar name={u.name ?? String(u.tg_user_id)} />
             <div className="min-w-0 flex-1">
-              <div className="font-medium truncate">{u.name ?? "—"}</div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium truncate">{u.name ?? "—"}</span>
+                {u.is_admin && (
+                  <span className="text-[10px] font-semibold tracking-widest px-1.5 py-0.5 rounded-full bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-400">
+                    АДМИН
+                  </span>
+                )}
+              </div>
               <div className="text-xs text-tg-text-hint tabular-nums">
                 ID {u.tg_user_id}
               </div>
@@ -143,8 +152,9 @@ export function AdminUsersTable({ jwt }: { jwt: string }) {
               onChange={(e) => {
                 const next = e.target.value as AdminUser["role"];
                 if (next === u.role) return;
-                if (isDestructive(u.role, next)) setPending({ id: u.id, role: next });
-                else void changeRole(u.id, next);
+                if (isDestructiveRole(u.role, next))
+                  setPending({ kind: "role", id: u.id, role: next });
+                else void patch(u.id, { role: next });
               }}
             >
               {ROLES.map((r) => (
@@ -153,17 +163,37 @@ export function AdminUsersTable({ jwt }: { jwt: string }) {
                 </option>
               ))}
             </select>
+            <label className="shrink-0 inline-flex items-center gap-1.5 text-xs text-tg-text-hint cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={u.is_admin}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  if (!next && u.is_admin)
+                    setPending({ kind: "admin", id: u.id, is_admin: false });
+                  else void patch(u.id, { is_admin: next });
+                }}
+                className="h-4 w-4 rounded accent-tg-button"
+              />
+              <span>Админ</span>
+            </label>
           </li>
         ))}
       </ul>
 
       <ConfirmDialog
         open={!!pending}
-        title="Подтвердить смену роли"
-        body="Это действие может разорвать существующие связи студент↔преподаватель. Продолжить?"
+        title={pending?.kind === "admin" ? "Снять права админа?" : "Подтвердить смену роли"}
+        body={
+          pending?.kind === "admin"
+            ? "Без прав админа этот пользователь больше не сможет управлять пользователями и связями."
+            : "Это действие может разорвать существующие связи студент↔преподаватель. Продолжить?"
+        }
         onCancel={() => setPending(null)}
         onConfirm={async () => {
-          if (pending) await changeRole(pending.id, pending.role);
+          if (!pending) return;
+          if (pending.kind === "role") await patch(pending.id, { role: pending.role });
+          else await patch(pending.id, { is_admin: pending.is_admin });
           setPending(null);
         }}
       />

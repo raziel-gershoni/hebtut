@@ -2,7 +2,7 @@
 // Acceptable for trusted teachers + easy token rotation in BotFather. Replace before public release.
 
 import type { NextRequest } from "next/server";
-import { authFromRequest, requireRole } from "@/lib/auth-server";
+import { authFromRequest, canTeachOrReadAsAdmin } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { getBot } from "@/lib/tg";
 import { serverEnv } from "@/lib/env";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest, { params }: { params: { messageId: string } }) {
   const user = await authFromRequest(req);
-  if (!requireRole(user, ["teacher", "admin"])) {
+  if (!canTeachOrReadAsAdmin(user)) {
     return new Response("forbidden", { status: 403 });
   }
   const messageId = Number(params.messageId);
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: { messageId: s
     .single();
   if (!msg) return new Response("not found", { status: 404 });
 
-  if (user.role !== "admin") {
+  if (!user.isAdmin) {
     const { data: link } = await sb
       .from("student_teachers")
       .select("teacher_id")

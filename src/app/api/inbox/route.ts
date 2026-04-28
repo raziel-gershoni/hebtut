@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { authFromRequest, requireRole } from "@/lib/auth-server";
+import { authFromRequest, canTeachOrReadAsAdmin } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
 
@@ -9,7 +9,7 @@ export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
   const user = await authFromRequest(req);
-  if (!requireRole(user, ["teacher", "admin"])) {
+  if (!canTeachOrReadAsAdmin(user)) {
     return new Response("forbidden", { status: 403 });
   }
   const sb = getServiceRoleClient();

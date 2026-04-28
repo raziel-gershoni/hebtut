@@ -1,7 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 
-export type SessionUser = { id: number; role: string; name: string | null };
+export type SessionUser = {
+  id: number;
+  role: string;
+  is_admin: boolean;
+  name: string | null;
+};
 export type AuthStatus =
   | { state: "loading" }
   | { state: "no-tg" }

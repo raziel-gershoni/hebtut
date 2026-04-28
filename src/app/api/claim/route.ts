@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
-import { authFromRequest, requireRole } from "@/lib/auth-server";
+import { authFromRequest, hasRole } from "@/lib/auth-server";
 import { claimMessage } from "@/server/claim";
 import { readJsonBody } from "@/lib/http";
 
@@ -11,7 +11,7 @@ const Body = z.object({ messageId: z.coerce.number().int() });
 
 export async function POST(req: NextRequest) {
   const user = await authFromRequest(req);
-  if (!requireRole(user, ["teacher", "admin"])) {
+  if (!hasRole(user, ["teacher"])) {
     return new Response("forbidden", { status: 403 });
   }
   const parsed = Body.safeParse(await readJsonBody(req));

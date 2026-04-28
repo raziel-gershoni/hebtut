@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { authFromRequest, requireRole } from "@/lib/auth-server";
+import { authFromRequest, canTeachOrReadAsAdmin } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
 
@@ -9,14 +9,14 @@ export const revalidate = 0;
 
 export async function GET(req: NextRequest, { params }: { params: { studentId: string } }) {
   const user = await authFromRequest(req);
-  if (!requireRole(user, ["teacher", "admin"])) {
+  if (!canTeachOrReadAsAdmin(user)) {
     return new Response("forbidden", { status: 403 });
   }
   const studentId = Number(params.studentId);
   if (!Number.isInteger(studentId)) return new Response("bad id", { status: 400 });
 
   const sb = getServiceRoleClient();
-  if (user.role !== "admin") {
+  if (!user.isAdmin) {
     const { data: link } = await sb
       .from("student_teachers")
       .select("teacher_id")

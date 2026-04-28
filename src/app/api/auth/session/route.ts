@@ -30,11 +30,11 @@ export async function POST(req: NextRequest) {
 
   const { data: existing } = await sb
     .from("users")
-    .select("id, role, name")
+    .select("id, role, is_admin, name")
     .eq("tg_user_id", parsed.user.id)
     .maybeSingle();
 
-  let userRow: { id: number; role: string; name: string | null };
+  let userRow: { id: number; role: string; is_admin: boolean; name: string | null };
   if (!existing) {
     const { data, error } = await sb
       .from("users")
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
         name: display,
         role: "pending",
       })
-      .select("id, role, name")
+      .select("id, role, is_admin, name")
       .single();
     if (error || !data) return Response.json({ error: error?.message ?? "insert failed" }, { status: 500 });
     userRow = data;
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       .from("users")
       .update({ name: display })
       .eq("id", existing.id)
-      .select("id, role, name")
+      .select("id, role, is_admin, name")
       .single();
     if (error || !data) {
       console.warn("name refresh failed", { reason: error?.message });
@@ -69,7 +69,12 @@ export async function POST(req: NextRequest) {
   return Response.json(
     {
       jwt,
-      user: { id: userRow.id, role: userRow.role, name: userRow.name },
+      user: {
+        id: userRow.id,
+        role: userRow.role,
+        is_admin: userRow.is_admin,
+        name: userRow.name,
+      },
     },
     { headers: noStoreHeaders },
   );

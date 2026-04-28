@@ -3,7 +3,7 @@
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
-export type UserRole = "pending" | "student" | "teacher" | "admin";
+export type UserRole = "pending" | "student" | "teacher";
 export type UserStatus = "active" | "paused";
 export type MessageDirection = "in" | "out";
 export type MessageKind = "voice" | "video_note";
@@ -19,6 +19,7 @@ export interface Database {
           tg_chat_id: number;
           name: string | null;
           role: UserRole;
+          is_admin: boolean;
           status: UserStatus;
           tz: string;
           created_at: string;
@@ -30,6 +31,7 @@ export interface Database {
           tg_chat_id: number;
           name?: string | null;
           role?: UserRole;
+          is_admin?: boolean;
           status?: UserStatus;
           tz?: string;
           created_at?: string;

@@ -6,6 +6,7 @@ import { useInitDataAuth } from "@/hooks/useInitDataAuth";
 export interface AppCtx {
   jwt: string;
   role: string;
+  isAdmin: boolean;
   userId: number;
   name: string | null;
 }
@@ -20,7 +21,6 @@ const ROLE_LABEL: Record<string, string> = {
   pending: "ожидание",
   student: "ученик",
   teacher: "преподаватель",
-  admin: "админ",
 };
 
 export function AppShell({ title, back, children }: AppShellProps) {
@@ -44,9 +44,16 @@ export function AppShell({ title, back, children }: AppShellProps) {
               {title}
             </h1>
             {status.state === "ok" && (
-              <span className="ml-auto text-xs text-tg-text-hint uppercase tracking-wider">
-                {ROLE_LABEL[status.user.role] ?? status.user.role}
-              </span>
+              <div className="ml-auto flex items-center gap-1.5">
+                <span className="text-xs text-tg-text-hint uppercase tracking-wider">
+                  {ROLE_LABEL[status.user.role] ?? status.user.role}
+                </span>
+                {status.user.is_admin && (
+                  <span className="text-[10px] font-semibold tracking-widest px-1.5 py-0.5 rounded-full bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-400">
+                    АДМИН
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </header>
@@ -64,6 +71,7 @@ export function AppShell({ title, back, children }: AppShellProps) {
           children({
             jwt: status.jwt,
             role: status.user.role,
+            isAdmin: status.user.is_admin,
             userId: status.user.id,
             name: status.user.name,
           })}
