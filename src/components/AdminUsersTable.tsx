@@ -15,12 +15,6 @@ type AdminUser = {
 
 const ROLES: AdminUser["role"][] = ["pending", "student", "teacher"];
 
-const ROLE_PILL: Record<AdminUser["role"], string> = {
-  pending: "bg-tg-bg-secondary text-tg-text-hint",
-  student: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  teacher: "bg-tg-button/15 text-tg-text-accent",
-};
-
 type PendingChange =
   | { kind: "role"; id: number; role: AdminUser["role"] }
   | { kind: "admin"; id: number; is_admin: boolean };
@@ -124,30 +118,20 @@ export function AdminUsersTable({ jwt }: { jwt: string }) {
         {filtered.map((u) => (
           <li
             key={u.id}
-            className="rounded-2xl bg-tg-bg-section p-3 flex items-center gap-3 flex-wrap"
+            className="rounded-2xl bg-tg-bg-section p-3 flex items-center gap-3"
           >
-            <Avatar name={u.name ?? String(u.tg_user_id)} />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <span className="font-medium truncate">{u.name ?? "—"}</span>
-                {u.is_admin && (
-                  <span className="text-[10px] font-semibold tracking-widest px-1.5 py-0.5 rounded-full bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-400">
-                    АДМИН
-                  </span>
-                )}
+            <Avatar name={u.name ?? String(u.tg_user_id)} isAdmin={u.is_admin} />
+            <div className="min-w-0 flex-1 leading-tight">
+              <div className="font-medium tracking-tight truncate">
+                {u.name ?? "—"}
               </div>
-              <div className="text-xs text-tg-text-hint tabular-nums">
-                ID {u.tg_user_id}
+              <div className="text-xs text-tg-text-hint tabular-nums truncate">
+                {u.tg_user_id}
               </div>
             </div>
-            <span
-              className={`shrink-0 inline-flex items-center h-6 px-2 rounded-full text-[11px] font-medium uppercase tracking-wider ${ROLE_PILL[u.role]}`}
-            >
-              {u.role}
-            </span>
             <select
-              aria-label="Изменить роль"
-              className="shrink-0 h-9 px-2 rounded-lg bg-tg-bg-secondary text-tg-text text-sm outline-none focus:ring-2 focus:ring-tg-button/40"
+              aria-label="Роль"
+              className="shrink-0 h-8 pl-2 pr-7 rounded-lg bg-tg-bg-secondary text-tg-text text-xs font-medium outline-none focus:ring-2 focus:ring-tg-button/40"
               value={u.role}
               onChange={(e) => {
                 const next = e.target.value as AdminUser["role"];
@@ -201,16 +185,19 @@ export function AdminUsersTable({ jwt }: { jwt: string }) {
   );
 }
 
-function Avatar({ name }: { name: string }) {
+function Avatar({ name, isAdmin }: { name: string; isAdmin?: boolean }) {
   const initials = name
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((s) => s[0]!.toUpperCase())
     .join("");
+  // Admins get a thin accent ring so they're scannable in a long list
+  // without needing a loud pill.
+  const ring = isAdmin ? "ring-1 ring-tg-text-accent/60" : "";
   return (
     <div
-      className="shrink-0 w-9 h-9 rounded-full bg-tg-bg-secondary text-tg-text flex items-center justify-center text-xs font-semibold tracking-tight"
+      className={`shrink-0 w-9 h-9 rounded-full bg-tg-bg-secondary text-tg-text flex items-center justify-center text-xs font-semibold tracking-tight ${ring}`}
       aria-hidden
     >
       {initials || "?"}
