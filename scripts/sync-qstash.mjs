@@ -63,22 +63,21 @@ async function main() {
     return;
   }
 
-  // 2) Create the schedule.
-  const createRes = await fetch(
-    `${QSTASH}/${encodeURIComponent(destination)}`,
-    {
-      method: "POST",
-      headers: {
-        ...auth,
-        "Upstash-Cron": CRON,
-        "Upstash-Method": "POST",
-        // Upstash-Forward-* headers are stripped of the prefix and forwarded
-        // to the destination. The bare `Authorization` header would be
-        // intercepted by QStash for its own signature, hence the prefix.
-        "Upstash-Forward-Authorization": `Bearer ${CRON_SECRET}`,
-      },
+  // 2) Create the schedule. The destination URL goes directly into the
+  // path — NOT URL-encoded. QStash's router treats the path opaquely, so
+  // percent-encoded `https%3A%2F%2F…` is rejected as having no scheme.
+  const createRes = await fetch(`${QSTASH}/${destination}`, {
+    method: "POST",
+    headers: {
+      ...auth,
+      "Upstash-Cron": CRON,
+      "Upstash-Method": "POST",
+      // Upstash-Forward-* headers have the prefix stripped and forwarded to
+      // the destination. The bare `Authorization` header would be intercepted
+      // by QStash for its own signature, hence the prefix.
+      "Upstash-Forward-Authorization": `Bearer ${CRON_SECRET}`,
     },
-  );
+  });
   if (!createRes.ok) {
     console.warn(`${TAG} create failed (${createRes.status}): ${await createRes.text()}`);
     return;
