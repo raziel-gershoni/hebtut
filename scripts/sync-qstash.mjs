@@ -36,7 +36,12 @@ async function main() {
     return;
   }
 
-  const destination = `${APP_BASE_URL.replace(/\/$/, "")}${ENDPOINT_PATH}`;
+  // Normalize: if APP_BASE_URL is set to a bare hostname (no scheme), prepend
+  // https:// so QStash accepts the destination. Vercel sometimes provides
+  // hostnames without scheme via VERCEL_URL — same pitfall.
+  let base = APP_BASE_URL.replace(/\/$/, "");
+  if (!/^https?:\/\//i.test(base)) base = `https://${base}`;
+  const destination = `${base}${ENDPOINT_PATH}`;
   const auth = { Authorization: `Bearer ${QSTASH_TOKEN}` };
 
   // 1) List schedules and check whether ours already exists.
