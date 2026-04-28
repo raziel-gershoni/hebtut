@@ -1,24 +1,45 @@
 "use client";
 import { useState } from "react";
+import { formatDuration } from "@/lib/i18n";
 
-type Msg = {
+export type ThreadMsg = {
   id: number;
   direction: "in" | "out";
   kind: "voice" | "video_note";
   duration: number;
+  status?: string;
+  reply_to_id?: number | null;
   created_at: string;
 };
 
 interface MessageBubbleProps {
-  msg: Msg;
+  msg: ThreadMsg;
   jwt: string;
+  /** Original message this bubble is a reply to, if any. */
+  replyTo?: ThreadMsg | null;
   onReply?: (messageId: number) => Promise<{ ok: boolean; reason?: string }>;
   replyDisabledReason?: string | null;
 }
 
-export function MessageBubble({ msg, jwt, onReply, replyDisabledReason }: MessageBubbleProps) {
-  const min = Math.floor(msg.duration / 60);
-  const sec = (msg.duration % 60).toString().padStart(2, "0");
+function scrollToMessage(id: number) {
+  if (typeof document === "undefined") return;
+  const el = document.getElementById(`msg-${id}`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  // Brief accent ring so the user sees what we scrolled to.
+  el.classList.add("ring-2", "ring-tg-text-accent/40");
+  window.setTimeout(() => {
+    el.classList.remove("ring-2", "ring-tg-text-accent/40");
+  }, 1500);
+}
+
+export function MessageBubble({
+  msg,
+  jwt,
+  replyTo,
+  onReply,
+  replyDisabledReason,
+}: MessageBubbleProps) {
   const isIn = msg.direction === "in";
   const align = isIn ? "justify-start" : "justify-end";
   const bubbleBase =
@@ -54,17 +75,32 @@ export function MessageBubble({ msg, jwt, onReply, replyDisabledReason }: Messag
   }
 
   return (
-    <div className={`flex ${align}`}>
+    <div id={`msg-${msg.id}`} className={`flex ${align} scroll-mt-16 rounded-2xl`}>
       <div className={`${bubbleBase} ${bubble}`}>
         <div className="text-[11px] uppercase tracking-wider text-tg-text-hint mb-1.5 flex items-center gap-2">
           <span>{isIn ? "Ученик" : "Преподаватель"}</span>
           <span aria-hidden>·</span>
-          <span className="tabular-nums">
-            {min}:{sec}
-          </span>
+          <span className="tabular-nums">{formatDuration(msg.duration)}</span>
           <span aria-hidden>·</span>
           <span className="tabular-nums">{time}</span>
         </div>
+
+        {replyTo && (
+          <button
+            type="button"
+            onClick={() => scrollToMessage(replyTo.id)}
+            className="w-full text-left mb-2 rounded-xl bg-tg-bg/60 border-l-2 border-tg-text-accent/40 px-2.5 py-1.5 text-[11px] text-tg-text-hint transition-colors active:bg-tg-bg-secondary"
+            aria-label="Перейти к исходному сообщению"
+          >
+            <span className="uppercase tracking-wider">
+              {replyTo.direction === "in" ? "Ученик" : "Преподаватель"}
+            </span>
+            <span className="mx-1.5" aria-hidden>·</span>
+            <span aria-hidden>{replyTo.kind === "voice" ? "🎙️" : "🟢"}</span>
+            <span className="ml-1 tabular-nums">{formatDuration(replyTo.duration)}</span>
+          </button>
+        )}
+
         {msg.kind === "voice" ? (
           <audio controls preload="none" src={src} className="w-full" />
         ) : (
@@ -76,6 +112,7 @@ export function MessageBubble({ msg, jwt, onReply, replyDisabledReason }: Messag
             src={src}
           />
         )}
+
         {isIn && onReply && (
           <div className="mt-2 flex items-center gap-3">
             <button

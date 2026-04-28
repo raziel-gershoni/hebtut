@@ -30,7 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
 
   const { data: messages, error } = await sb
     .from("messages")
-    .select("id, direction, kind, duration, status, created_at")
+    .select("id, direction, kind, duration, status, reply_to_id, created_at")
     .eq("student_id", studentId)
     .in("status", ["pending", "answered", "expired"])
     .order("created_at", { ascending: true });

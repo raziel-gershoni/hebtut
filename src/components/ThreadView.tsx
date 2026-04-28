@@ -1,15 +1,6 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
-import { MessageBubble } from "./MessageBubble";
-
-type ThreadMsg = {
-  id: number;
-  direction: "in" | "out";
-  kind: "voice" | "video_note";
-  duration: number;
-  status: string;
-  created_at: string;
-};
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { MessageBubble, type ThreadMsg } from "./MessageBubble";
 
 interface ClaimInfo {
   teacher_id: number;
@@ -61,6 +52,10 @@ export function ThreadView({
     };
   }, [load]);
 
+  // O(N) once per render, so we can resolve reply_to_id → original ThreadMsg
+  // without prop-drilling the whole list down to every bubble.
+  const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+
   const replyDisabledReason =
     claim && claim.teacher_id !== myUserId
       ? `Берёт ${claim.teacher_name}`
@@ -76,7 +71,6 @@ export function ThreadView({
       });
       const d = (await r.json().catch(() => ({}))) as { ok?: true; kind?: string; error?: string };
       if (r.ok && d.ok) {
-        // Re-fetch so we pick up the new claim state.
         void load();
         return { ok: true };
       }
@@ -115,6 +109,7 @@ export function ThreadView({
           key={m.id}
           msg={m}
           jwt={jwt}
+          replyTo={m.reply_to_id != null ? byId.get(m.reply_to_id) ?? null : null}
           onReply={onReply}
           replyDisabledReason={replyDisabledReason}
         />
