@@ -103,10 +103,10 @@ The schedule is **created automatically by `scripts/sync-qstash.mjs` on producti
 ### Setup
 
 1. Sign in to [console.upstash.com](https://console.upstash.com) → **QStash**. Free tier, no credit card.
-2. **API Keys** → copy your **QStash Token** (starts with `eyJ…`).
+2. **API Keys** → copy your **QStash Token** (starts with `eyJ…`). Note also the API base URL — most accounts can use the global `https://qstash.upstash.io`, but **region-scoped accounts** (e.g. `https://qstash-us-east-1.upstash.io`) need to override it via `QSTASH_URL`.
 3. In **Vercel → Project Settings → Environment Variables**, add:
-   - Name: `QSTASH_TOKEN`
-   - Value: the token from step 2
+   - `QSTASH_TOKEN` = the token from step 2
+   - (Optional, only if region-scoped) `QSTASH_URL` = e.g. `https://qstash-us-east-1.upstash.io`
    - Environment: **Production** only (so preview deploys don't touch your QStash account).
 4. Trigger a deploy (push any commit, or hit "Redeploy" on the latest deployment). The deploy log will show:
    - `[qstash-sync] created schedule (id=...) → https://<your-domain>/api/cron/expire-claims` on first run, or

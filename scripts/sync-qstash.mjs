@@ -9,6 +9,7 @@ const TAG = "[qstash-sync]";
 
 const {
   QSTASH_TOKEN,
+  QSTASH_URL,
   APP_BASE_URL,
   CRON_SECRET,
   VERCEL_ENV,
@@ -16,7 +17,9 @@ const {
 
 const ENDPOINT_PATH = "/api/cron/expire-claims";
 const CRON = "*/5 * * * *";
-const QSTASH = "https://qstash.upstash.io/v2/schedules";
+// Default to the global endpoint; users on a regional account
+// (e.g. https://qstash-us-east-1.upstash.io) override via QSTASH_URL.
+const QSTASH = `${(QSTASH_URL ?? "https://qstash.upstash.io").replace(/\/$/, "")}/v2/schedules`;
 
 async function main() {
   // Only sync on production deploys. Previews / local builds are no-ops.
