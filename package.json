@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "vercel-build": "supabase db push --db-url \"$SUPABASE_DB_URL\" --include-all && node scripts/sync-qstash.mjs && next build",
+    "vercel-build": "node scripts/db-push.mjs && node scripts/sync-qstash.mjs && next build",
     "db:push": "supabase db push --db-url \"$SUPABASE_DB_URL\" --include-all",
     "start": "next start",
     "lint": "next lint",
@@ -33,6 +33,7 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.20",
     "postcss": "^8.4.47",
+    "postgres": "^3.4.9",
     "prettier": "^3.3.3",
     "supabase": "^2.95.3",
     "tailwindcss": "^3.4.13",
@@ -41,6 +42,10 @@
   },
   "packageManager": "pnpm@10.33.0",
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "supabase", "unrs-resolver"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "supabase",
+      "unrs-resolver"
+    ]
   }
 }

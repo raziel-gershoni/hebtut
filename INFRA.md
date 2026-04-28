@@ -56,7 +56,7 @@ End-to-end, ~30 min. PoC only — prod = dev = test.
 
    ⚠ Don't use **Transaction Pooler** (port `6543`) either — transaction-mode pooling doesn't support migrations.
 
-   Migrations are applied automatically on every Vercel deploy via `pnpm vercel-build`, which runs `supabase db push --db-url "$SUPABASE_DB_URL" --include-all && next build`. No manual `supabase link` / `supabase db push` is required.
+   Migrations are applied automatically on every Vercel deploy via `pnpm vercel-build`, which runs `node scripts/db-push.mjs && next build`. The script uses the `postgres` library with `prepare: false` so it sidesteps the pgx-prepared-statement collisions that the Supabase CLI's `db push` triggers when going through Supavisor pooler. Tracking still lives in `supabase_migrations.schema_migrations` for compatibility with `supabase db push` if you run it locally.
 
 5. (Optional, only if you want to regenerate `src/types/database.ts` from the live schema):
    ```bash
