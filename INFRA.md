@@ -94,23 +94,35 @@ A `.env.local` file has been generated in the repo root with the auto-generatabl
 4. Deploy. The build runs `supabase db push` against `SUPABASE_DB_URL` before `next build` — migrations land before any request hits the new code. Re-deploys are idempotent (Supabase tracks applied migrations in the `supabase_migrations.schema_migrations` table).
 5. Smoke check: `curl https://<your-domain>/api/ping` → `{"ok":true,...}`.
 
-## 5. Schedule the claim-expiry cron via Upstash QStash
+## 5. Schedule the claim-expiry cron via Upstash QStash (auto-sync)
 
-Vercel Hobby caps cron at once-per-day, which is too slow for a 15-minute claim TTL. We run the schedule on Upstash QStash instead (free tier — 5-min cadence = 288 msgs/day, well under the 500/day cap).
+Vercel Hobby caps cron at once-per-day, too slow for a 15-min claim TTL. We run the schedule on Upstash QStash (free tier; 5-min cadence = 288 msgs/day, well under the 500/day cap).
+
+The schedule is **created automatically by `scripts/sync-qstash.mjs` on production deploys** (idempotent — only creates if missing; never modifies an existing schedule pointing at the same destination). One env var to set, then it's hands-off.
+
+### Setup
 
 1. Sign in to [console.upstash.com](https://console.upstash.com) → **QStash**. Free tier, no credit card.
-2. **Schedules** → **Create schedule**:
-   - **Destination**: `https://<your-vercel-domain>/api/cron/expire-claims`
-   - **Method**: `POST`
-   - **Cron**: `*/5 * * * *` (every 5 minutes)
-   - **Headers** → add one:
-     - Name: `Upstash-Forward-Authorization`
-     - Value: `Bearer <CRON_SECRET>` (use the exact `CRON_SECRET` value you set in Vercel env)
-     - QStash reserves the bare `Authorization` header for its own signature, so you must use the `Upstash-Forward-` prefix. QStash strips that prefix when delivering, so our route still sees a normal `Authorization: Bearer …` header.
-   - **Retries**: leave default
-3. Save. Within ~5 min the schedule's **Events** tab should show a `200` for the first invocation. A `200` body of `{"released": 0}` means there were no stale claims — that's the expected steady state.
+2. **API Keys** → copy your **QStash Token** (starts with `eyJ…`).
+3. In **Vercel → Project Settings → Environment Variables**, add:
+   - Name: `QSTASH_TOKEN`
+   - Value: the token from step 2
+   - Environment: **Production** only (so preview deploys don't touch your QStash account).
+4. Trigger a deploy (push any commit, or hit "Redeploy" on the latest deployment). The deploy log will show:
+   - `[qstash-sync] created schedule (id=...) → https://<your-domain>/api/cron/expire-claims` on first run, or
+   - `[qstash-sync] schedule already present (id=…) — not modifying` on subsequent runs.
 
-Manual sanity check from your terminal:
+The script:
+- Skips entirely if `VERCEL_ENV !== "production"` or `QSTASH_TOKEN` is unset.
+- Lists existing schedules and matches by `destination`. If yours is already there (e.g. you created it manually before), it leaves it alone.
+- Otherwise creates it with `Upstash-Cron: */5 * * * *` and `Upstash-Forward-Authorization: Bearer <CRON_SECRET>`.
+- Failures (network, auth, rate limit) print a warning but **don't break the build** — claim expiry degrades gracefully without the cron (in-process time check still rejects stale claims at every read).
+
+### Verify
+
+In QStash dashboard → **Schedules**, you should see one row pointing at your `/api/cron/expire-claims`. Within ~5 min its **Events** tab will show a `200` with body `{"released": 0}` (or `{"released": N}` if there were stale claims to clean).
+
+Manual one-shot trigger from your terminal:
 
 ```bash
 curl -X POST -H "Authorization: Bearer <CRON_SECRET>" \
@@ -118,7 +130,15 @@ curl -X POST -H "Authorization: Bearer <CRON_SECRET>" \
 # → {"released":0}
 ```
 
-If you get `403 forbidden`, the bearer doesn't match `CRON_SECRET`.
+`403 forbidden` means the bearer doesn't match `CRON_SECRET`.
+
+### Manual fallback
+
+If you'd rather create the schedule by hand (and skip `QSTASH_TOKEN`): in QStash, **Schedules → Create schedule** with destination `https://<your-domain>/api/cron/expire-claims`, method `POST`, cron `*/5 * * * *`, and a header **`Upstash-Forward-Authorization: Bearer <CRON_SECRET>`**. (Bare `Authorization` is reserved by QStash for its own signature; the `Upstash-Forward-` prefix is stripped on delivery.)
+
+### Caveat
+
+If you rotate `CRON_SECRET` later, the script will **not** update the forwarded header on an existing schedule. Either delete the schedule manually in QStash and re-deploy (the script will recreate with the new secret), or edit the schedule's header in the dashboard.
 
 ## 6. Wire the Telegram webhook
 
