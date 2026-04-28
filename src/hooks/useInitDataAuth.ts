@@ -13,19 +13,6 @@ export type AuthStatus =
   | { state: "error"; message: string }
   | { state: "ok"; jwt: string; user: SessionUser };
 
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp?: {
-        initData?: string;
-        ready: () => void;
-        expand: () => void;
-        close?: () => void;
-      };
-    };
-  }
-}
-
 export function useInitDataAuth(): AuthStatus {
   const [status, setStatus] = useState<AuthStatus>({ state: "loading" });
 

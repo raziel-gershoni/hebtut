@@ -1,7 +1,7 @@
 "use client";
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { useInitDataAuth } from "@/hooks/useInitDataAuth";
+import { useTelegramBackButton } from "@/hooks/useTelegramBackButton";
 
 export interface AppCtx {
   jwt: string;
@@ -25,21 +25,15 @@ const ROLE_LABEL: Record<string, string> = {
 
 export function AppShell({ title, back, children }: AppShellProps) {
   const status = useInitDataAuth();
+  // Drive TG's native back button. The visual back link below is gone;
+  // TG renders its own native chevron in the platform's preferred place.
+  useTelegramBackButton(back);
 
   return (
     <div className="min-h-screen flex flex-col">
-      {(title || back) && (
+      {title && (
         <header className="sticky top-0 z-10 bg-tg-bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-tg-bg-header/80 border-b border-black/[0.04]">
           <div className="mx-auto max-w-2xl px-4 h-12 flex items-center gap-3">
-            {back && (
-              <Link
-                href={back}
-                aria-label="Назад"
-                className="-ml-1 px-2 h-9 inline-flex items-center text-tg-text-link"
-              >
-                ← <span className="ml-1 hidden sm:inline">Назад</span>
-              </Link>
-            )}
             <h1 className="text-base font-semibold tracking-tight truncate">
               {title}
             </h1>
