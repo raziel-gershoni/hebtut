@@ -1,23 +1,19 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import type { AdminUser } from "./AdminUsersTable";
 
-type LinkUser = { id: number; name: string | null; role: string };
+interface AdminLinksPanelProps {
+  jwt: string;
+  /** Shared user list, owned by the admin page so that role changes
+   *  in AdminUsersTable propagate to these dropdowns immediately. */
+  users: AdminUser[];
+}
 
-export function AdminLinksPanel({ jwt }: { jwt: string }) {
-  const [users, setUsers] = useState<LinkUser[]>([]);
+export function AdminLinksPanel({ jwt, users }: AdminLinksPanelProps) {
   const [studentId, setStudentId] = useState<number | null>(null);
   const [teacherId, setTeacherId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    void fetch("/api/admin/users", {
-      cache: "no-store",
-      headers: { Authorization: `Bearer ${jwt}` },
-    })
-      .then((r) => r.json() as Promise<{ users: LinkUser[] }>)
-      .then((d) => setUsers(d.users));
-  }, [jwt]);
 
   const students = users.filter((u) => u.role === "student");
   const teachers = users.filter((u) => u.role === "teacher");
@@ -32,6 +28,7 @@ export function AdminLinksPanel({ jwt }: { jwt: string }) {
     try {
       const r = await fetch("/api/admin/links", {
         method: action,
+        cache: "no-store",
         headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
         body: JSON.stringify({ studentId, teacherId }),
       });
@@ -113,7 +110,7 @@ function PickerRow({
   onChange,
 }: {
   label: string;
-  options: LinkUser[];
+  options: AdminUser[];
   value: number | null;
   onChange: (id: number | null) => void;
 }) {

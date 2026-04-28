@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { ConfirmDialog } from "./ConfirmDialog";
 
-type AdminUser = {
+export type AdminUser = {
   id: number;
   tg_user_id: number;
   name: string | null;
@@ -19,37 +19,17 @@ type PendingChange =
   | { kind: "role"; id: number; role: AdminUser["role"] }
   | { kind: "admin"; id: number; is_admin: boolean };
 
-export function AdminUsersTable({ jwt }: { jwt: string }) {
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [loaded, setLoaded] = useState(false);
+interface AdminUsersTableProps {
+  jwt: string;
+  users: AdminUser[];
+  loaded: boolean;
+  /** Called after every mutation so other consumers (e.g. AdminLinksPanel) re-render. */
+  refetch: () => Promise<void>;
+}
+
+export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTableProps) {
   const [pending, setPending] = useState<PendingChange | null>(null);
   const [filter, setFilter] = useState("");
-
-  const load = useCallback(async () => {
-    const r = await fetch("/api/admin/users", {
-      cache: "no-store",
-      headers: { Authorization: `Bearer ${jwt}` },
-    });
-    const d = (await r.json()) as { users: AdminUser[] };
-    setUsers(d.users);
-    setLoaded(true);
-  }, [jwt]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    function onVisibility() {
-      if (document.visibilityState === "visible") void load();
-    }
-    document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("focus", onVisibility);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("focus", onVisibility);
-    };
-  }, [load]);
 
   async function patch(id: number, body: { role?: AdminUser["role"]; is_admin?: boolean }) {
     await fetch(`/api/admin/users/${id}/role`, {
@@ -58,7 +38,7 @@ export function AdminUsersTable({ jwt }: { jwt: string }) {
       headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    await load();
+    await refetch();
   }
 
   function isDestructiveRole(current: AdminUser["role"], next: AdminUser["role"]): boolean {
@@ -84,7 +64,7 @@ export function AdminUsersTable({ jwt }: { jwt: string }) {
         <h2 className="text-lg font-semibold tracking-tight">Пользователи</h2>
         <button
           type="button"
-          onClick={() => void load()}
+          onClick={() => void refetch()}
           className="text-xs text-tg-text-link tracking-wider uppercase tabular-nums transition-opacity active:opacity-60"
           aria-label="Обновить список"
         >
@@ -192,8 +172,6 @@ function Avatar({ name, isAdmin }: { name: string; isAdmin?: boolean }) {
     .slice(0, 2)
     .map((s) => s[0]!.toUpperCase())
     .join("");
-  // Admins get a thin accent ring so they're scannable in a long list
-  // without needing a loud pill.
   const ring = isAdmin ? "ring-1 ring-tg-text-accent/60" : "";
   return (
     <div
