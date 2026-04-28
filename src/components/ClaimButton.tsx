@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { Spinner } from "./Spinner";
 
 export function ClaimButton({
   jwt,
@@ -37,21 +38,5 @@ export function ClaimButton({
     >
       {busy ? <Spinner /> : "Ответить"}
     </button>
-  );
-}
-
-function Spinner() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      className="animate-spin"
-      aria-hidden
-    >
-      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
-      <path d="M14 8a6 6 0 0 1-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
   );
 }

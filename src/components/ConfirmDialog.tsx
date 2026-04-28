@@ -1,5 +1,6 @@
 "use client";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { Spinner } from "./Spinner";
 
 export function ConfirmDialog({
   open,
@@ -12,9 +13,21 @@ export function ConfirmDialog({
   title: string;
   body: ReactNode;
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: () => Promise<void> | void;
 }) {
+  const [busy, setBusy] = useState(false);
   if (!open) return null;
+
+  async function handleConfirm() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await onConfirm();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 animate-fade-in">
       <div className="bg-tg-bg-section text-tg-text w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 shadow-2xl animate-slide-up">
@@ -23,17 +36,20 @@ export function ConfirmDialog({
         <div className="flex justify-end gap-2">
           <button
             type="button"
+            disabled={busy}
             onClick={onCancel}
-            className="min-h-10 h-10 px-4 rounded-full bg-tg-bg-secondary text-tg-text text-sm font-medium transition-transform active:scale-95"
+            className="min-h-10 h-10 px-4 rounded-full bg-tg-bg-secondary text-tg-text text-sm font-medium transition-transform active:scale-95 disabled:opacity-50"
           >
             Отмена
           </button>
           <button
             type="button"
-            onClick={onConfirm}
-            className="min-h-10 h-10 px-4 rounded-full bg-tg-text-destructive text-white text-sm font-medium transition-transform active:scale-95"
+            disabled={busy}
+            onClick={() => void handleConfirm()}
+            aria-busy={busy}
+            className="min-h-10 h-10 px-4 rounded-full bg-tg-text-destructive text-white text-sm font-medium transition-transform active:scale-95 disabled:opacity-70 inline-flex items-center justify-center min-w-[7rem]"
           >
-            Подтвердить
+            {busy ? <Spinner /> : "Подтвердить"}
           </button>
         </div>
       </div>

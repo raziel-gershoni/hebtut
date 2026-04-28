@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { formatDuration } from "@/lib/i18n";
+import { Spinner } from "./Spinner";
 
 export type ThreadMsg = {
   id: number;
@@ -119,9 +120,11 @@ export function MessageBubble({
               type="button"
               disabled={busy || !!replyDisabledReason}
               onClick={() => void handleReply()}
-              className="text-xs font-medium tracking-tight text-tg-text-link disabled:text-tg-text-hint disabled:cursor-not-allowed"
+              aria-busy={busy}
+              className="inline-flex items-center gap-1.5 text-xs font-medium tracking-tight text-tg-text-link disabled:text-tg-text-hint disabled:cursor-not-allowed"
             >
-              {busy ? "…" : "Ответить"}
+              {busy && <Spinner size={12} />}
+              <span>Ответить</span>
             </button>
             {replyDisabledReason && (
               <span className="text-xs text-tg-text-hint">{replyDisabledReason}</span>

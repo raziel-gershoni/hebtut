@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { AdminUser } from "./AdminUsersTable";
+import { Spinner } from "./Spinner";
 
 interface AdminLinksPanelProps {
   jwt: string;
@@ -13,7 +14,10 @@ export function AdminLinksPanel({ jwt, users }: AdminLinksPanelProps) {
   const [studentId, setStudentId] = useState<number | null>(null);
   const [teacherId, setTeacherId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
-  const [busy, setBusy] = useState(false);
+  // Tracks WHICH button is in flight so only it shows a spinner; both
+  // remain disabled while the request resolves.
+  const [busyAction, setBusyAction] = useState<"POST" | "DELETE" | null>(null);
+  const busy = busyAction !== null;
 
   const students = users.filter((u) => u.role === "student");
   const teachers = users.filter((u) => u.role === "teacher");
@@ -23,7 +27,7 @@ export function AdminLinksPanel({ jwt, users }: AdminLinksPanelProps) {
       setFeedback({ tone: "err", text: "Выбери студента и преподавателя." });
       return;
     }
-    setBusy(true);
+    setBusyAction(action);
     setFeedback(null);
     try {
       const r = await fetch("/api/admin/links", {
@@ -41,7 +45,7 @@ export function AdminLinksPanel({ jwt, users }: AdminLinksPanelProps) {
         text: action === "POST" ? "Связаны." : "Связь удалена.",
       });
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
@@ -73,17 +77,19 @@ export function AdminLinksPanel({ jwt, users }: AdminLinksPanelProps) {
             type="button"
             disabled={busy || !studentId || !teacherId}
             onClick={() => void link("POST")}
-            className="flex-1 min-h-10 h-10 rounded-full bg-tg-button text-tg-button-text text-sm font-medium tracking-tight transition-transform active:scale-95 disabled:opacity-50"
+            aria-busy={busyAction === "POST"}
+            className="flex-1 min-h-10 h-10 rounded-full bg-tg-button text-tg-button-text text-sm font-medium tracking-tight transition-transform active:scale-95 disabled:opacity-50 inline-flex items-center justify-center"
           >
-            Привязать
+            {busyAction === "POST" ? <Spinner /> : "Привязать"}
           </button>
           <button
             type="button"
             disabled={busy || !studentId || !teacherId}
             onClick={() => void link("DELETE")}
-            className="flex-1 min-h-10 h-10 rounded-full bg-tg-bg-secondary text-tg-text text-sm font-medium tracking-tight transition-transform active:scale-95 disabled:opacity-50"
+            aria-busy={busyAction === "DELETE"}
+            className="flex-1 min-h-10 h-10 rounded-full bg-tg-bg-secondary text-tg-text text-sm font-medium tracking-tight transition-transform active:scale-95 disabled:opacity-50 inline-flex items-center justify-center"
           >
-            Отвязать
+            {busyAction === "DELETE" ? <Spinner /> : "Отвязать"}
           </button>
         </div>
 
