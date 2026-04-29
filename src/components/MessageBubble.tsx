@@ -108,31 +108,31 @@ export function MessageBubble({
     >
       {isIn && <div className="shrink-0 mt-1.5">{speakerAvatar}</div>}
       <div className={`${bubbleBase} ${bubble}`}>
-        <div className="text-[11px] mb-1.5 flex items-center gap-2">
+        <div className="text-[11px] mb-1.5 flex items-center gap-2 min-w-0">
           <span
-            className={`truncate max-w-[60%] font-semibold text-xs ${speakerColors.name}`}
+            className={`truncate min-w-0 font-semibold text-xs ${speakerColors.name}`}
           >
             {speaker.name}
           </span>
-          <span aria-hidden className="text-tg-text-hint">·</span>
-          <span className="tabular-nums text-tg-text-hint">{time}</span>
+          <span aria-hidden className="text-tg-text-hint shrink-0">·</span>
+          <span className="tabular-nums text-tg-text-hint shrink-0">{time}</span>
         </div>
 
         {replyTo && replyToSpeaker && replyToSpeakerColors && (
           <button
             type="button"
             onClick={() => scrollToMessage(replyTo.id)}
-            className={`w-full text-left mb-2 rounded-xl px-2.5 py-1.5 text-xs border-l-[3px] transition-transform active:scale-[0.99] ${replyToSpeakerColors.replyBg} ${replyToSpeakerColors.border}`}
+            className={`w-full text-left mb-2 rounded-xl px-2.5 py-1.5 text-xs border-l-[3px] transition-transform active:scale-[0.99] flex items-center gap-1.5 ${replyToSpeakerColors.replyBg} ${replyToSpeakerColors.border}`}
             aria-label="Перейти к исходному сообщению"
           >
             <span
-              className={`font-semibold truncate inline-block max-w-[70%] align-bottom ${replyToSpeakerColors.name}`}
+              className={`font-semibold truncate min-w-0 ${replyToSpeakerColors.name}`}
             >
               {replyToSpeaker.name}
             </span>
-            <span className="mx-1.5 text-tg-text-hint" aria-hidden>·</span>
-            <span aria-hidden>{replyTo.kind === "voice" ? "🎙️" : "🟢"}</span>
-            <span className="ml-1 tabular-nums text-tg-text">
+            <span className="text-tg-text-hint shrink-0" aria-hidden>·</span>
+            <span aria-hidden className="shrink-0">{replyTo.kind === "voice" ? "🎙️" : "🟢"}</span>
+            <span className="tabular-nums text-tg-text shrink-0">
               {formatDuration(replyTo.duration)}
             </span>
           </button>
