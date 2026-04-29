@@ -251,15 +251,29 @@ function VideoNote({ src, totalSeconds }: { src: string; totalSeconds: number })
     ? formatDuration(Math.floor(current))
     : formatDuration(totalSeconds);
 
+  // Idle: snug inline circle so the bubble stays narrow.
+  // Playing: lifts to a centered, near-full-viewport square (TG-native).
+  const buttonClass = playing
+    ? "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 block w-[min(85vw,85vh)] h-[min(85vw,85vh)]"
+    : "relative block w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36";
+
   return (
-    <div className="inline-flex flex-col items-center">
-      <button
-        type="button"
-        onClick={toggle}
-        aria-label={playing ? "Пауза" : "Воспроизвести"}
-        className="relative block w-44 h-44 sm:w-48 sm:h-48"
-        style={{ width: SIZE, height: SIZE }}
-      >
+    <>
+      {playing && (
+        <button
+          type="button"
+          aria-label="Закрыть"
+          onClick={toggle}
+          className="fixed inset-0 z-40 bg-black/75 animate-fade-in cursor-default"
+        />
+      )}
+      <div className="inline-flex flex-col items-center max-w-full">
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={playing ? "Пауза" : "Воспроизвести"}
+          className={buttonClass}
+        >
         <div className="absolute inset-0 rounded-full overflow-hidden bg-black">
           <video
             ref={videoRef}
@@ -282,10 +296,8 @@ function VideoNote({ src, totalSeconds }: { src: string; totalSeconds: number })
           )}
         </div>
         <svg
-          width={SIZE}
-          height={SIZE}
           viewBox={`0 0 ${SIZE} ${SIZE}`}
-          className="absolute inset-0 -rotate-90 pointer-events-none"
+          className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none"
           aria-hidden
         >
           <circle
@@ -312,8 +324,9 @@ function VideoNote({ src, totalSeconds }: { src: string; totalSeconds: number })
           />
         </svg>
       </button>
-      <span className="mt-1.5 text-[11px] tabular-nums text-tg-text-hint">{elapsedDisplay}</span>
-    </div>
+        <span className="mt-1.5 text-[11px] tabular-nums text-tg-text-hint">{elapsedDisplay}</span>
+      </div>
+    </>
   );
 }
 
