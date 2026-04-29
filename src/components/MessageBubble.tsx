@@ -119,7 +119,7 @@ export function MessageBubble({
           <button
             type="button"
             onClick={() => scrollToMessage(replyTo.id)}
-            className={`w-full text-left mb-2 rounded-xl px-2.5 py-1.5 text-xs border-l-[3px] transition-transform active:scale-[0.99] ${replyToSpeakerColors.replyBg} ${replyToSpeakerColors.border}`}
+            className={`w-full text-left mb-2 px-2.5 py-1 text-xs border-l-[3px] transition-transform active:scale-[0.99] ${replyToSpeakerColors.border}`}
             aria-label="Перейти к исходному сообщению"
           >
             <span
