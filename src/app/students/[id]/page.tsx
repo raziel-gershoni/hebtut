@@ -6,7 +6,7 @@ export default function StudentThreadPage({ params }: { params: { id: string } }
   const studentId = Number(params.id);
   return (
     <AppShell back="/inbox">
-      {({ jwt, role, isAdmin, userId, name, hasAvatar }) => {
+      {({ jwt, role, isAdmin, userId, hasAvatar }) => {
         if (role !== "teacher" && !isAdmin) {
           return (
             <div className="rounded-2xl bg-tg-bg-section p-6 text-sm text-tg-text-hint">
@@ -26,7 +26,6 @@ export default function StudentThreadPage({ params }: { params: { id: string } }
             jwt={jwt}
             studentId={studentId}
             myUserId={userId}
-            myName={name}
             myHasAvatar={hasAvatar}
           />
         );

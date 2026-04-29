@@ -30,13 +30,11 @@ export function ThreadView({
   jwt,
   studentId,
   myUserId,
-  myName,
   myHasAvatar,
 }: {
   jwt: string;
   studentId: number;
   myUserId: number;
-  myName: string | null;
   myHasAvatar: boolean;
 }) {
   const [messages, setMessages] = useState<ApiMessage[]>([]);
@@ -134,8 +132,10 @@ export function ThreadView({
       return { name: studentDisplay, avatarUrl: studentAvatarUrl };
     }
     if (msg.teacher_id === myUserId) {
+      // Always "Ты" for the current viewer's own messages, regardless of
+      // whether their TG name is known — matches TG's "You" convention.
       return {
-        name: myName ?? "Ты",
+        name: "Ты",
         avatarUrl: myHasAvatar
           ? `/api/avatar/${myUserId}?token=${encodeURIComponent(jwt)}`
           : undefined,
