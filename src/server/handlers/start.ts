@@ -2,6 +2,7 @@ import type { Context } from "grammy";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { ru, formatDuration } from "@/lib/i18n";
 import { getRemainingForToday } from "@/server/quota";
+import { refreshUserAvatar } from "@/server/avatars";
 
 export async function handleStart(ctx: Context): Promise<void> {
   const from = ctx.from;
@@ -21,18 +22,25 @@ export async function handleStart(ctx: Context): Promise<void> {
     .maybeSingle();
 
   if (!existing) {
-    await sb.from("users").insert({
-      tg_user_id: from.id,
-      tg_chat_id: chat.id,
-      name: display,
-      role: "pending",
-    });
+    const { data: inserted } = await sb
+      .from("users")
+      .insert({
+        tg_user_id: from.id,
+        tg_chat_id: chat.id,
+        name: display,
+        role: "pending",
+      })
+      .select("id")
+      .single();
+    if (inserted) await refreshUserAvatar(inserted.id, from.id);
     await ctx.reply(ru.greetingRegistered);
     return;
   }
 
   // Refresh chat_id and name (the user may have re-/started or changed display name).
   await sb.from("users").update({ tg_chat_id: chat.id, name: display }).eq("id", existing.id);
+  // Opportunistic avatar refresh on every /start.
+  await refreshUserAvatar(existing.id, from.id);
 
   // Greeting precedence:
   //   admin (with or without a working role) → teacher/admin greeting

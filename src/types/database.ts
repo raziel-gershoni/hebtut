@@ -24,6 +24,9 @@ export interface Database {
           tz: string;
           created_at: string;
           role_changed_at: string | null;
+          avatar_file_id: string | null;
+          avatar_file_unique_id: string | null;
+          avatar_fetched_at: string | null;
         };
         Insert: {
           id?: number;
@@ -36,6 +39,9 @@ export interface Database {
           tz?: string;
           created_at?: string;
           role_changed_at?: string | null;
+          avatar_file_id?: string | null;
+          avatar_file_unique_id?: string | null;
+          avatar_fetched_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["users"]["Insert"]>;
         Relationships: [];
@@ -146,6 +152,20 @@ export interface Database {
           expires_at: string;
         };
         Update: Partial<Database["public"]["Tables"]["claims"]["Insert"]>;
+        Relationships: [];
+      };
+      inbox_reads: {
+        Row: {
+          teacher_id: number;
+          student_id: number;
+          last_seen_at: string;
+        };
+        Insert: {
+          teacher_id: number;
+          student_id: number;
+          last_seen_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["inbox_reads"]["Insert"]>;
         Relationships: [];
       };
       quota_usage: {

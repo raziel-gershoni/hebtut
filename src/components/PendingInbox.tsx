@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import { Avatar, type AdminUser } from "./AdminUsersTable";
+import { Avatar } from "./Avatar";
+import { type AdminUser } from "./AdminUsersTable";
 import { Spinner } from "./Spinner";
 
 interface PendingInboxProps {

@@ -2,6 +2,7 @@ import { getBot } from "@/lib/tg";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { serverEnv } from "@/lib/env";
 import { ru, formatDuration } from "@/lib/i18n";
+import { formatWhen } from "@/lib/time";
 import { editAllNotificationsForMessage } from "./notifications";
 import type { MessageDirection, MessageStatus } from "@/types/database";
 
@@ -59,7 +60,7 @@ export async function startReply(messageId: number, teacherId: number): Promise<
 
   const { data: msg } = await sb
     .from("messages")
-    .select("id, direction, status, student_id, kind, duration")
+    .select("id, direction, status, student_id, kind, duration, created_at")
     .eq("id", messageId)
     .single();
   if (!msg) return { ok: false, reason: "not-found" };
@@ -113,16 +114,17 @@ export async function startReply(messageId: number, teacherId: number): Promise<
   // Send prompt DM to the teacher.
   const [{ data: student }, { data: teacher }] = await Promise.all([
     sb.from("users").select("name").eq("id", msg.student_id).single(),
-    sb.from("users").select("tg_chat_id, name").eq("id", teacherId).single(),
+    sb.from("users").select("tg_chat_id, name, tz").eq("id", teacherId).single(),
   ]);
   if (!teacher) return { ok: false, reason: "fatal" };
 
   const studentName = student?.name ?? `student ${msg.student_id}`;
   const dur = formatDuration(msg.duration);
+  const when = formatWhen(msg.created_at, teacher.tz);
   const promptText =
     decision.kind === "followup"
-      ? ru.teacherFollowupPrompt(studentName, dur)
-      : ru.teacherClaimPrompt(studentName, dur);
+      ? ru.teacherFollowupPrompt(studentName, dur, when)
+      : ru.teacherClaimPrompt(studentName, dur, when);
   const sent = await getBot().api.sendMessage(teacher.tg_chat_id, promptText);
 
   await sb.from("prompts").insert({

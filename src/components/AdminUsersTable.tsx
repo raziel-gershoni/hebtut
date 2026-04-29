@@ -1,6 +1,7 @@
 "use client";
 import { useState, useMemo } from "react";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { Avatar } from "./Avatar";
 
 export type AdminUser = {
   id: number;
@@ -165,20 +166,3 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
   );
 }
 
-export function Avatar({ name, isAdmin }: { name: string; isAdmin?: boolean }) {
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((s) => s[0]!.toUpperCase())
-    .join("");
-  const ring = isAdmin ? "ring-1 ring-tg-text-accent/60" : "";
-  return (
-    <div
-      className={`shrink-0 w-9 h-9 rounded-full bg-tg-bg-secondary text-tg-text flex items-center justify-center text-xs font-semibold tracking-tight ${ring}`}
-      aria-hidden
-    >
-      {initials || "?"}
-    </div>
-  );
-}

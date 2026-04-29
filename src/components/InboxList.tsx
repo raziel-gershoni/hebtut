@@ -1,29 +1,31 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ClaimButton } from "./ClaimButton";
+import { Avatar } from "./Avatar";
 import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
+import { formatDuration } from "@/lib/i18n";
 
-type InboxMessage = {
+type LastMessage = {
   id: number;
-  student_id: number;
+  direction: "in" | "out";
   kind: "voice" | "video_note";
   duration: number;
   status: "pending" | "answered" | "expired" | "orphaned";
   created_at: string;
-  users: { name: string | null } | null;
 };
 
-type ActiveClaim = {
+interface Chat {
   student_id: number;
-  teacher_id: number;
-  teacher_name: string;
-  expires_at: string;
-};
+  student_name: string | null;
+  has_avatar: boolean;
+  last_message: LastMessage | null;
+  unread_count: number;
+  has_unanswered: boolean;
+  claim: { teacher_id: number; teacher_name: string; is_self: boolean } | null;
+}
 
 export function InboxList({ jwt, myUserId }: { jwt: string; myUserId: number }) {
-  const [messages, setMessages] = useState<InboxMessage[]>([]);
-  const [claimsByStudent, setClaimsByStudent] = useState<Map<number, ActiveClaim>>(new Map());
+  const [chats, setChats] = useState<Chat[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
@@ -35,9 +37,8 @@ export function InboxList({ jwt, myUserId }: { jwt: string; myUserId: number }) 
       setLoaded(true);
       return;
     }
-    const d = (await r.json()) as { messages: InboxMessage[]; claims: ActiveClaim[] };
-    setMessages(d.messages);
-    setClaimsByStudent(new Map((d.claims ?? []).map((c) => [c.student_id, c])));
+    const d = (await r.json()) as { chats: Chat[] };
+    setChats(d.chats);
     setLoaded(true);
   }, [jwt]);
 
@@ -49,110 +50,125 @@ export function InboxList({ jwt, myUserId }: { jwt: string; myUserId: number }) 
 
   if (!loaded) {
     return (
-      <ul className="space-y-3 animate-pulse">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <li key={i} className="h-20 rounded-2xl bg-tg-bg-secondary" />
+      <ul className="space-y-2 animate-pulse">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <li key={i} className="h-16 rounded-2xl bg-tg-bg-secondary" />
         ))}
       </ul>
     );
   }
 
-  if (messages.length === 0) {
+  if (chats.length === 0) {
     return (
       <div className="rounded-2xl bg-tg-bg-section p-6 text-center text-sm text-tg-text-hint">
-        Пока ничего нет. Сюда придут голосовые от твоих учеников.
+        Пока ничего нет. Сюда придут сообщения от твоих учеников.
       </div>
     );
   }
 
+  // Suppress the unused warning in the loop scope.
+  void myUserId;
+
   return (
-    <ul className="space-y-3">
-      {messages.map((m) => (
-        <InboxRow
-          key={m.id}
-          jwt={jwt}
-          m={m}
-          claim={claimsByStudent.get(m.student_id) ?? null}
-          myUserId={myUserId}
-          onClaimed={load}
-        />
+    <ul className="space-y-1">
+      {chats.map((c) => (
+        <ChatRow key={c.student_id} chat={c} />
       ))}
     </ul>
   );
 }
 
-function InboxRow({
-  jwt,
-  m,
-  claim,
-  myUserId,
-  onClaimed,
-}: {
-  jwt: string;
-  m: InboxMessage;
-  claim: ActiveClaim | null;
-  myUserId: number;
-  onClaimed: () => void;
-}) {
-  const name = m.users?.name ?? "Ученик";
-  const min = Math.floor(m.duration / 60);
-  const sec = (m.duration % 60).toString().padStart(2, "0");
-  const kindLabel = m.kind === "voice" ? "🎙️ голосовое" : "🟢 видео";
-
-  const heldByMe = claim?.teacher_id === myUserId;
-  const heldByOther = claim && claim.teacher_id !== myUserId;
+function ChatRow({ chat }: { chat: Chat }) {
+  const name = chat.student_name ?? "Ученик";
+  const avatarUrl = chat.has_avatar ? `/api/avatar/${chat.student_id}` : undefined;
+  const time = chat.last_message ? formatChatTimestamp(chat.last_message.created_at) : "";
+  const unanswered = chat.has_unanswered;
+  const heldByOther = chat.claim && !chat.claim.is_self;
 
   return (
-    <li className="rounded-2xl bg-tg-bg-section p-4 transition-transform active:scale-[0.99]">
-      <div className="flex items-start gap-3">
-        <Link href={`/students/${m.student_id}`} className="flex-1 min-w-0 outline-none">
-          <div className="flex items-center gap-2">
-            <StatusDot status={m.status} heldByMe={heldByMe} heldByOther={!!heldByOther} />
+    <li>
+      <Link
+        href={`/students/${chat.student_id}`}
+        className={`flex items-center gap-3 px-3 py-3 rounded-2xl transition-colors active:bg-tg-bg-secondary/60 ${
+          unanswered ? "border-l-2 border-tg-text-accent/50 pl-[14px]" : ""
+        }`}
+      >
+        <Avatar name={name} imageUrl={avatarUrl} size={48} />
+        <div className="min-w-0 flex-1 leading-tight">
+          <div className="flex items-baseline gap-2">
             <span className="font-medium tracking-tight truncate">{name}</span>
+            {time && (
+              <span className="ml-auto shrink-0 text-[11px] tabular-nums text-tg-text-hint">
+                {time}
+              </span>
+            )}
           </div>
-          <div className="mt-1 text-sm text-tg-text-hint">
-            {kindLabel} · {min}:{sec}
+          <div className="mt-0.5 flex items-center gap-2">
+            <span className="min-w-0 flex-1 truncate text-sm text-tg-text-hint">
+              <Preview chat={chat} />
+            </span>
+            {chat.unread_count > 0 && (
+              <span className="shrink-0 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-tg-button text-tg-button-text text-[11px] font-semibold tabular-nums">
+                {chat.unread_count}
+              </span>
+            )}
           </div>
-        </Link>
-        <div className="shrink-0">
-          {m.status === "pending" && !heldByOther && (
-            <ClaimButton jwt={jwt} messageId={m.id} onClaimed={onClaimed} />
-          )}
-          {m.status === "pending" && heldByOther && (
-            <span className="inline-flex items-center h-9 px-3 rounded-full text-xs font-medium bg-tg-bg-secondary text-tg-text-hint">
-              {claim!.teacher_name}
-            </span>
-          )}
-          {m.status === "pending" && heldByMe && (
-            <span className="inline-flex items-center h-9 px-3 rounded-full text-xs font-medium bg-amber-500/15 text-amber-700 dark:text-amber-400">
-              Жду в чате
-            </span>
-          )}
-          {m.status === "answered" && (
-            <span className="inline-flex items-center h-9 px-3 rounded-full text-xs font-medium bg-tg-bg-secondary text-tg-text-hint">
-              ✓ Отвечено
-            </span>
+          {heldByOther && (
+            <div className="mt-0.5 text-[11px] text-tg-text-hint">
+              Берёт {chat.claim!.teacher_name}
+            </div>
           )}
         </div>
-      </div>
+      </Link>
     </li>
   );
 }
 
-function StatusDot({
-  status,
-  heldByMe,
-  heldByOther,
-}: {
-  status: InboxMessage["status"];
-  heldByMe: boolean;
-  heldByOther: boolean;
-}) {
-  if (status === "pending" && heldByMe)
-    return <span className="block w-2 h-2 rounded-full bg-amber-500" aria-hidden />;
-  if (status === "pending" && heldByOther)
-    return <span className="block w-2 h-2 rounded-full bg-tg-text-hint/40" aria-hidden />;
-  if (status === "pending")
-    return <span className="block w-2 h-2 rounded-full bg-tg-button" aria-hidden />;
-  return <span className="block w-2 h-2 rounded-full bg-tg-text-hint/40" aria-hidden />;
+function Preview({ chat }: { chat: Chat }) {
+  const m = chat.last_message;
+  if (!m) return <span>Пока пусто</span>;
+  const icon = m.kind === "voice" ? "🎙️" : "🟢";
+  const dur = formatDuration(m.duration);
+  const prefix = m.direction === "out" ? "Ты: " : "";
+  const tail = chat.has_unanswered ? " · ждёт ответа" : "";
+  return (
+    <span>
+      {prefix}
+      {icon} {dur}
+      {tail}
+    </span>
+  );
+}
+
+/**
+ * TG-style relative timestamp.
+ * Today → HH:MM
+ * Yesterday → "Вчера"
+ * This week (within last 7 days) → short weekday (пн/вт/…)
+ * Older → DD.MM
+ */
+function formatChatTimestamp(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) {
+    return d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  }
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const wasYesterday =
+    d.getFullYear() === yesterday.getFullYear() &&
+    d.getMonth() === yesterday.getMonth() &&
+    d.getDate() === yesterday.getDate();
+  if (wasYesterday) return "Вчера";
+
+  const diffMs = now.getTime() - d.getTime();
+  const SEVEN_DAYS = 7 * 24 * 3600 * 1000;
+  if (diffMs < SEVEN_DAYS) {
+    return d.toLocaleDateString("ru-RU", { weekday: "short" });
+  }
+  return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
 }

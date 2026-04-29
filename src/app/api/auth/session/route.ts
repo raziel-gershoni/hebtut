@@ -3,6 +3,7 @@ import { verifyInitData, parseInitData, mintSupabaseJwt } from "@/lib/auth";
 import { serverEnv } from "@/lib/env";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { ensureBootstrapAdmin } from "@/server/bootstrap";
+import { refreshUserAvatar } from "@/server/avatars";
 import { readJsonBody } from "@/lib/http";
 import { noStoreHeaders } from "@/lib/no-cache";
 
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
 
   const { data: existing } = await sb
     .from("users")
-    .select("id, role, is_admin, name")
+    .select("id, role, is_admin, name, avatar_fetched_at")
     .eq("tg_user_id", parsed.user.id)
     .maybeSingle();
 
@@ -63,6 +64,12 @@ export async function POST(req: NextRequest) {
     }
   } else {
     userRow = existing;
+  }
+
+  // First-ever Mini App open for someone who never `/start`'d (e.g. a fresh
+  // bootstrap admin) — fetch their TG avatar so the chat list has it.
+  if (existing && existing.avatar_fetched_at == null) {
+    await refreshUserAvatar(existing.id, parsed.user.id);
   }
 
   const jwt = await mintSupabaseJwt(parsed.user.id, userRow.role);

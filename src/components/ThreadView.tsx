@@ -40,6 +40,16 @@ export function ThreadView({
     void load();
   }, [load]);
 
+  // Mark this chat as read on mount — fire-and-forget.
+  useEffect(() => {
+    void fetch("/api/inbox/seen", {
+      method: "POST",
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId }),
+    });
+  }, [jwt, studentId]);
+
   useEffect(() => {
     function onVisibility() {
       if (document.visibilityState === "visible") void load();

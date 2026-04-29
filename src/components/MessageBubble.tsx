@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { formatDuration } from "@/lib/i18n";
 import { Spinner } from "./Spinner";
 
@@ -27,7 +27,6 @@ function scrollToMessage(id: number) {
   const el = document.getElementById(`msg-${id}`);
   if (!el) return;
   el.scrollIntoView({ behavior: "smooth", block: "center" });
-  // Brief accent ring so the user sees what we scrolled to.
   el.classList.add("ring-2", "ring-tg-text-accent/40");
   window.setTimeout(() => {
     el.classList.remove("ring-2", "ring-tg-text-accent/40");
@@ -65,6 +64,9 @@ export function MessageBubble({
       const r = await onReply(msg.id);
       if (r.ok) {
         setFeedback("✓ Свайпни по приглашению в чате");
+        // Mirror the inbox claim flow: close the Mini App so the prompt
+        // landing in the teacher's TG chat is visible.
+        window.Telegram?.WebApp?.close?.();
       } else if (r.reason === "taken-by-other") {
         setFeedback("Берёт другой преподаватель");
       } else {
@@ -103,15 +105,9 @@ export function MessageBubble({
         )}
 
         {msg.kind === "voice" ? (
-          <audio controls preload="none" src={src} className="w-full" />
+          <VoicePlayer src={src} totalSeconds={msg.duration} />
         ) : (
-          <video
-            controls
-            preload="none"
-            playsInline
-            className="rounded-xl max-w-full"
-            src={src}
-          />
+          <VideoNote src={src} />
         )}
 
         {isIn && onReply && (
@@ -136,5 +132,125 @@ export function MessageBubble({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * TG-style voice player: round play/pause + thin progress bar + duration.
+ * Hidden <audio> drives it via refs.
+ */
+function VoicePlayer({ src, totalSeconds }: { src: string; totalSeconds: number }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [current, setCurrent] = useState(0);
+
+  function toggle() {
+    const a = audioRef.current;
+    if (!a) return;
+    if (playing) {
+      a.pause();
+    } else {
+      void a.play();
+    }
+  }
+
+  const elapsedDisplay = playing
+    ? formatDuration(Math.floor(current))
+    : formatDuration(totalSeconds);
+  const progress = Math.min(1, totalSeconds > 0 ? current / totalSeconds : 0);
+
+  return (
+    <div className="flex items-center gap-3 min-w-[12rem]">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={playing ? "Пауза" : "Воспроизвести"}
+        className="shrink-0 w-10 h-10 rounded-full bg-tg-button text-tg-button-text flex items-center justify-center transition-transform active:scale-95"
+      >
+        {playing ? (
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
+            <rect x="2" y="1" width="3.5" height="12" rx="1" />
+            <rect x="8.5" y="1" width="3.5" height="12" rx="1" />
+          </svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
+            <path d="M3 1.5L12 7L3 12.5z" />
+          </svg>
+        )}
+      </button>
+      <div className="flex-1 min-w-0">
+        <div className="h-1 rounded-full bg-tg-bg/40 overflow-hidden">
+          <div
+            className="h-full bg-tg-text-accent transition-[width] duration-100 ease-linear"
+            style={{ width: `${progress * 100}%` }}
+          />
+        </div>
+        <div className="mt-1 text-[11px] tabular-nums text-tg-text-hint">
+          {elapsedDisplay}
+        </div>
+      </div>
+      <audio
+        ref={audioRef}
+        src={src}
+        preload="metadata"
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => {
+          setPlaying(false);
+          setCurrent(0);
+        }}
+        onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
+      />
+    </div>
+  );
+}
+
+/**
+ * TG-style video note: a circular clip with a translucent play overlay
+ * when paused. Tap-to-toggle, native controls hidden.
+ */
+function VideoNote({ src }: { src: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+
+  function toggle() {
+    const v = videoRef.current;
+    if (!v) return;
+    if (playing) v.pause();
+    else void v.play();
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-label={playing ? "Пауза" : "Воспроизвести"}
+      className="relative block w-44 h-44 sm:w-48 sm:h-48 rounded-full overflow-hidden bg-black"
+    >
+      <video
+        ref={videoRef}
+        src={src}
+        preload="metadata"
+        playsInline
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => setPlaying(false)}
+        className="absolute inset-0 w-full h-full object-cover"
+      />
+      {!playing && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+          <svg
+            width="36"
+            height="36"
+            viewBox="0 0 14 14"
+            fill="white"
+            className="drop-shadow"
+            aria-hidden
+          >
+            <path d="M3 1.5L12 7L3 12.5z" />
+          </svg>
+        </div>
+      )}
+    </button>
   );
 }
