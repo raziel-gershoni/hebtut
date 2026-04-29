@@ -72,15 +72,17 @@ export function InboxList({ jwt, myUserId }: { jwt: string; myUserId: number }) 
   return (
     <ul className="space-y-1">
       {chats.map((c) => (
-        <ChatRow key={c.student_id} chat={c} />
+        <ChatRow key={c.student_id} chat={c} jwt={jwt} />
       ))}
     </ul>
   );
 }
 
-function ChatRow({ chat }: { chat: Chat }) {
+function ChatRow({ chat, jwt }: { chat: Chat; jwt: string }) {
   const name = chat.student_name ?? "Ученик";
-  const avatarUrl = chat.has_avatar ? `/api/avatar/${chat.student_id}` : undefined;
+  const avatarUrl = chat.has_avatar
+    ? `/api/avatar/${chat.student_id}?token=${encodeURIComponent(jwt)}`
+    : undefined;
   const time = chat.last_message ? formatChatTimestamp(chat.last_message.created_at) : "";
   const unanswered = chat.has_unanswered;
   const heldByOther = chat.claim && !chat.claim.is_self;
