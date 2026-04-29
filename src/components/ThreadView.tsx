@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { MessageBubble, type ThreadMsg } from "./MessageBubble";
+import { MessageBubble, type ThreadMsg, type Speaker } from "./MessageBubble";
 import { Avatar } from "./Avatar";
 
 interface ClaimInfo {
@@ -15,18 +15,31 @@ interface StudentMeta {
   has_avatar: boolean;
 }
 
+interface TeacherMeta {
+  id: number;
+  name: string | null;
+  has_avatar: boolean;
+}
+
+interface ApiMessage extends ThreadMsg {
+  teacher_id: number | null;
+  teacher: TeacherMeta | null;
+}
+
 export function ThreadView({
   jwt,
   studentId,
   myUserId,
   myName,
+  myHasAvatar,
 }: {
   jwt: string;
   studentId: number;
   myUserId: number;
   myName: string | null;
+  myHasAvatar: boolean;
 }) {
-  const [messages, setMessages] = useState<ThreadMsg[]>([]);
+  const [messages, setMessages] = useState<ApiMessage[]>([]);
   const [claim, setClaim] = useState<ClaimInfo | null>(null);
   const [student, setStudent] = useState<StudentMeta | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -41,7 +54,7 @@ export function ThreadView({
       return;
     }
     const d = (await r.json()) as {
-      messages: ThreadMsg[];
+      messages: ApiMessage[];
       claim?: ClaimInfo | null;
       student?: StudentMeta | null;
     };
@@ -104,6 +117,39 @@ export function ThreadView({
     [jwt, load],
   );
 
+  const studentDisplay = student?.name ?? "Ученик";
+  const studentAvatarUrl = useMemo(
+    () =>
+      student?.has_avatar
+        ? `/api/avatar/${student.id}?token=${encodeURIComponent(jwt)}`
+        : undefined,
+    [student, jwt],
+  );
+
+  // For each message, resolve who's speaking. Inbound = the student. Outbound
+  // = the teacher who sent it (real name) — but if it's the *current viewer*'s
+  // own message, label it "Ты" while still showing their avatar.
+  function speakerFor(msg: ApiMessage): Speaker {
+    if (msg.direction === "in") {
+      return { name: studentDisplay, avatarUrl: studentAvatarUrl };
+    }
+    if (msg.teacher_id === myUserId) {
+      return {
+        name: myName ?? "Ты",
+        avatarUrl: myHasAvatar
+          ? `/api/avatar/${myUserId}?token=${encodeURIComponent(jwt)}`
+          : undefined,
+      };
+    }
+    const t = msg.teacher;
+    return {
+      name: t?.name ?? "Преподаватель",
+      avatarUrl: t?.has_avatar
+        ? `/api/avatar/${t.id}?token=${encodeURIComponent(jwt)}`
+        : undefined,
+    };
+  }
+
   if (!loaded) {
     return (
       <div className="space-y-2 animate-pulse">
@@ -122,13 +168,6 @@ export function ThreadView({
     );
   }
 
-  const studentDisplay = student?.name ?? "Ученик";
-  const myDisplay = myName ?? "Ты";
-  const studentAvatarUrl =
-    student?.has_avatar
-      ? `/api/avatar/${student.id}?token=${encodeURIComponent(jwt)}`
-      : undefined;
-
   return (
     <div className="flex flex-col gap-1">
       <header className="flex items-center gap-3 mb-3 pb-3 border-b border-tg-text-hint/15">
@@ -143,18 +182,21 @@ export function ThreadView({
           Активная сессия с этим учеником — отвечай в чате.
         </div>
       )}
-      {messages.map((m) => (
-        <MessageBubble
-          key={m.id}
-          msg={m}
-          jwt={jwt}
-          replyTo={m.reply_to_id != null ? byId.get(m.reply_to_id) ?? null : null}
-          studentName={studentDisplay}
-          myName={myDisplay}
-          onReply={onReply}
-          replyDisabledReason={replyDisabledReason}
-        />
-      ))}
+      {messages.map((m) => {
+        const replyToMsg = m.reply_to_id != null ? byId.get(m.reply_to_id) ?? null : null;
+        return (
+          <MessageBubble
+            key={m.id}
+            msg={m}
+            jwt={jwt}
+            speaker={speakerFor(m)}
+            replyTo={replyToMsg}
+            replyToSpeaker={replyToMsg ? speakerFor(replyToMsg) : null}
+            onReply={onReply}
+            replyDisabledReason={replyDisabledReason}
+          />
+        );
+      })}
     </div>
   );
 }

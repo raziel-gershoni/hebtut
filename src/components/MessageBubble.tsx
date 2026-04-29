@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import { formatDuration } from "@/lib/i18n";
 import { Spinner } from "./Spinner";
+import { Avatar } from "./Avatar";
 
 export type ThreadMsg = {
   id: number;
@@ -13,15 +14,19 @@ export type ThreadMsg = {
   created_at: string;
 };
 
+export interface Speaker {
+  name: string;
+  avatarUrl?: string;
+}
+
 interface MessageBubbleProps {
   msg: ThreadMsg;
   jwt: string;
-  /** Original message this bubble is a reply to, if any. */
+  /** Who said this message. Drives the meta label and the side avatar. */
+  speaker: Speaker;
+  /** Original message this one replies to, if any. */
   replyTo?: ThreadMsg | null;
-  /** Name shown for inbound (student) bubbles + reply-context chip. */
-  studentName: string;
-  /** Name shown for outbound (your) bubbles + reply-context chip. */
-  myName: string;
+  replyToSpeaker?: Speaker | null;
   onReply?: (messageId: number) => Promise<{ ok: boolean; reason?: string }>;
   replyDisabledReason?: string | null;
 }
@@ -37,16 +42,12 @@ function scrollToMessage(id: number) {
   }, 1500);
 }
 
-function speakerName(direction: "in" | "out", studentName: string, myName: string): string {
-  return direction === "in" ? studentName : myName;
-}
-
 export function MessageBubble({
   msg,
   jwt,
+  speaker,
   replyTo,
-  studentName,
-  myName,
+  replyToSpeaker,
   onReply,
   replyDisabledReason,
 }: MessageBubbleProps) {
@@ -62,8 +63,6 @@ export function MessageBubble({
     hour: "2-digit",
     minute: "2-digit",
   });
-
-  const speaker = speakerName(msg.direction, studentName, myName);
 
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -89,16 +88,24 @@ export function MessageBubble({
     }
   }
 
+  const speakerAvatar = (
+    <Avatar size={32} name={speaker.name} imageUrl={speaker.avatarUrl} />
+  );
+
   return (
-    <div id={`msg-${msg.id}`} className={`flex ${align} scroll-mt-16 rounded-2xl`}>
+    <div
+      id={`msg-${msg.id}`}
+      className={`flex ${align} items-start gap-2 scroll-mt-16 rounded-2xl`}
+    >
+      {isIn && <div className="shrink-0 mt-1.5">{speakerAvatar}</div>}
       <div className={`${bubbleBase} ${bubble}`}>
         <div className="text-[11px] uppercase tracking-wider text-tg-text-hint mb-1.5 flex items-center gap-2">
-          <span className="truncate max-w-[60%]">{speaker}</span>
+          <span className="truncate max-w-[60%]">{speaker.name}</span>
           <span aria-hidden>·</span>
           <span className="tabular-nums">{time}</span>
         </div>
 
-        {replyTo && (
+        {replyTo && replyToSpeaker && (
           <button
             type="button"
             onClick={() => scrollToMessage(replyTo.id)}
@@ -106,7 +113,7 @@ export function MessageBubble({
             aria-label="Перейти к исходному сообщению"
           >
             <span className="uppercase tracking-wider truncate inline-block max-w-[70%] align-bottom">
-              {speakerName(replyTo.direction, studentName, myName)}
+              {replyToSpeaker.name}
             </span>
             <span className="mx-1.5" aria-hidden>·</span>
             <span aria-hidden>{replyTo.kind === "voice" ? "🎙️" : "🟢"}</span>
@@ -141,6 +148,7 @@ export function MessageBubble({
           </div>
         )}
       </div>
+      {!isIn && <div className="shrink-0 mt-1.5">{speakerAvatar}</div>}
     </div>
   );
 }
@@ -216,10 +224,9 @@ function VideoNote({ src, totalSeconds }: { src: string; totalSeconds: number })
   }
 
   const progress = Math.min(1, totalSeconds > 0 ? current / totalSeconds : 0);
-  // Geometry of the SVG progress ring. Sized to be on/just-outside the clip.
   const SIZE = 192;
   const STROKE = 3;
-  const RADIUS = SIZE / 2 - STROKE; // sit inside the bounds with a small margin
+  const RADIUS = SIZE / 2 - STROKE;
   const CIRC = 2 * Math.PI * RADIUS;
   const dashoffset = CIRC * (1 - progress);
 
@@ -257,8 +264,6 @@ function VideoNote({ src, totalSeconds }: { src: string; totalSeconds: number })
             </div>
           )}
         </div>
-        {/* Progress arc — drawn over the clip, in its own (non-clipped) layer.
-            Rotated -90° so the fill starts at the top, like TG. */}
         <svg
           width={SIZE}
           height={SIZE}
