@@ -2,7 +2,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { AdminUsersTable, type AdminUser } from "@/components/AdminUsersTable";
-import { AdminLinksPanel } from "@/components/AdminLinksPanel";
+import {
+  AdminConnectionsPanel,
+  type Connection,
+} from "@/components/AdminConnectionsPanel";
+import { PendingInbox } from "@/components/PendingInbox";
 
 export default function AdminPage() {
   return (
@@ -22,25 +26,28 @@ export default function AdminPage() {
 }
 
 /**
- * Owns the shared user list so the role table and the linker dropdowns stay
- * in sync without a page reload. AdminUsersTable calls `refetch` after every
- * mutation; AdminLinksPanel just reads.
+ * Owns the shared `users` and `links` lists so the pending inbox, role
+ * table, and connections panel all stay in sync without page reloads.
  */
 function AdminBody({ jwt }: { jwt: string }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [links, setLinks] = useState<Connection[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   const refetch = useCallback(async () => {
-    const r = await fetch("/api/admin/users", {
-      cache: "no-store",
-      headers: { Authorization: `Bearer ${jwt}` },
-    });
-    if (!r.ok) {
-      setLoaded(true);
-      return;
+    const headers = { Authorization: `Bearer ${jwt}` };
+    const [uRes, lRes] = await Promise.all([
+      fetch("/api/admin/users", { cache: "no-store", headers }),
+      fetch("/api/admin/links", { cache: "no-store", headers }),
+    ]);
+    if (uRes.ok) {
+      const u = (await uRes.json()) as { users: AdminUser[] };
+      setUsers(u.users);
     }
-    const d = (await r.json()) as { users: AdminUser[] };
-    setUsers(d.users);
+    if (lRes.ok) {
+      const l = (await lRes.json()) as { links: Connection[] };
+      setLinks(l.links);
+    }
     setLoaded(true);
   }, [jwt]);
 
@@ -48,8 +55,8 @@ function AdminBody({ jwt }: { jwt: string }) {
     void refetch();
   }, [refetch]);
 
-  // Catch out-of-band changes (other devices, /start from a new TG user) when
-  // the Mini App returns to foreground.
+  // Catch out-of-band changes (other devices, /start from a fresh TG user)
+  // when the Mini App returns to foreground.
   useEffect(() => {
     function onVisible() {
       if (document.visibilityState === "visible") void refetch();
@@ -64,8 +71,9 @@ function AdminBody({ jwt }: { jwt: string }) {
 
   return (
     <>
+      <PendingInbox jwt={jwt} users={users} refetch={refetch} />
       <AdminUsersTable jwt={jwt} users={users} loaded={loaded} refetch={refetch} />
-      <AdminLinksPanel jwt={jwt} users={users} />
+      <AdminConnectionsPanel jwt={jwt} users={users} links={links} refetch={refetch} />
     </>
   );
 }

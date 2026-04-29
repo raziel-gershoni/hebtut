@@ -165,7 +165,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
   );
 }
 
-function Avatar({ name, isAdmin }: { name: string; isAdmin?: boolean }) {
+export function Avatar({ name, isAdmin }: { name: string; isAdmin?: boolean }) {
   const initials = name
     .split(/\s+/)
     .filter(Boolean)
