@@ -1,12 +1,10 @@
 /**
  * TG-style per-speaker color assignment for the thread view. Each non-self
- * speaker gets one of 8 hues deterministically based on their user_id, so
- * a given user always shows up in the same color. The current viewer's own
- * messages get a distinct "self" hue (Tailwind blue) — picked deliberately
- * outside the 8-hue rotation so a non-self speaker can never collide with
- * "you", and from a real Tailwind palette so alpha modifiers work (the
- * tg-button CSS variable doesn't support /[X] alpha because Tailwind can't
- * parse alpha out of `var(...)`).
+ * speaker gets one of 7 hues deterministically based on their user_id.
+ * The current viewer's own messages get a distinct "self" hue (Tailwind
+ * amber) — picked deliberately outside the rotation so a non-self speaker
+ * can never collide with "you", and tuned to a slightly stronger alpha so
+ * "Me" reads as the standout color in any thread.
  *
  * Static class strings are referenced literally inside PALETTE so Tailwind's
  * JIT picks them up — no safelist needed.
@@ -24,7 +22,7 @@ export interface SpeakerColorClasses {
   replyBg: string;
 }
 
-type Hue = "emerald" | "sky" | "violet" | "amber" | "rose" | "teal" | "pink" | "indigo";
+type Hue = "emerald" | "sky" | "violet" | "rose" | "teal" | "pink" | "indigo";
 
 const PALETTE: Record<Hue | "self", SpeakerColorClasses> = {
   emerald: {
@@ -44,12 +42,6 @@ const PALETTE: Record<Hue | "self", SpeakerColorClasses> = {
     name: "text-violet-600 dark:text-violet-400",
     bubbleBg: "bg-violet-500/[0.08]",
     replyBg: "bg-violet-500/[0.18]",
-  },
-  amber: {
-    border: "border-amber-500",
-    name: "text-amber-600 dark:text-amber-400",
-    bubbleBg: "bg-amber-500/[0.10]",
-    replyBg: "bg-amber-500/[0.22]",
   },
   rose: {
     border: "border-rose-500",
@@ -76,14 +68,14 @@ const PALETTE: Record<Hue | "self", SpeakerColorClasses> = {
     replyBg: "bg-indigo-500/[0.18]",
   },
   self: {
-    border: "border-blue-500",
-    name: "text-blue-600 dark:text-blue-400",
-    bubbleBg: "bg-blue-500/[0.10]",
-    replyBg: "bg-blue-500/[0.20]",
+    border: "border-amber-500",
+    name: "text-amber-600 dark:text-amber-400",
+    bubbleBg: "bg-amber-500/[0.12]",
+    replyBg: "bg-amber-500/[0.24]",
   },
 };
 
-const HUES: Hue[] = ["emerald", "sky", "violet", "amber", "rose", "teal", "pink", "indigo"];
+const HUES: Hue[] = ["emerald", "sky", "violet", "rose", "teal", "pink", "indigo"];
 
 export function speakerColor(userId: number, isSelf: boolean): SpeakerColorClasses {
   if (isSelf) return PALETTE.self;

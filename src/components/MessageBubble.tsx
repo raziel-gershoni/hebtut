@@ -59,8 +59,11 @@ export function MessageBubble({
 }: MessageBubbleProps) {
   const isIn = msg.direction === "in";
   const align = isIn ? "justify-start" : "justify-end";
+  // Bubble cap: roomy on narrow phones (so the voice player's ~12rem min
+  // width fits), then pull back hard on wider screens so the thread reads
+  // as a conversation rather than a wall of text.
   const bubbleBase =
-    "max-w-[85%] sm:max-w-[75%] rounded-2xl p-3 my-1 transition-colors animate-fade-in";
+    "max-w-[85%] sm:max-w-[60%] md:max-w-[50%] rounded-2xl p-3 my-1 transition-colors animate-fade-in";
   const bubble = isIn
     ? `${speakerColors.bubbleBg} border-l-[3px] ${speakerColors.border}`
     : `${speakerColors.bubbleBg} border-r-[3px] ${speakerColors.border}`;
