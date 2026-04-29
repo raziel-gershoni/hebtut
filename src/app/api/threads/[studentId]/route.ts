@@ -36,6 +36,19 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
     .order("created_at", { ascending: true });
   if (error) return new Response(error.message, { status: 500, headers: noStoreHeaders });
 
+  const { data: studentRow } = await sb
+    .from("users")
+    .select("id, name, avatar_file_id")
+    .eq("id", studentId)
+    .single();
+  const student = studentRow
+    ? {
+        id: studentRow.id,
+        name: studentRow.name,
+        has_avatar: !!studentRow.avatar_file_id,
+      }
+    : null;
+
   // Surface the active claim (if any) so the thread UI can show "X handling".
   const nowIso = new Date().toISOString();
   const { data: claimRow } = await sb
@@ -59,5 +72,5 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
     };
   }
 
-  return Response.json({ messages, claim }, { headers: noStoreHeaders });
+  return Response.json({ messages, claim, student }, { headers: noStoreHeaders });
 }

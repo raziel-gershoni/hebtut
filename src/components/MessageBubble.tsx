@@ -18,6 +18,10 @@ interface MessageBubbleProps {
   jwt: string;
   /** Original message this bubble is a reply to, if any. */
   replyTo?: ThreadMsg | null;
+  /** Name shown for inbound (student) bubbles + reply-context chip. */
+  studentName: string;
+  /** Name shown for outbound (your) bubbles + reply-context chip. */
+  myName: string;
   onReply?: (messageId: number) => Promise<{ ok: boolean; reason?: string }>;
   replyDisabledReason?: string | null;
 }
@@ -33,10 +37,16 @@ function scrollToMessage(id: number) {
   }, 1500);
 }
 
+function speakerName(direction: "in" | "out", studentName: string, myName: string): string {
+  return direction === "in" ? studentName : myName;
+}
+
 export function MessageBubble({
   msg,
   jwt,
   replyTo,
+  studentName,
+  myName,
   onReply,
   replyDisabledReason,
 }: MessageBubbleProps) {
@@ -53,6 +63,8 @@ export function MessageBubble({
     minute: "2-digit",
   });
 
+  const speaker = speakerName(msg.direction, studentName, myName);
+
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -64,7 +76,7 @@ export function MessageBubble({
       const r = await onReply(msg.id);
       if (r.ok) {
         setFeedback("✓ Свайпни по приглашению в чате");
-        // Mirror the inbox claim flow: close the Mini App so the prompt
+        // Mirror the inbox claim flow — close the Mini App so the prompt
         // landing in the teacher's TG chat is visible.
         window.Telegram?.WebApp?.close?.();
       } else if (r.reason === "taken-by-other") {
@@ -81,9 +93,7 @@ export function MessageBubble({
     <div id={`msg-${msg.id}`} className={`flex ${align} scroll-mt-16 rounded-2xl`}>
       <div className={`${bubbleBase} ${bubble}`}>
         <div className="text-[11px] uppercase tracking-wider text-tg-text-hint mb-1.5 flex items-center gap-2">
-          <span>{isIn ? "Ученик" : "Преподаватель"}</span>
-          <span aria-hidden>·</span>
-          <span className="tabular-nums">{formatDuration(msg.duration)}</span>
+          <span className="truncate max-w-[60%]">{speaker}</span>
           <span aria-hidden>·</span>
           <span className="tabular-nums">{time}</span>
         </div>
@@ -95,8 +105,8 @@ export function MessageBubble({
             className="w-full text-left mb-2 rounded-xl bg-tg-bg/60 border-l-2 border-tg-text-accent/40 px-2.5 py-1.5 text-[11px] text-tg-text-hint transition-colors active:bg-tg-bg-secondary"
             aria-label="Перейти к исходному сообщению"
           >
-            <span className="uppercase tracking-wider">
-              {replyTo.direction === "in" ? "Ученик" : "Преподаватель"}
+            <span className="uppercase tracking-wider truncate inline-block max-w-[70%] align-bottom">
+              {speakerName(replyTo.direction, studentName, myName)}
             </span>
             <span className="mx-1.5" aria-hidden>·</span>
             <span aria-hidden>{replyTo.kind === "voice" ? "🎙️" : "🟢"}</span>
@@ -107,7 +117,7 @@ export function MessageBubble({
         {msg.kind === "voice" ? (
           <VoicePlayer src={src} totalSeconds={msg.duration} />
         ) : (
-          <VideoNote src={src} />
+          <VideoNote src={src} totalSeconds={msg.duration} />
         )}
 
         {isIn && onReply && (
@@ -135,10 +145,7 @@ export function MessageBubble({
   );
 }
 
-/**
- * TG-style voice player: round play/pause + thin progress bar + duration.
- * Hidden <audio> drives it via refs.
- */
+/** TG-style voice player: round play/pause + thin progress bar + duration. */
 function VoicePlayer({ src, totalSeconds }: { src: string; totalSeconds: number }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -147,11 +154,8 @@ function VoicePlayer({ src, totalSeconds }: { src: string; totalSeconds: number 
   function toggle() {
     const a = audioRef.current;
     if (!a) return;
-    if (playing) {
-      a.pause();
-    } else {
-      void a.play();
-    }
+    if (playing) a.pause();
+    else void a.play();
   }
 
   const elapsedDisplay = playing
@@ -167,16 +171,7 @@ function VoicePlayer({ src, totalSeconds }: { src: string; totalSeconds: number 
         aria-label={playing ? "Пауза" : "Воспроизвести"}
         className="shrink-0 w-10 h-10 rounded-full bg-tg-button text-tg-button-text flex items-center justify-center transition-transform active:scale-95"
       >
-        {playing ? (
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
-            <rect x="2" y="1" width="3.5" height="12" rx="1" />
-            <rect x="8.5" y="1" width="3.5" height="12" rx="1" />
-          </svg>
-        ) : (
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
-            <path d="M3 1.5L12 7L3 12.5z" />
-          </svg>
-        )}
+        {playing ? <PauseIcon /> : <PlayIcon />}
       </button>
       <div className="flex-1 min-w-0">
         <div className="h-1 rounded-full bg-tg-bg/40 overflow-hidden">
@@ -185,9 +180,7 @@ function VoicePlayer({ src, totalSeconds }: { src: string; totalSeconds: number 
             style={{ width: `${progress * 100}%` }}
           />
         </div>
-        <div className="mt-1 text-[11px] tabular-nums text-tg-text-hint">
-          {elapsedDisplay}
-        </div>
+        <div className="mt-1 text-[11px] tabular-nums text-tg-text-hint">{elapsedDisplay}</div>
       </div>
       <audio
         ref={audioRef}
@@ -206,12 +199,14 @@ function VoicePlayer({ src, totalSeconds }: { src: string; totalSeconds: number 
 }
 
 /**
- * TG-style video note: a circular clip with a translucent play overlay
- * when paused. Tap-to-toggle, native controls hidden.
+ * TG-style video note: a circular video clip with a progress arc that fills
+ * around it as playback progresses. Tap-to-toggle, native controls hidden.
+ * Duration label sits below the circle (TG-style understated meta).
  */
-function VideoNote({ src }: { src: string }) {
+function VideoNote({ src, totalSeconds }: { src: string; totalSeconds: number }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
+  const [current, setCurrent] = useState(0);
 
   function toggle() {
     const v = videoRef.current;
@@ -220,37 +215,113 @@ function VideoNote({ src }: { src: string }) {
     else void v.play();
   }
 
+  const progress = Math.min(1, totalSeconds > 0 ? current / totalSeconds : 0);
+  // Geometry of the SVG progress ring. Sized to be on/just-outside the clip.
+  const SIZE = 192;
+  const STROKE = 3;
+  const RADIUS = SIZE / 2 - STROKE; // sit inside the bounds with a small margin
+  const CIRC = 2 * Math.PI * RADIUS;
+  const dashoffset = CIRC * (1 - progress);
+
+  const elapsedDisplay = playing
+    ? formatDuration(Math.floor(current))
+    : formatDuration(totalSeconds);
+
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      aria-label={playing ? "Пауза" : "Воспроизвести"}
-      className="relative block w-44 h-44 sm:w-48 sm:h-48 rounded-full overflow-hidden bg-black"
-    >
-      <video
-        ref={videoRef}
-        src={src}
-        preload="metadata"
-        playsInline
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)}
-        className="absolute inset-0 w-full h-full object-cover"
-      />
-      {!playing && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-          <svg
-            width="36"
-            height="36"
-            viewBox="0 0 14 14"
-            fill="white"
-            className="drop-shadow"
-            aria-hidden
-          >
-            <path d="M3 1.5L12 7L3 12.5z" />
-          </svg>
+    <div className="inline-flex flex-col items-center">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={playing ? "Пауза" : "Воспроизвести"}
+        className="relative block w-44 h-44 sm:w-48 sm:h-48"
+        style={{ width: SIZE, height: SIZE }}
+      >
+        <div className="absolute inset-0 rounded-full overflow-hidden bg-black">
+          <video
+            ref={videoRef}
+            src={src}
+            preload="metadata"
+            playsInline
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onEnded={() => {
+              setPlaying(false);
+              setCurrent(0);
+            }}
+            onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          {!playing && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+              <PlayIcon size={36} className="text-white drop-shadow" />
+            </div>
+          )}
         </div>
-      )}
-    </button>
+        {/* Progress arc — drawn over the clip, in its own (non-clipped) layer.
+            Rotated -90° so the fill starts at the top, like TG. */}
+        <svg
+          width={SIZE}
+          height={SIZE}
+          viewBox={`0 0 ${SIZE} ${SIZE}`}
+          className="absolute inset-0 -rotate-90 pointer-events-none"
+          aria-hidden
+        >
+          <circle
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={RADIUS}
+            fill="none"
+            stroke="white"
+            strokeOpacity="0.18"
+            strokeWidth={STROKE}
+          />
+          <circle
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={RADIUS}
+            fill="none"
+            className="text-tg-text-accent"
+            stroke="currentColor"
+            strokeWidth={STROKE}
+            strokeLinecap="round"
+            strokeDasharray={CIRC}
+            strokeDashoffset={dashoffset}
+            style={{ transition: "stroke-dashoffset 100ms linear" }}
+          />
+        </svg>
+      </button>
+      <span className="mt-1.5 text-[11px] tabular-nums text-tg-text-hint">{elapsedDisplay}</span>
+    </div>
+  );
+}
+
+function PlayIcon({ size = 14, className }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 14 14"
+      fill="currentColor"
+      className={className}
+      aria-hidden
+    >
+      <path d="M3 1.5L12 7L3 12.5z" />
+    </svg>
+  );
+}
+
+function PauseIcon({ size = 14, className }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 14 14"
+      fill="currentColor"
+      className={className}
+      aria-hidden
+    >
+      <rect x="2" y="1" width="3.5" height="12" rx="1" />
+      <rect x="8.5" y="1" width="3.5" height="12" rx="1" />
+    </svg>
   );
 }

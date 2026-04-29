@@ -8,17 +8,26 @@ interface ClaimInfo {
   expires_at: string;
 }
 
+interface StudentMeta {
+  id: number;
+  name: string | null;
+  has_avatar: boolean;
+}
+
 export function ThreadView({
   jwt,
   studentId,
   myUserId,
+  myName,
 }: {
   jwt: string;
   studentId: number;
   myUserId: number;
+  myName: string | null;
 }) {
   const [messages, setMessages] = useState<ThreadMsg[]>([]);
   const [claim, setClaim] = useState<ClaimInfo | null>(null);
+  const [student, setStudent] = useState<StudentMeta | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
@@ -30,9 +39,14 @@ export function ThreadView({
       setLoaded(true);
       return;
     }
-    const d = (await r.json()) as { messages: ThreadMsg[]; claim?: ClaimInfo | null };
+    const d = (await r.json()) as {
+      messages: ThreadMsg[];
+      claim?: ClaimInfo | null;
+      student?: StudentMeta | null;
+    };
     setMessages(d.messages);
     setClaim(d.claim ?? null);
+    setStudent(d.student ?? null);
     setLoaded(true);
   }, [jwt, studentId]);
 
@@ -62,14 +76,10 @@ export function ThreadView({
     };
   }, [load]);
 
-  // O(N) once per render, so we can resolve reply_to_id → original ThreadMsg
-  // without prop-drilling the whole list down to every bubble.
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
 
   const replyDisabledReason =
-    claim && claim.teacher_id !== myUserId
-      ? `Берёт ${claim.teacher_name}`
-      : null;
+    claim && claim.teacher_id !== myUserId ? `Берёт ${claim.teacher_name}` : null;
 
   const onReply = useCallback(
     async (messageId: number): Promise<{ ok: boolean; reason?: string }> => {
@@ -79,7 +89,11 @@ export function ThreadView({
         headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
         body: JSON.stringify({ messageId }),
       });
-      const d = (await r.json().catch(() => ({}))) as { ok?: true; kind?: string; error?: string };
+      const d = (await r.json().catch(() => ({}))) as {
+        ok?: true;
+        kind?: string;
+        error?: string;
+      };
       if (r.ok && d.ok) {
         void load();
         return { ok: true };
@@ -107,6 +121,9 @@ export function ThreadView({
     );
   }
 
+  const studentDisplay = student?.name ?? "Ученик";
+  const myDisplay = myName ?? "Ты";
+
   return (
     <div className="flex flex-col gap-1">
       {claim && claim.teacher_id === myUserId && (
@@ -120,6 +137,8 @@ export function ThreadView({
           msg={m}
           jwt={jwt}
           replyTo={m.reply_to_id != null ? byId.get(m.reply_to_id) ?? null : null}
+          studentName={studentDisplay}
+          myName={myDisplay}
           onReply={onReply}
           replyDisabledReason={replyDisabledReason}
         />
