@@ -62,8 +62,8 @@ export function MessageBubble({
   const bubbleBase =
     "max-w-[85%] sm:max-w-[75%] rounded-2xl p-3 my-1 transition-colors animate-fade-in";
   const bubble = isIn
-    ? `bg-tg-bg-secondary border-l-[3px] ${speakerColors.border}`
-    : `bg-tg-button/10 border-r-[3px] ${speakerColors.border}`;
+    ? `${speakerColors.bubbleBg} border-l-[3px] ${speakerColors.border}`
+    : `${speakerColors.bubbleBg} border-r-[3px] ${speakerColors.border}`;
   const src = `/api/media/${msg.id}?token=${encodeURIComponent(jwt)}`;
   const time = new Date(msg.created_at).toLocaleTimeString("ru-RU", {
     hour: "2-digit",
