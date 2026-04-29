@@ -31,11 +31,17 @@ export async function POST(req: NextRequest) {
 
   const { data: existing } = await sb
     .from("users")
-    .select("id, role, is_admin, name, avatar_fetched_at")
+    .select("id, role, is_admin, name, avatar_file_id, avatar_fetched_at")
     .eq("tg_user_id", parsed.user.id)
     .maybeSingle();
 
-  let userRow: { id: number; role: string; is_admin: boolean; name: string | null };
+  let userRow: {
+    id: number;
+    role: string;
+    is_admin: boolean;
+    name: string | null;
+    avatar_file_id: string | null;
+  };
   if (!existing) {
     const { data, error } = await sb
       .from("users")
@@ -45,7 +51,7 @@ export async function POST(req: NextRequest) {
         name: display,
         role: "pending",
       })
-      .select("id, role, is_admin, name")
+      .select("id, role, is_admin, name, avatar_file_id")
       .single();
     if (error || !data) return Response.json({ error: error?.message ?? "insert failed" }, { status: 500 });
     userRow = data;
@@ -54,7 +60,7 @@ export async function POST(req: NextRequest) {
       .from("users")
       .update({ name: display })
       .eq("id", existing.id)
-      .select("id, role, is_admin, name")
+      .select("id, role, is_admin, name, avatar_file_id")
       .single();
     if (error || !data) {
       console.warn("name refresh failed", { reason: error?.message });
@@ -81,6 +87,7 @@ export async function POST(req: NextRequest) {
         role: userRow.role,
         is_admin: userRow.is_admin,
         name: userRow.name,
+        has_avatar: !!userRow.avatar_file_id,
       },
     },
     { headers: noStoreHeaders },

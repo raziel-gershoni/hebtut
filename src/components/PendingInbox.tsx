@@ -74,7 +74,15 @@ function PendingCard({
   return (
     <li className="rounded-2xl bg-tg-bg-section ring-1 ring-inset ring-tg-text-accent/15 p-3">
       <div className="flex items-center gap-3">
-        <Avatar name={user.name ?? String(user.tg_user_id)} isAdmin={user.is_admin} />
+        <Avatar
+          name={user.name ?? String(user.tg_user_id)}
+          isAdmin={user.is_admin}
+          imageUrl={
+            user.has_avatar
+              ? `/api/avatar/${user.id}?token=${encodeURIComponent(jwt)}`
+              : undefined
+          }
+        />
         <div className="min-w-0 flex-1 leading-tight">
           <div className="font-medium tracking-tight truncate">
             {user.name ?? "—"}

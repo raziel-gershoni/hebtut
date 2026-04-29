@@ -9,6 +9,7 @@ export type AdminUser = {
   name: string | null;
   role: "pending" | "student" | "teacher";
   is_admin: boolean;
+  has_avatar: boolean;
   status: string;
   created_at: string;
   role_changed_at: string | null;
@@ -26,6 +27,10 @@ interface AdminUsersTableProps {
   loaded: boolean;
   /** Called after every mutation so other consumers (e.g. AdminLinksPanel) re-render. */
   refetch: () => Promise<void>;
+}
+
+function avatarUrl(jwt: string, u: { id: number; has_avatar: boolean }): string | undefined {
+  return u.has_avatar ? `/api/avatar/${u.id}?token=${encodeURIComponent(jwt)}` : undefined;
 }
 
 export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTableProps) {
@@ -101,7 +106,11 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
             key={u.id}
             className="rounded-2xl bg-tg-bg-section p-3 flex items-center gap-3"
           >
-            <Avatar name={u.name ?? String(u.tg_user_id)} isAdmin={u.is_admin} />
+            <Avatar
+              name={u.name ?? String(u.tg_user_id)}
+              isAdmin={u.is_admin}
+              imageUrl={avatarUrl(jwt, u)}
+            />
             <div className="min-w-0 flex-1 leading-tight">
               <div className="font-medium tracking-tight truncate">
                 {u.name ?? "—"}

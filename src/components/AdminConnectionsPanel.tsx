@@ -51,6 +51,17 @@ export function AdminConnectionsPanel({
     [links],
   );
 
+  const hasAvatarById = useMemo(
+    () => new Map(users.map((u) => [u.id, u.has_avatar])),
+    [users],
+  );
+
+  function avatarUrlFor(id: number): string | undefined {
+    return hasAvatarById.get(id)
+      ? `/api/avatar/${id}?token=${encodeURIComponent(jwt)}`
+      : undefined;
+  }
+
   const alreadyLinked =
     studentId !== null &&
     teacherId !== null &&
@@ -208,7 +219,7 @@ export function AdminConnectionsPanel({
           {groups.map((g) => (
             <li key={`${mode}-${g.id}`} className="rounded-2xl bg-tg-bg-section p-3">
               <header className="flex items-center gap-3 mb-2">
-                <Avatar name={g.primaryName} />
+                <Avatar name={g.primaryName} imageUrl={avatarUrlFor(g.id)} />
                 <div className="min-w-0 flex-1 leading-tight">
                   <div className="font-medium tracking-tight truncate">
                     {g.primaryName}

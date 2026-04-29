@@ -13,8 +13,14 @@ export async function GET(req: NextRequest) {
   const sb = getServiceRoleClient();
   const { data, error } = await sb
     .from("users")
-    .select("id, tg_user_id, name, role, is_admin, status, created_at, role_changed_at")
+    .select(
+      "id, tg_user_id, name, role, is_admin, status, created_at, role_changed_at, avatar_file_id",
+    )
     .order("created_at", { ascending: false });
   if (error) return new Response(error.message, { status: 500 });
-  return Response.json({ users: data }, { headers: noStoreHeaders });
+  const users = (data ?? []).map((u) => {
+    const { avatar_file_id, ...rest } = u;
+    return { ...rest, has_avatar: !!avatar_file_id };
+  });
+  return Response.json({ users }, { headers: noStoreHeaders });
 }

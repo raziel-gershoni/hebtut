@@ -2,6 +2,7 @@
 import type { ReactNode } from "react";
 import { useInitDataAuth } from "@/hooks/useInitDataAuth";
 import { useTelegramBackButton } from "@/hooks/useTelegramBackButton";
+import { Avatar } from "./Avatar";
 
 export interface AppCtx {
   jwt: string;
@@ -9,6 +10,7 @@ export interface AppCtx {
   isAdmin: boolean;
   userId: number;
   name: string | null;
+  hasAvatar: boolean;
 }
 
 interface AppShellProps {
@@ -25,8 +27,6 @@ const ROLE_LABEL: Record<string, string> = {
 
 export function AppShell({ title, back, children }: AppShellProps) {
   const status = useInitDataAuth();
-  // Drive TG's native back button. The visual back link below is gone;
-  // TG renders its own native chevron in the platform's preferred place.
   useTelegramBackButton(back);
 
   return (
@@ -34,11 +34,9 @@ export function AppShell({ title, back, children }: AppShellProps) {
       {title && (
         <header className="sticky top-0 z-10 bg-tg-bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-tg-bg-header/80 border-b border-black/[0.04]">
           <div className="mx-auto max-w-2xl px-4 h-12 flex items-center gap-3">
-            <h1 className="text-base font-semibold tracking-tight truncate">
-              {title}
-            </h1>
+            <h1 className="text-base font-semibold tracking-tight truncate">{title}</h1>
             {status.state === "ok" && (
-              <div className="ml-auto flex items-center gap-1.5">
+              <div className="ml-auto flex items-center gap-2">
                 <span className="text-xs text-tg-text-hint uppercase tracking-wider">
                   {ROLE_LABEL[status.user.role] ?? status.user.role}
                 </span>
@@ -47,6 +45,16 @@ export function AppShell({ title, back, children }: AppShellProps) {
                     АДМИН
                   </span>
                 )}
+                <Avatar
+                  size={32}
+                  name={status.user.name ?? "?"}
+                  isAdmin={status.user.is_admin}
+                  imageUrl={
+                    status.user.has_avatar
+                      ? `/api/avatar/${status.user.id}?token=${encodeURIComponent(status.jwt)}`
+                      : undefined
+                  }
+                />
               </div>
             )}
           </div>
@@ -55,9 +63,7 @@ export function AppShell({ title, back, children }: AppShellProps) {
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-5 animate-fade-in">
         {status.state === "loading" && <SkeletonStack />}
-        {status.state === "no-tg" && (
-          <Notice tone="info">Открой эту страницу через Telegram.</Notice>
-        )}
+        {status.state === "no-tg" && <Notice tone="info">Открой эту страницу через Telegram.</Notice>}
         {status.state === "error" && (
           <Notice tone="error">Ошибка авторизации: {status.message}</Notice>
         )}
@@ -68,6 +74,7 @@ export function AppShell({ title, back, children }: AppShellProps) {
             isAdmin: status.user.is_admin,
             userId: status.user.id,
             name: status.user.name,
+            hasAvatar: status.user.has_avatar,
           })}
       </main>
     </div>
@@ -89,7 +96,5 @@ function Notice({ tone, children }: { tone: "info" | "error"; children: ReactNod
     tone === "error"
       ? "border-tg-text-destructive/25 text-tg-text-destructive"
       : "border-tg-text-hint/30 text-tg-text-subtitle";
-  return (
-    <div className={`rounded-2xl border ${cls} bg-tg-bg-section p-4 text-sm`}>{children}</div>
-  );
+  return <div className={`rounded-2xl border ${cls} bg-tg-bg-section p-4 text-sm`}>{children}</div>;
 }

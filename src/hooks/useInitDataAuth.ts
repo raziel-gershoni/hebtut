@@ -6,6 +6,7 @@ export type SessionUser = {
   role: string;
   is_admin: boolean;
   name: string | null;
+  has_avatar: boolean;
 };
 export type AuthStatus =
   | { state: "loading" }

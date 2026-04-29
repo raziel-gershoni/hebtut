@@ -5,7 +5,7 @@ import { ThreadView } from "@/components/ThreadView";
 export default function StudentThreadPage({ params }: { params: { id: string } }) {
   const studentId = Number(params.id);
   return (
-    <AppShell title="Диалог" back="/inbox">
+    <AppShell back="/inbox">
       {({ jwt, role, isAdmin, userId, name }) => {
         if (role !== "teacher" && !isAdmin) {
           return (

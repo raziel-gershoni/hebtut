@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { MessageBubble, type ThreadMsg } from "./MessageBubble";
+import { Avatar } from "./Avatar";
 
 interface ClaimInfo {
   teacher_id: number;
@@ -123,9 +124,20 @@ export function ThreadView({
 
   const studentDisplay = student?.name ?? "Ученик";
   const myDisplay = myName ?? "Ты";
+  const studentAvatarUrl =
+    student?.has_avatar
+      ? `/api/avatar/${student.id}?token=${encodeURIComponent(jwt)}`
+      : undefined;
 
   return (
     <div className="flex flex-col gap-1">
+      <header className="flex items-center gap-3 mb-3 pb-3 border-b border-tg-text-hint/15">
+        <Avatar size={48} name={studentDisplay} imageUrl={studentAvatarUrl} />
+        <div className="min-w-0 flex-1 leading-tight">
+          <div className="font-semibold tracking-tight truncate">{studentDisplay}</div>
+          <div className="text-xs text-tg-text-hint">ученик</div>
+        </div>
+      </header>
       {claim && claim.teacher_id === myUserId && (
         <div className="text-xs text-tg-text-hint mb-2">
           Активная сессия с этим учеником — отвечай в чате.
