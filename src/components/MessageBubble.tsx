@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { formatDuration } from "@/lib/i18n";
 import { Spinner } from "./Spinner";
 import { Avatar } from "./Avatar";
+import type { SpeakerColorClasses } from "@/lib/speaker-color";
 
 export type ThreadMsg = {
   id: number;
@@ -24,9 +25,12 @@ interface MessageBubbleProps {
   jwt: string;
   /** Who said this message. Drives the meta label and the side avatar. */
   speaker: Speaker;
+  /** Color classes derived from the speaker's user_id. */
+  speakerColors: SpeakerColorClasses;
   /** Original message this one replies to, if any. */
   replyTo?: ThreadMsg | null;
   replyToSpeaker?: Speaker | null;
+  replyToSpeakerColors?: SpeakerColorClasses | null;
   onReply?: (messageId: number) => Promise<{ ok: boolean; reason?: string }>;
   replyDisabledReason?: string | null;
 }
@@ -46,8 +50,10 @@ export function MessageBubble({
   msg,
   jwt,
   speaker,
+  speakerColors,
   replyTo,
   replyToSpeaker,
+  replyToSpeakerColors,
   onReply,
   replyDisabledReason,
 }: MessageBubbleProps) {
@@ -56,8 +62,8 @@ export function MessageBubble({
   const bubbleBase =
     "max-w-[85%] sm:max-w-[75%] rounded-2xl p-3 my-1 transition-colors animate-fade-in";
   const bubble = isIn
-    ? "bg-tg-bg-secondary border-l-2 border-tg-text-accent/40"
-    : "bg-tg-button/10 border-r-2 border-tg-button/60";
+    ? `bg-tg-bg-secondary border-l-[3px] ${speakerColors.border}`
+    : `bg-tg-button/10 border-r-[3px] ${speakerColors.border}`;
   const src = `/api/media/${msg.id}?token=${encodeURIComponent(jwt)}`;
   const time = new Date(msg.created_at).toLocaleTimeString("ru-RU", {
     hour: "2-digit",
@@ -99,25 +105,33 @@ export function MessageBubble({
     >
       {isIn && <div className="shrink-0 mt-1.5">{speakerAvatar}</div>}
       <div className={`${bubbleBase} ${bubble}`}>
-        <div className="text-[11px] uppercase tracking-wider text-tg-text-hint mb-1.5 flex items-center gap-2">
-          <span className="truncate max-w-[60%]">{speaker.name}</span>
-          <span aria-hidden>·</span>
-          <span className="tabular-nums">{time}</span>
+        <div className="text-[11px] mb-1.5 flex items-center gap-2">
+          <span
+            className={`truncate max-w-[60%] font-semibold text-xs ${speakerColors.name}`}
+          >
+            {speaker.name}
+          </span>
+          <span aria-hidden className="text-tg-text-hint">·</span>
+          <span className="tabular-nums text-tg-text-hint">{time}</span>
         </div>
 
-        {replyTo && replyToSpeaker && (
+        {replyTo && replyToSpeaker && replyToSpeakerColors && (
           <button
             type="button"
             onClick={() => scrollToMessage(replyTo.id)}
-            className="w-full text-left mb-2 rounded-xl bg-tg-bg/60 border-l-2 border-tg-text-accent/40 px-2.5 py-1.5 text-[11px] text-tg-text-hint transition-colors active:bg-tg-bg-secondary"
+            className={`w-full text-left mb-2 rounded-xl px-2.5 py-1.5 text-xs border-l-[3px] transition-transform active:scale-[0.99] ${replyToSpeakerColors.replyBg} ${replyToSpeakerColors.border}`}
             aria-label="Перейти к исходному сообщению"
           >
-            <span className="uppercase tracking-wider truncate inline-block max-w-[70%] align-bottom">
+            <span
+              className={`font-semibold truncate inline-block max-w-[70%] align-bottom ${replyToSpeakerColors.name}`}
+            >
               {replyToSpeaker.name}
             </span>
-            <span className="mx-1.5" aria-hidden>·</span>
+            <span className="mx-1.5 text-tg-text-hint" aria-hidden>·</span>
             <span aria-hidden>{replyTo.kind === "voice" ? "🎙️" : "🟢"}</span>
-            <span className="ml-1 tabular-nums">{formatDuration(replyTo.duration)}</span>
+            <span className="ml-1 tabular-nums text-tg-text">
+              {formatDuration(replyTo.duration)}
+            </span>
           </button>
         )}
 

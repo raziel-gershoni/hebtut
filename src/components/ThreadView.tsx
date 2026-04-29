@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { MessageBubble, type ThreadMsg, type Speaker } from "./MessageBubble";
 import { Avatar } from "./Avatar";
+import { speakerColor, type SpeakerColorClasses } from "@/lib/speaker-color";
 
 interface ClaimInfo {
   teacher_id: number;
@@ -150,6 +151,17 @@ export function ThreadView({
     };
   }
 
+  // Stable per-user color so each speaker has a recognizable signature on
+  // bubble border + name + reply-quote bar. Self always gets the TG-button
+  // hue so own messages stay theme-coherent.
+  function colorFor(msg: ApiMessage): SpeakerColorClasses {
+    if (msg.direction === "in") {
+      return speakerColor(student?.id ?? msg.teacher_id ?? 0, false);
+    }
+    if (msg.teacher_id === myUserId) return speakerColor(myUserId, true);
+    return speakerColor(msg.teacher_id ?? 0, false);
+  }
+
   if (!loaded) {
     return (
       <div className="space-y-2 animate-pulse">
@@ -190,8 +202,10 @@ export function ThreadView({
             msg={m}
             jwt={jwt}
             speaker={speakerFor(m)}
+            speakerColors={colorFor(m)}
             replyTo={replyToMsg}
             replyToSpeaker={replyToMsg ? speakerFor(replyToMsg) : null}
+            replyToSpeakerColors={replyToMsg ? colorFor(replyToMsg) : null}
             onReply={onReply}
             replyDisabledReason={replyDisabledReason}
           />
