@@ -23,6 +23,8 @@ export const ru = {
     `📩 Ответь ${studentName} — голосовое ${dur}, отправлено ${when}. Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
   teacherFollowupPrompt: (studentName: string, dur: string, when: string) =>
     `📩 Доп. ответ для ${studentName} — голосовое ${dur} (отправлено ${when}). Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
+  teacherInitiatePrompt: (studentName: string) =>
+    `📩 Сообщение для ${studentName}. Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
   teacherNotificationActionable: (studentName: string, kindLabel: string, durationLabel: string) =>
     `🔔 ${studentName} прислал(а) ${kindLabel} ${durationLabel}. Открой мини-приложение, чтобы взять в работу.`,
   teacherNotificationTaken: (handler: string) => `✓ ${handler} взял(а) сообщение в работу.`,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decideReplyKind } from "@/server/claim";
+import { decideReplyKind, decideInitiation } from "@/server/claim";
 
 const ME = 7;
 const OTHER = 99;
@@ -101,6 +101,26 @@ describe("decideReplyKind", () => {
         activeClaimTeacherId: OTHER,
         teacherId: ME,
       }),
+    ).toEqual({ ok: false, reason: "taken-by-other" });
+  });
+});
+
+describe("decideInitiation", () => {
+  it("allows when no claim is active", () => {
+    expect(decideInitiation({ activeClaimTeacherId: null, teacherId: ME })).toEqual({
+      ok: true,
+    });
+  });
+
+  it("allows when this teacher already holds the claim (refresh)", () => {
+    expect(decideInitiation({ activeClaimTeacherId: ME, teacherId: ME })).toEqual({
+      ok: true,
+    });
+  });
+
+  it("rejects when another teacher holds the claim", () => {
+    expect(
+      decideInitiation({ activeClaimTeacherId: OTHER, teacherId: ME }),
     ).toEqual({ ok: false, reason: "taken-by-other" });
   });
 });

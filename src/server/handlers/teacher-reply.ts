@@ -54,7 +54,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
 
   const { data: prompt } = await sb
     .from("prompts")
-    .select("id, student_message_id, teacher_id, tg_prompt_message_id")
+    .select("id, student_id, student_message_id, teacher_id, tg_prompt_message_id")
     .eq("teacher_id", teacher.id)
     .eq("tg_prompt_message_id", replyTo.message_id)
     .maybeSingle();
@@ -73,21 +73,33 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     return true;
   }
 
-  const { data: original } = await sb
-    .from("messages")
-    .select("id, student_id, status, direction, tg_message_id_in_student_chat")
-    .eq("id", prompt.student_message_id)
-    .single();
-  if (!original || original.direction !== "in" || original.status === "orphaned") {
-    await ctx.reply(ru.teacherReplyFailed);
-    return true;
+  // Initiation prompts have no original message; reply prompts do. Load the
+  // original lazily so the rest of the handler can branch on `original`.
+  let original: {
+    id: number;
+    student_id: number;
+    status: string;
+    direction: string;
+    tg_message_id_in_student_chat: number | null;
+  } | null = null;
+  if (prompt.student_message_id != null) {
+    const { data: orig } = await sb
+      .from("messages")
+      .select("id, student_id, status, direction, tg_message_id_in_student_chat")
+      .eq("id", prompt.student_message_id)
+      .single();
+    if (!orig || orig.direction !== "in" || orig.status === "orphaned") {
+      await ctx.reply(ru.teacherReplyFailed);
+      return true;
+    }
+    original = orig;
   }
 
   // Ensure the (S, T) link still holds.
   const { data: link } = await sb
     .from("student_teachers")
     .select("teacher_id")
-    .eq("student_id", original.student_id)
+    .eq("student_id", prompt.student_id)
     .eq("teacher_id", teacher.id)
     .maybeSingle();
   if (!link) {
@@ -95,13 +107,14 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     return true;
   }
 
-  // For pending/expired messages we require an active claim by this teacher.
-  // For already-answered messages we allow follow-ups without a live claim.
-  if (original.status !== "answered") {
+  // For pending/expired student messages we require an active claim by this
+  // teacher. Already-answered originals (followup) and pure initiations skip
+  // the live-claim check.
+  if (original && original.status !== "answered") {
     const { data: claim } = await sb
       .from("claims")
       .select("teacher_id, expires_at")
-      .eq("student_id", original.student_id)
+      .eq("student_id", prompt.student_id)
       .maybeSingle();
     const claimActive =
       !!claim && new Date(claim.expires_at).getTime() > Date.now() && claim.teacher_id === teacher.id;
@@ -114,7 +127,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
   const { data: student } = await sb
     .from("users")
     .select("tg_chat_id")
-    .eq("id", original.student_id)
+    .eq("id", prompt.student_id)
     .single();
   if (!student) {
     await ctx.reply(ru.teacherReplyFailed);
@@ -126,11 +139,13 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
   const fileId = (voice?.file_id ?? note?.file_id) as string;
   const duration = (voice?.duration ?? note?.duration ?? 0) as number;
 
-  // TG-reply to the student's original message. allow_sending_without_reply
-  // means: if the student deleted the original, the bot still delivers (just
-  // un-threaded). If the whole chat is gone, the catch below handles it.
+  // TG-reply to the student's original message when one exists. Initiation
+  // prompts have no original — the message lands as a fresh top-level note.
+  // allow_sending_without_reply: if the student deleted the original, the
+  // bot still delivers (just un-threaded). If the whole chat is gone, the
+  // catch below handles it.
   const replyParams =
-    original.tg_message_id_in_student_chat != null
+    original?.tg_message_id_in_student_chat != null
       ? {
           reply_parameters: {
             message_id: original.tg_message_id_in_student_chat,
@@ -161,7 +176,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
   }
 
   await sb.from("messages").insert({
-    student_id: original.student_id,
+    student_id: prompt.student_id,
     direction: "out",
     teacher_id: teacher.id,
     kind,
@@ -169,12 +184,13 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     file_unique_id: newFileUniqueId,
     duration,
     status: "answered",
-    reply_to_id: original.id,
+    reply_to_id: original?.id ?? null,
     tg_message_id_in_student_chat: sentMessageId,
   });
 
-  const isFirstAnswer = original.status !== "answered";
-  if (isFirstAnswer) {
+  // "First answer" + notification edits only apply when there's an original
+  // student message in flight. Initiation has nothing to mark answered.
+  if (original && original.status !== "answered") {
     await sb
       .from("messages")
       .update({
@@ -194,7 +210,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     .from("claims")
     .upsert(
       {
-        student_id: original.student_id,
+        student_id: prompt.student_id,
         teacher_id: teacher.id,
         claimed_at: new Date().toISOString(),
         expires_at: expiresAt,

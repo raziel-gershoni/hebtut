@@ -129,6 +129,7 @@ export async function startReply(messageId: number, teacherId: number): Promise<
 
   await sb.from("prompts").insert({
     teacher_id: teacherId,
+    student_id: msg.student_id,
     student_message_id: messageId,
     tg_chat_id: teacher.tg_chat_id,
     tg_prompt_message_id: sent.message_id,
@@ -151,4 +152,101 @@ export async function startReply(messageId: number, teacherId: number): Promise<
   }
 
   return { ok: true, kind: decision.kind, promptMessageId: sent.message_id };
+}
+
+export type StartInitiationResult =
+  | { ok: true; kind: "initiate"; promptMessageId: number }
+  | { ok: false; reason: "taken-by-other" | "not-allowed" | "not-found" | "fatal" };
+
+/**
+ * Pure decision: can `teacherId` initiate a chat given the currently active
+ * claim holder (or null if no claim is active)? Mirrors the same semantics
+ * baked into decideReplyKind's "taken-by-other" rule, kept separate so the
+ * initiate path can be exercised in isolation.
+ */
+export function decideInitiation(input: {
+  activeClaimTeacherId: number | null;
+  teacherId: number;
+}): { ok: true } | { ok: false; reason: "taken-by-other" } {
+  if (
+    input.activeClaimTeacherId !== null &&
+    input.activeClaimTeacherId !== input.teacherId
+  ) {
+    return { ok: false, reason: "taken-by-other" };
+  }
+  return { ok: true };
+}
+
+/**
+ * Teacher-initiated outbound: lets a teacher seed a chat with a linked
+ * student even when there's no incoming message to reply to. Mirrors
+ * startReply's claim/prompt machinery but without the original-message
+ * lookup, decision rule, or notification edits — there's nothing to
+ * "answer" on the way in.
+ */
+export async function startInitiation(
+  teacherId: number,
+  studentId: number,
+): Promise<StartInitiationResult> {
+  const sb = getServiceRoleClient();
+
+  const { data: link } = await sb
+    .from("student_teachers")
+    .select("teacher_id")
+    .eq("student_id", studentId)
+    .eq("teacher_id", teacherId)
+    .maybeSingle();
+  if (!link) return { ok: false, reason: "not-allowed" };
+
+  const { data: claim } = await sb
+    .from("claims")
+    .select("teacher_id, expires_at")
+    .eq("student_id", studentId)
+    .maybeSingle();
+  const claimActive = !!claim && new Date(claim.expires_at).getTime() > Date.now();
+  const decision = decideInitiation({
+    activeClaimTeacherId: claimActive ? claim.teacher_id : null,
+    teacherId,
+  });
+  if (!decision.ok) return decision;
+
+  const ttlMs = serverEnv.CLAIM_TTL_MINUTES * 60_000;
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+  const { error: upsertErr } = await sb
+    .from("claims")
+    .upsert(
+      {
+        student_id: studentId,
+        teacher_id: teacherId,
+        claimed_at: new Date().toISOString(),
+        expires_at: expiresAt,
+      },
+      { onConflict: "student_id" },
+    );
+  if (upsertErr) {
+    console.error("initiation claim upsert failed", upsertErr.message);
+    return { ok: false, reason: "fatal" };
+  }
+
+  const [{ data: student }, { data: teacher }] = await Promise.all([
+    sb.from("users").select("name").eq("id", studentId).single(),
+    sb.from("users").select("tg_chat_id").eq("id", teacherId).single(),
+  ]);
+  if (!teacher) return { ok: false, reason: "fatal" };
+
+  const studentName = student?.name ?? `student ${studentId}`;
+  const sent = await getBot().api.sendMessage(
+    teacher.tg_chat_id,
+    ru.teacherInitiatePrompt(studentName),
+  );
+
+  await sb.from("prompts").insert({
+    teacher_id: teacherId,
+    student_id: studentId,
+    student_message_id: null,
+    tg_chat_id: teacher.tg_chat_id,
+    tg_prompt_message_id: sent.message_id,
+  });
+
+  return { ok: true, kind: "initiate", promptMessageId: sent.message_id };
 }
