@@ -1,7 +1,8 @@
 import type { Context } from "grammy";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { ru, formatDuration } from "@/lib/i18n";
-import { getRemainingForToday, commitUsage } from "@/server/quota";
+import { getUsedForToday, decideQuota, commitUsageSplit } from "@/server/quota";
+import { serverEnv } from "@/lib/env";
 import { fanOutToTeachers } from "@/server/notifications";
 import { isTgUserBanned } from "@/server/invites";
 
@@ -69,9 +70,15 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
   }
 
   // Duration is read straight from the webhook payload — never download to measure.
-  const remaining = await getRemainingForToday(user.id, user.tz);
-  if (duration > remaining) {
-    await ctx.reply(ru.overQuota(formatDuration(remaining)));
+  const usedToday = await getUsedForToday(user.id, user.tz);
+  const decision = decideQuota({
+    usedToday,
+    dailyQuota: serverEnv.DAILY_QUOTA_SECONDS,
+    graceSeconds: serverEnv.OVERFLOW_GRACE_SECONDS,
+    messageDuration: duration,
+  });
+  if (!decision.ok) {
+    await ctx.reply(ru.overQuota(formatDuration(decision.remainingIncludingGrace)));
     return true;
   }
 
@@ -104,8 +111,19 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
     return true;
   }
 
-  const newRemaining = await commitUsage(user.id, user.tz, duration);
-  await ctx.reply(ru.acceptedStudent(formatDuration(newRemaining)));
+  await commitUsageSplit(user.id, user.tz, decision.todayDebit, decision.tomorrowDebit);
+
+  // Choose the reply: overflow > low-warning > normal. Each takes priority
+  // because the more urgent state should not be hidden by the cheerier copy.
+  let reply: string;
+  if (decision.tomorrowDebit > 0) {
+    reply = ru.acceptedStudentOverflow(formatDuration(decision.tomorrowDebit));
+  } else if (decision.newRemainingToday > 0 && decision.newRemainingToday <= 60) {
+    reply = ru.acceptedStudentLow(formatDuration(decision.newRemainingToday));
+  } else {
+    reply = ru.acceptedStudent(formatDuration(decision.newRemainingToday));
+  }
+  await ctx.reply(reply);
   await fanOutToTeachers(inserted.id);
   return true;
 }

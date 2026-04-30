@@ -54,6 +54,10 @@ const ServerSchema = z.object({
     }
   }),
   DAILY_QUOTA_SECONDS: z.coerce.number().int().positive().default(300),
+  // Slack the daily quota by this many seconds. Anything within
+  // [DAILY_QUOTA, DAILY_QUOTA + OVERFLOW_GRACE_SECONDS] is still accepted
+  // today; the part beyond DAILY_QUOTA is debited against tomorrow.
+  OVERFLOW_GRACE_SECONDS: z.coerce.number().int().nonnegative().default(60),
   CLAIM_TTL_MINUTES: z.coerce.number().int().positive().default(15),
   DEFAULT_TZ: z.string().default("Asia/Jerusalem"),
   CRON_SECRET: z.string().min(8),

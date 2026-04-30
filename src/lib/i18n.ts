@@ -15,6 +15,10 @@ export const ru = {
   overQuota: (remaining: string) =>
     `На сегодня лимит почти исчерпан — осталось ${remaining}. Попробуй завтра или сократи запись.`,
   acceptedStudent: (remaining: string) => `✅ Отправлено! Осталось ${remaining} на сегодня.`,
+  acceptedStudentLow: (remaining: string) =>
+    `✅ Отправлено! ⚠️ Осталось ${remaining} — меньше минуты на сегодня.`,
+  acceptedStudentOverflow: (overflow: string) =>
+    `✅ Отправлено! Лимит на сегодня исчерпан, ${overflow} списались с завтрашнего лимита.`,
   teacherReplyMissingContext:
     "Чтобы ответить ученику, открой мини-приложение, нажми «Ответить» рядом с его сообщением, и потом свайпни по подсказке.",
   teacherReplyDelivered: "✅ Ответ отправлен ученику.",
