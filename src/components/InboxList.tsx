@@ -5,6 +5,7 @@ import { Avatar } from "./Avatar";
 import { StudentPicker } from "./StudentPicker";
 import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
 import { formatDuration } from "@/lib/i18n";
+import { bgFromHandle } from "@/lib/handle";
 
 type LastMessage = {
   id: number;
@@ -17,12 +18,17 @@ type LastMessage = {
 
 interface Chat {
   student_id: number;
-  student_name: string | null;
-  has_avatar: boolean;
+  student_handle: string;
+  student_emoji: string;
   last_message: LastMessage | null;
   unread_count: number;
   has_unanswered: boolean;
-  claim: { teacher_id: number; teacher_name: string; is_self: boolean } | null;
+  claim: {
+    teacher_id: number;
+    teacher_handle: string;
+    teacher_emoji: string;
+    is_self: boolean;
+  } | null;
 }
 
 export function InboxList({
@@ -101,10 +107,8 @@ export function InboxList({
 }
 
 function ChatRow({ chat, jwt }: { chat: Chat; jwt: string }) {
-  const name = chat.student_name ?? "Ученик";
-  const avatarUrl = chat.has_avatar
-    ? `/api/avatar/${chat.student_id}?token=${encodeURIComponent(jwt)}`
-    : undefined;
+  void jwt;
+  const name = chat.student_handle;
   const time = chat.last_message ? formatChatTimestamp(chat.last_message.created_at) : "";
   const unanswered = chat.has_unanswered;
   const heldByOther = chat.claim && !chat.claim.is_self;
@@ -117,7 +121,12 @@ function ChatRow({ chat, jwt }: { chat: Chat; jwt: string }) {
           unanswered ? "border-l-2 border-tg-text-accent/50 pl-[14px]" : ""
         }`}
       >
-        <Avatar name={name} imageUrl={avatarUrl} size={48} />
+        <Avatar
+          name={name}
+          emoji={chat.student_emoji}
+          bgClass={bgFromHandle(chat.student_handle)}
+          size={48}
+        />
         <div className="min-w-0 flex-1 leading-tight">
           <div className="flex items-baseline gap-2">
             <span className="font-medium tracking-tight truncate">{name}</span>
@@ -139,7 +148,7 @@ function ChatRow({ chat, jwt }: { chat: Chat; jwt: string }) {
           </div>
           {heldByOther && (
             <div className="mt-0.5 text-[11px] text-tg-text-hint">
-              Берёт {chat.claim!.teacher_name}
+              Берёт {chat.claim!.teacher_handle}
             </div>
           )}
         </div>

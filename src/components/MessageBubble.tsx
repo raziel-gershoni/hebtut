@@ -17,7 +17,11 @@ export type ThreadMsg = {
 
 export interface Speaker {
   name: string;
+  /** Self/admin path: real TG photo URL. Mutually exclusive with emoji+bgClass. */
   avatarUrl?: string;
+  /** Anonymous path: animal emoji on a colored circle. */
+  emoji?: string;
+  bgClass?: string;
 }
 
 interface MessageBubbleProps {
@@ -98,7 +102,13 @@ export function MessageBubble({
   }
 
   const speakerAvatar = (
-    <Avatar size={32} name={speaker.name} imageUrl={speaker.avatarUrl} />
+    <Avatar
+      size={32}
+      name={speaker.name}
+      imageUrl={speaker.avatarUrl}
+      emoji={speaker.emoji}
+      bgClass={speaker.bgClass}
+    />
   );
 
   return (

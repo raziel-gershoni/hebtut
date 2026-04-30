@@ -5,6 +5,7 @@ import { serverEnv } from "@/lib/env";
 import { ru } from "@/lib/i18n";
 import { editAllNotificationsForMessage } from "@/server/notifications";
 import { isTgUserBanned } from "@/server/invites";
+import { userHandle } from "@/lib/handle";
 
 export interface ReplyContext {
   replyToMessageId: number;
@@ -36,7 +37,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
   const sb = getServiceRoleClient();
   const { data: teacher } = await sb
     .from("users")
-    .select("id, role, name, status")
+    .select("id, role, tg_user_id, display_handle, status")
     .eq("tg_user_id", ctx.from.id)
     .maybeSingle();
   if (!teacher || teacher.role !== "teacher") {
@@ -199,8 +200,8 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
         claimed_by_teacher_id: teacher.id,
       })
       .eq("id", original.id);
-    const teacherName = teacher.name ?? "Тренер";
-    await editAllNotificationsForMessage(original.id, ru.teacherNotificationTaken(teacherName));
+    const teacherHandle = teacher.display_handle ?? userHandle(teacher.tg_user_id).handle;
+    await editAllNotificationsForMessage(original.id, ru.teacherNotificationTaken(teacherHandle));
   }
 
   // Refresh the (S, T) session — the teacher is engaged.

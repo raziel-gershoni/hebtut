@@ -27,20 +27,10 @@ export async function GET(req: NextRequest, { params }: { params: { userId: stri
   if (!target) return new Response("not found", { status: 404 });
   if (!target.avatar_file_id) return new Response("no avatar", { status: 404 });
 
-  // Authz: a non-admin teacher can only see avatars of their linked
-  // students (or their own avatar). Avatars of other teachers / unrelated
-  // users aren't exposed.
+  // Authz: real avatars are admin-only or self. Peer-facing chat surfaces use
+  // the generated emoji avatar instead — see `Avatar` + `userHandle`.
   if (!me.isAdmin && target.id !== me.id) {
-    if (target.role !== "student") {
-      return new Response("forbidden", { status: 403 });
-    }
-    const { data: link } = await sb
-      .from("student_teachers")
-      .select("teacher_id")
-      .eq("student_id", target.id)
-      .eq("teacher_id", me.id)
-      .maybeSingle();
-    if (!link) return new Response("forbidden", { status: 403 });
+    return new Response("forbidden", { status: 403 });
   }
 
   let file;

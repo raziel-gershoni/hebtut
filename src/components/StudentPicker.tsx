@@ -2,11 +2,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Avatar } from "./Avatar";
 import { Spinner } from "./Spinner";
+import { bgFromHandle } from "@/lib/handle";
 
 interface Student {
   id: number;
-  name: string | null;
-  has_avatar: boolean;
+  handle: string;
+  emoji: string;
 }
 
 interface StudentPickerProps {
@@ -43,9 +44,6 @@ export function StudentPicker({ jwt, onClose }: StudentPickerProps) {
     void load();
   }, [load]);
 
-  function avatarUrl(s: Student): string | undefined {
-    return s.has_avatar ? `/api/avatar/${s.id}?token=${encodeURIComponent(jwt)}` : undefined;
-  }
 
   async function pick(studentId: number) {
     setBusyId(studentId);
@@ -121,9 +119,14 @@ export function StudentPicker({ jwt, onClose }: StudentPickerProps) {
                     onClick={() => void pick(s.id)}
                     className="w-full flex items-center gap-3 p-2 rounded-xl active:bg-tg-bg-secondary transition-colors disabled:opacity-50"
                   >
-                    <Avatar size={36} name={s.name ?? "—"} imageUrl={avatarUrl(s)} />
+                    <Avatar
+                      size={36}
+                      name={s.handle}
+                      emoji={s.emoji}
+                      bgClass={bgFromHandle(s.handle)}
+                    />
                     <span className="flex-1 min-w-0 truncate text-left">
-                      {s.name ?? "—"}
+                      {s.handle}
                     </span>
                     {busyId === s.id && <Spinner size={14} />}
                   </button>

@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { authFromRequest, canTeachOrReadAsAdmin } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
+import { userHandle } from "@/lib/handle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,8 +20,8 @@ interface MessageRow {
 
 interface InboxChat {
   student_id: number;
-  student_name: string | null;
-  has_avatar: boolean;
+  student_handle: string;
+  student_emoji: string;
   last_message:
     | {
         id: number;
@@ -34,8 +35,22 @@ interface InboxChat {
   unread_count: number;
   has_unanswered: boolean;
   claim:
-    | { teacher_id: number; teacher_name: string; is_self: boolean }
+    | { teacher_id: number; teacher_handle: string; teacher_emoji: string; is_self: boolean }
     | null;
+}
+
+function resolveHandle(
+  row: { tg_user_id: number; display_handle: string | null; display_emoji: string | null } | undefined,
+): { handle: string; emoji: string } {
+  if (row?.display_handle && row.display_emoji) {
+    return { handle: row.display_handle, emoji: row.display_emoji };
+  }
+  // Legacy NULL fallback — derive from tg_user_id. Same algorithm the bot
+  // and the admin route use, so the value matches once the lazy backfill
+  // commits in /api/admin/users.
+  const fallbackTgId = row?.tg_user_id ?? 0;
+  const h = userHandle(fallbackTgId);
+  return { handle: h.handle, emoji: h.emoji };
 }
 
 export async function GET(req: NextRequest) {
@@ -65,10 +80,10 @@ export async function GET(req: NextRequest) {
     .limit(500);
   const msgs = (msgsRaw ?? []) as MessageRow[];
 
-  // 3) Linked-student rows (names + avatar presence).
+  // 3) Linked-student rows (handles + emoji for the anonymous chat surface).
   const { data: studentRows } = await sb
     .from("users")
-    .select("id, name, avatar_file_id")
+    .select("id, tg_user_id, display_handle, display_emoji")
     .in("id", studentIds);
 
   // 4) Inbox-read marks for me.
@@ -90,21 +105,23 @@ export async function GET(req: NextRequest) {
     .gt("expires_at", nowIso);
   const claimByStudent = new Map<
     number,
-    { teacher_id: number; teacher_name: string }
+    { teacher_id: number; teacher_handle: string; teacher_emoji: string }
   >();
   if (claimRows && claimRows.length > 0) {
     const claimTeacherIds = Array.from(new Set(claimRows.map((c) => c.teacher_id)));
     const { data: teacherRows } = await sb
       .from("users")
-      .select("id, name")
+      .select("id, tg_user_id, display_handle, display_emoji")
       .in("id", claimTeacherIds);
-    const teacherNameById = new Map(
-      (teacherRows ?? []).map((t) => [t.id, t.name ?? "Тренер"]),
+    const teacherById = new Map(
+      (teacherRows ?? []).map((t) => [t.id, t]),
     );
     for (const c of claimRows) {
+      const h = resolveHandle(teacherById.get(c.teacher_id));
       claimByStudent.set(c.student_id, {
         teacher_id: c.teacher_id,
-        teacher_name: teacherNameById.get(c.teacher_id) ?? "Тренер",
+        teacher_handle: h.handle,
+        teacher_emoji: h.emoji,
       });
     }
   }
@@ -136,10 +153,11 @@ export async function GET(req: NextRequest) {
       const s = studentById.get(sid);
       const last = lastByStudent.get(sid) ?? null;
       const claim = claimByStudent.get(sid) ?? null;
+      const studentHandle = resolveHandle(s);
       return {
         student_id: sid,
-        student_name: s?.name ?? null,
-        has_avatar: !!s?.avatar_file_id,
+        student_handle: studentHandle.handle,
+        student_emoji: studentHandle.emoji,
         last_message: last
           ? {
               id: last.id,
@@ -155,7 +173,8 @@ export async function GET(req: NextRequest) {
         claim: claim
           ? {
               teacher_id: claim.teacher_id,
-              teacher_name: claim.teacher_name,
+              teacher_handle: claim.teacher_handle,
+              teacher_emoji: claim.teacher_emoji,
               is_self: claim.teacher_id === user.id,
             }
           : null,

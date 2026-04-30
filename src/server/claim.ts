@@ -3,8 +3,19 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { serverEnv } from "@/lib/env";
 import { ru, formatDuration } from "@/lib/i18n";
 import { formatWhen } from "@/lib/time";
+import { userHandle } from "@/lib/handle";
 import { editAllNotificationsForMessage } from "./notifications";
 import type { MessageDirection, MessageStatus } from "@/types/database";
+
+function handleFromRow(
+  row:
+    | { tg_user_id: number; display_handle: string | null }
+    | null
+    | undefined,
+): string {
+  if (row?.display_handle) return row.display_handle;
+  return userHandle(row?.tg_user_id ?? 0).handle;
+}
 
 export type ReplyKind = "claim" | "session-refresh" | "followup";
 
@@ -113,18 +124,26 @@ export async function startReply(messageId: number, teacherId: number): Promise<
 
   // Send prompt DM to the teacher.
   const [{ data: student }, { data: teacher }] = await Promise.all([
-    sb.from("users").select("name").eq("id", msg.student_id).single(),
-    sb.from("users").select("tg_chat_id, name, tz").eq("id", teacherId).single(),
+    sb
+      .from("users")
+      .select("tg_user_id, display_handle")
+      .eq("id", msg.student_id)
+      .single(),
+    sb
+      .from("users")
+      .select("tg_user_id, tg_chat_id, display_handle, tz")
+      .eq("id", teacherId)
+      .single(),
   ]);
   if (!teacher) return { ok: false, reason: "fatal" };
 
-  const studentName = student?.name ?? `student ${msg.student_id}`;
+  const studentHandle = handleFromRow(student);
   const dur = formatDuration(msg.duration);
   const when = formatWhen(msg.created_at, teacher.tz);
   const promptText =
     decision.kind === "followup"
-      ? ru.teacherFollowupPrompt(studentName, dur, when)
-      : ru.teacherClaimPrompt(studentName, dur, when);
+      ? ru.teacherFollowupPrompt(studentHandle, dur, when)
+      : ru.teacherClaimPrompt(studentHandle, dur, when);
   const sent = await getBot().api.sendMessage(teacher.tg_chat_id, promptText);
 
   await sb.from("prompts").insert({
@@ -140,14 +159,14 @@ export async function startReply(messageId: number, teacherId: number): Promise<
   // these notifications are already in that state; calling the helper is a
   // safe no-op (TG returns 400 'message is not modified', which we swallow).
   if (decision.kind === "claim") {
-    const teacherName = teacher.name ?? "Тренер";
+    const teacherHandle = handleFromRow(teacher);
     const { data: pendingMsgs } = await sb
       .from("messages")
       .select("id")
       .eq("student_id", msg.student_id)
       .eq("status", "pending");
     for (const m of pendingMsgs ?? []) {
-      await editAllNotificationsForMessage(m.id, ru.teacherNotificationTaken(teacherName));
+      await editAllNotificationsForMessage(m.id, ru.teacherNotificationTaken(teacherHandle));
     }
   }
 
@@ -229,15 +248,19 @@ export async function startInitiation(
   }
 
   const [{ data: student }, { data: teacher }] = await Promise.all([
-    sb.from("users").select("name").eq("id", studentId).single(),
+    sb
+      .from("users")
+      .select("tg_user_id, display_handle")
+      .eq("id", studentId)
+      .single(),
     sb.from("users").select("tg_chat_id").eq("id", teacherId).single(),
   ]);
   if (!teacher) return { ok: false, reason: "fatal" };
 
-  const studentName = student?.name ?? `student ${studentId}`;
+  const studentHandle = handleFromRow(student);
   const sent = await getBot().api.sendMessage(
     teacher.tg_chat_id,
-    ru.teacherInitiatePrompt(studentName),
+    ru.teacherInitiatePrompt(studentHandle),
   );
 
   await sb.from("prompts").insert({

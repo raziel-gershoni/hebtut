@@ -1,6 +1,17 @@
 import { getBot } from "@/lib/tg";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { ru, formatDuration } from "@/lib/i18n";
+import { userHandle } from "@/lib/handle";
+
+function handleFromRow(
+  row:
+    | { tg_user_id: number; display_handle: string | null }
+    | null
+    | undefined,
+): string {
+  if (row?.display_handle) return row.display_handle;
+  return userHandle(row?.tg_user_id ?? 0).handle;
+}
 
 /**
  * Notify every teacher linked to the student about a new inbound message.
@@ -19,10 +30,10 @@ export async function fanOutToTeachers(messageId: number): Promise<void> {
 
   const { data: student } = await sb
     .from("users")
-    .select("name")
+    .select("tg_user_id, display_handle")
     .eq("id", msg.student_id)
     .single();
-  const studentName = student?.name ?? `student ${msg.student_id}`;
+  const studentHandle = handleFromRow(student);
 
   const { data: links } = await sb
     .from("student_teachers")
@@ -40,20 +51,28 @@ export async function fanOutToTeachers(messageId: number): Promise<void> {
   const handlerId =
     claim && new Date(claim.expires_at).getTime() > Date.now() ? claim.teacher_id : null;
 
-  const handlerName = handlerId
-    ? (await sb.from("users").select("name").eq("id", handlerId).single()).data?.name ?? null
+  const handlerHandle = handlerId
+    ? handleFromRow(
+        (
+          await sb
+            .from("users")
+            .select("tg_user_id, display_handle")
+            .eq("id", handlerId)
+            .single()
+        ).data,
+      )
     : null;
 
   const { data: teachers } = await sb
     .from("users")
-    .select("id, tg_chat_id, name")
+    .select("id, tg_chat_id")
     .in("id", teacherIds);
   if (!teachers?.length) return;
 
   const bot = getBot();
   const kindLabel = msg.kind === "voice" ? "голосовое" : "круглое видео";
   const durationLabel = formatDuration(msg.duration);
-  const actionable = ru.teacherNotificationActionable(studentName, kindLabel, durationLabel);
+  const actionable = ru.teacherNotificationActionable(studentHandle, kindLabel, durationLabel);
   const taken = (name: string) => ru.teacherNotificationTaken(name);
 
   const rows: {
@@ -64,7 +83,7 @@ export async function fanOutToTeachers(messageId: number): Promise<void> {
   }[] = [];
   for (const t of teachers) {
     const text =
-      handlerId && handlerId !== t.id ? taken(handlerName ?? "Тренер") : actionable;
+      handlerId && handlerId !== t.id ? taken(handlerHandle ?? "Тренер") : actionable;
     try {
       const sent = await bot.api.sendMessage(t.tg_chat_id, text);
       rows.push({

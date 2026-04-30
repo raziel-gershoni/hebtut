@@ -25,14 +25,14 @@ export const ru = {
   teacherReplyDelivered: "✅ Ответ отправлен ученику.",
   teacherReplyFailed: "Не удалось отправить ответ. Попробуй ещё раз через мини-приложение.",
   teacherClaimPrompt: (studentName: string, dur: string, when: string) =>
-    `📩 Ответь ${studentName} — голосовое ${dur}, отправлено ${when}. Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
+    `📩 От: ${studentName}. Голосовое ${dur}, отправлено ${when}. Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
   teacherFollowupPrompt: (studentName: string, dur: string, when: string) =>
-    `📩 Доп. ответ для ${studentName} — голосовое ${dur} (отправлено ${when}). Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
+    `📩 Доп. ответ. От: ${studentName}. Голосовое ${dur} (отправлено ${when}). Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
   teacherInitiatePrompt: (studentName: string) =>
-    `📩 Сообщение для ${studentName}. Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
+    `📩 Кому: ${studentName}. Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
   teacherNotificationActionable: (studentName: string, kindLabel: string, durationLabel: string) =>
-    `🔔 ${studentName} прислал(а) ${kindLabel} ${durationLabel}. Открой мини-приложение, чтобы взять в работу.`,
-  teacherNotificationTaken: (handler: string) => `✓ ${handler} взял(а) сообщение в работу.`,
+    `🔔 Новое: ${kindLabel} ${durationLabel} от ${studentName}. Открой мини-приложение, чтобы взять в работу.`,
+  teacherNotificationTaken: (handler: string) => `✓ В работе: ${handler}.`,
   teacherNotificationExpired: "⚠️ Время на ответ истекло, сообщение снова доступно.",
 };
 

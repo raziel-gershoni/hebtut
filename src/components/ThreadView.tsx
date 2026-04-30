@@ -3,23 +3,25 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { MessageBubble, type ThreadMsg, type Speaker } from "./MessageBubble";
 import { Avatar } from "./Avatar";
 import { speakerColor, type SpeakerColorClasses } from "@/lib/speaker-color";
+import { bgFromHandle } from "@/lib/handle";
 
 interface ClaimInfo {
   teacher_id: number;
-  teacher_name: string;
+  teacher_handle: string;
+  teacher_emoji: string;
   expires_at: string;
 }
 
 interface StudentMeta {
   id: number;
-  name: string | null;
-  has_avatar: boolean;
+  handle: string;
+  emoji: string;
 }
 
 interface TeacherMeta {
   id: number;
-  name: string | null;
-  has_avatar: boolean;
+  handle: string;
+  emoji: string;
 }
 
 interface ApiMessage extends ThreadMsg {
@@ -96,7 +98,7 @@ export function ThreadView({
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
 
   const replyDisabledReason =
-    claim && claim.teacher_id !== myUserId ? `Берёт ${claim.teacher_name}` : null;
+    claim && claim.teacher_id !== myUserId ? `Берёт ${claim.teacher_handle}` : null;
 
   const canInitiate = role === "teacher" && !replyDisabledReason;
 
@@ -149,25 +151,19 @@ export function ThreadView({
     [jwt, load],
   );
 
-  const studentDisplay = student?.name ?? "Ученик";
-  const studentAvatarUrl = useMemo(
-    () =>
-      student?.has_avatar
-        ? `/api/avatar/${student.id}?token=${encodeURIComponent(jwt)}`
-        : undefined,
-    [student, jwt],
-  );
+  const studentDisplay = student?.handle ?? "Ученик";
+  const studentEmoji = student?.emoji;
+  const studentBg = student ? bgFromHandle(student.handle) : undefined;
 
-  // For each message, resolve who's speaking. Inbound = the student. Outbound
-  // = the teacher who sent it (real name) — but if it's the *current viewer*'s
-  // own message, label it "Ты" while still showing their avatar.
+  // For each message, resolve who's speaking. Inbound = the student (anonymous
+  // handle + animal-emoji avatar). Outbound = either the current viewer (real
+  // own avatar, label "Ты" — matches TG's "You" convention) or another teacher
+  // (anonymous handle + emoji).
   function speakerFor(msg: ApiMessage): Speaker {
     if (msg.direction === "in") {
-      return { name: studentDisplay, avatarUrl: studentAvatarUrl };
+      return { name: studentDisplay, emoji: studentEmoji, bgClass: studentBg };
     }
     if (msg.teacher_id === myUserId) {
-      // Always "Ты" for the current viewer's own messages, regardless of
-      // whether their TG name is known — matches TG's "You" convention.
       return {
         name: "Ты",
         avatarUrl: myHasAvatar
@@ -177,10 +173,9 @@ export function ThreadView({
     }
     const t = msg.teacher;
     return {
-      name: t?.name ?? "Тренер",
-      avatarUrl: t?.has_avatar
-        ? `/api/avatar/${t.id}?token=${encodeURIComponent(jwt)}`
-        : undefined,
+      name: t?.handle ?? "Тренер",
+      emoji: t?.emoji,
+      bgClass: t ? bgFromHandle(t.handle) : undefined,
     };
   }
 
@@ -208,7 +203,7 @@ export function ThreadView({
   return (
     <div className="flex flex-col gap-1">
       <header className="flex items-center gap-3 mb-3 pb-3 border-b border-tg-text-hint/15">
-        <Avatar size={48} name={studentDisplay} imageUrl={studentAvatarUrl} />
+        <Avatar size={48} name={studentDisplay} emoji={studentEmoji} bgClass={studentBg} />
         <div className="min-w-0 flex-1 leading-tight">
           <div className="font-semibold tracking-tight truncate">{studentDisplay}</div>
           <div className="text-xs text-tg-text-hint">ученик</div>
