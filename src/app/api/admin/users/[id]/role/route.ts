@@ -42,6 +42,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (target.role === "teacher" || parsed.data.role === "teacher") {
       await sb.from("student_teachers").delete().eq("teacher_id", targetId);
     }
+    // Claims are per-(student, teacher) reply locks; once the role flips,
+    // any claim referencing this user is meaningless. Drop both sides so
+    // the next phase starts unblocked.
+    await sb.from("claims").delete().or(`student_id.eq.${targetId},teacher_id.eq.${targetId}`);
   }
 
   const update: { role?: UserRole; is_admin?: boolean; role_changed_at?: string } = {};
