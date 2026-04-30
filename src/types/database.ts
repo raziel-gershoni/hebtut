@@ -122,7 +122,8 @@ export interface Database {
         Row: {
           id: number;
           teacher_id: number;
-          student_message_id: number;
+          student_id: number;
+          student_message_id: number | null;
           tg_chat_id: number;
           tg_prompt_message_id: number;
           created_at: string;
@@ -130,7 +131,8 @@ export interface Database {
         Insert: {
           id?: number;
           teacher_id: number;
-          student_message_id: number;
+          student_id: number;
+          student_message_id?: number | null;
           tg_chat_id: number;
           tg_prompt_message_id: number;
           created_at?: string;
