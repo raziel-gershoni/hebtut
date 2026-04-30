@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { Avatar } from "./Avatar";
+import { StudentPicker } from "./StudentPicker";
 import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
 import { formatDuration } from "@/lib/i18n";
 
@@ -24,9 +25,18 @@ interface Chat {
   claim: { teacher_id: number; teacher_name: string; is_self: boolean } | null;
 }
 
-export function InboxList({ jwt, myUserId }: { jwt: string; myUserId: number }) {
+export function InboxList({
+  jwt,
+  myUserId,
+  role,
+}: {
+  jwt: string;
+  myUserId: number;
+  role: string;
+}) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/inbox", {
@@ -48,33 +58,45 @@ export function InboxList({ jwt, myUserId }: { jwt: string; myUserId: number }) 
 
   useRealtimeMessages(jwt, load);
 
-  if (!loaded) {
-    return (
-      <ul className="space-y-2 animate-pulse">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <li key={i} className="h-16 rounded-2xl bg-tg-bg-secondary" />
-        ))}
-      </ul>
-    );
-  }
-
-  if (chats.length === 0) {
-    return (
-      <div className="rounded-2xl bg-tg-bg-section p-6 text-center text-sm text-tg-text-hint">
-        Пока ничего нет. Сюда придут сообщения от твоих учеников.
-      </div>
-    );
-  }
-
   // Suppress the unused warning in the loop scope.
   void myUserId;
 
+  const isTeacher = role === "teacher";
+
   return (
-    <ul className="space-y-1">
-      {chats.map((c) => (
-        <ChatRow key={c.student_id} chat={c} jwt={jwt} />
-      ))}
-    </ul>
+    <>
+      {isTeacher && (
+        <div className="flex justify-end mb-2">
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 h-9 rounded-full bg-tg-button text-tg-button-text text-sm font-semibold transition-transform active:scale-95"
+          >
+            + Написать ученику
+          </button>
+        </div>
+      )}
+
+      {!loaded ? (
+        <ul className="space-y-2 animate-pulse">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <li key={i} className="h-16 rounded-2xl bg-tg-bg-secondary" />
+          ))}
+        </ul>
+      ) : chats.length === 0 ? (
+        <div className="rounded-2xl bg-tg-bg-section p-6 text-center text-sm text-tg-text-hint">
+          Пока ничего нет. Сюда придут сообщения от твоих учеников.
+        </div>
+      ) : (
+        <ul className="space-y-1">
+          {chats.map((c) => (
+            <ChatRow key={c.student_id} chat={c} jwt={jwt} />
+          ))}
+        </ul>
+      )}
+
+      {pickerOpen && <StudentPicker jwt={jwt} onClose={() => setPickerOpen(false)} />}
+    </>
   );
 }
 

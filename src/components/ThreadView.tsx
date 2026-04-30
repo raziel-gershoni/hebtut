@@ -32,16 +32,20 @@ export function ThreadView({
   studentId,
   myUserId,
   myHasAvatar,
+  role,
 }: {
   jwt: string;
   studentId: number;
   myUserId: number;
   myHasAvatar: boolean;
+  role: string;
 }) {
   const [messages, setMessages] = useState<ApiMessage[]>([]);
   const [claim, setClaim] = useState<ClaimInfo | null>(null);
   const [student, setStudent] = useState<StudentMeta | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [initiateBusy, setInitiateBusy] = useState(false);
+  const [initiateError, setInitiateError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/threads/${studentId}`, {
@@ -93,6 +97,35 @@ export function ThreadView({
 
   const replyDisabledReason =
     claim && claim.teacher_id !== myUserId ? `Берёт ${claim.teacher_name}` : null;
+
+  const canInitiate = role === "teacher" && !replyDisabledReason;
+
+  async function startInitiate() {
+    setInitiateBusy(true);
+    setInitiateError(null);
+    try {
+      const r = await fetch("/api/teacher/initiate", {
+        method: "POST",
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId }),
+      });
+      const d = (await r.json().catch(() => ({}))) as { ok?: true; error?: string };
+      if (r.ok && d.ok) {
+        window.Telegram?.WebApp?.close?.();
+        return;
+      }
+      setInitiateError(
+        d.error === "taken-by-other"
+          ? "Другой тренер сейчас работает с этим учеником"
+          : d.error === "not-allowed"
+            ? "Связь с этим учеником утрачена"
+            : "Не удалось — попробуй ещё раз",
+      );
+    } finally {
+      setInitiateBusy(false);
+    }
+  }
 
   const onReply = useCallback(
     async (messageId: number): Promise<{ ok: boolean; reason?: string }> => {
@@ -172,14 +205,6 @@ export function ThreadView({
     );
   }
 
-  if (messages.length === 0) {
-    return (
-      <div className="rounded-2xl bg-tg-bg-section p-6 text-center text-sm text-tg-text-hint">
-        Сообщений ещё нет.
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-1">
       <header className="flex items-center gap-3 mb-3 pb-3 border-b border-tg-text-hint/15">
@@ -188,29 +213,48 @@ export function ThreadView({
           <div className="font-semibold tracking-tight truncate">{studentDisplay}</div>
           <div className="text-xs text-tg-text-hint">ученик</div>
         </div>
+        {canInitiate && (
+          <button
+            type="button"
+            disabled={initiateBusy}
+            onClick={() => void startInitiate()}
+            className="shrink-0 inline-flex items-center gap-1.5 px-3 h-9 rounded-full bg-tg-button text-tg-button-text text-xs font-semibold transition-transform active:scale-95 disabled:opacity-50"
+          >
+            + Написать
+          </button>
+        )}
       </header>
       {claim && claim.teacher_id === myUserId && (
         <div className="text-xs text-tg-text-hint mb-2">
           Активная сессия с этим учеником — отвечай в чате.
         </div>
       )}
-      {messages.map((m) => {
-        const replyToMsg = m.reply_to_id != null ? byId.get(m.reply_to_id) ?? null : null;
-        return (
-          <MessageBubble
-            key={m.id}
-            msg={m}
-            jwt={jwt}
-            speaker={speakerFor(m)}
-            speakerColors={colorFor(m)}
-            replyTo={replyToMsg}
-            replyToSpeaker={replyToMsg ? speakerFor(replyToMsg) : null}
-            replyToSpeakerColors={replyToMsg ? colorFor(replyToMsg) : null}
-            onReply={onReply}
-            replyDisabledReason={replyDisabledReason}
-          />
-        );
-      })}
+      {initiateError && (
+        <div className="text-xs text-tg-text-destructive mb-2">{initiateError}</div>
+      )}
+      {messages.length === 0 ? (
+        <div className="rounded-2xl bg-tg-bg-section p-6 text-center text-sm text-tg-text-hint">
+          Сообщений ещё нет.
+        </div>
+      ) : (
+        messages.map((m) => {
+          const replyToMsg = m.reply_to_id != null ? byId.get(m.reply_to_id) ?? null : null;
+          return (
+            <MessageBubble
+              key={m.id}
+              msg={m}
+              jwt={jwt}
+              speaker={speakerFor(m)}
+              speakerColors={colorFor(m)}
+              replyTo={replyToMsg}
+              replyToSpeaker={replyToMsg ? speakerFor(replyToMsg) : null}
+              replyToSpeakerColors={replyToMsg ? colorFor(replyToMsg) : null}
+              onReply={onReply}
+              replyDisabledReason={replyDisabledReason}
+            />
+          );
+        })
+      )}
     </div>
   );
 }

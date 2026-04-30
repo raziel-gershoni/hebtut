@@ -27,6 +27,7 @@ export default function StudentThreadPage({ params }: { params: { id: string } }
             studentId={studentId}
             myUserId={userId}
             myHasAvatar={hasAvatar}
+            role={role}
           />
         );
       }}

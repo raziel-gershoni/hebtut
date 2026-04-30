@@ -13,7 +13,7 @@ export default function InboxPage() {
             </div>
           );
         }
-        return <InboxList jwt={jwt} myUserId={userId} />;
+        return <InboxList jwt={jwt} myUserId={userId} role={role} />;
       }}
     </AppShell>
   );
