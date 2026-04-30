@@ -4,7 +4,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type UserRole = "pending" | "student" | "teacher";
-export type UserStatus = "active" | "paused";
+export type UserStatus = "active" | "suspended";
 export type MessageDirection = "in" | "out";
 export type MessageKind = "voice" | "video_note";
 export type MessageStatus = "pending" | "answered" | "expired" | "orphaned";
@@ -182,12 +182,54 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["quota_usage"]["Insert"]>;
         Relationships: [];
       };
+      teacher_invites: {
+        Row: {
+          id: number;
+          token: string;
+          created_by: number;
+          created_at: string;
+          consumed_at: string | null;
+          consumed_by: number | null;
+          revoked_at: string | null;
+        };
+        Insert: {
+          id?: number;
+          token: string;
+          created_by: number;
+          created_at?: string;
+          consumed_at?: string | null;
+          consumed_by?: number | null;
+          revoked_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["teacher_invites"]["Insert"]>;
+        Relationships: [];
+      };
+      banned_tg_users: {
+        Row: {
+          tg_user_id: number;
+          name_snapshot: string | null;
+          banned_at: string;
+          banned_by: number | null;
+        };
+        Insert: {
+          tg_user_id: number;
+          name_snapshot?: string | null;
+          banned_at?: string;
+          banned_by?: number | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["banned_tg_users"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
       current_app_user: {
         Args: Record<string, never>;
         Returns: Database["public"]["Tables"]["users"]["Row"];
+      };
+      delete_user_cascade: {
+        Args: { target_id: number };
+        Returns: void;
       };
     };
     Enums: Record<string, never>;
