@@ -49,7 +49,7 @@ describe("decideQuota", () => {
     });
   });
 
-  it("splits across today + tomorrow when the tail crosses into grace", () => {
+  it("accepts the first message that crosses into grace, charging full duration today + the overflow tomorrow", () => {
     expect(
       decideQuota({
         usedToday: 280,
@@ -59,13 +59,13 @@ describe("decideQuota", () => {
       }),
     ).toEqual({
       ok: true,
-      todayDebit: 20,
+      todayDebit: 50,
       tomorrowDebit: 30,
       newRemainingToday: 0,
     });
   });
 
-  it("charges the whole message to tomorrow when today's quota is fully spent", () => {
+  it("accepts a grace-only message starting exactly at the quota line", () => {
     expect(
       decideQuota({
         usedToday: 300,
@@ -75,32 +75,37 @@ describe("decideQuota", () => {
       }),
     ).toEqual({
       ok: true,
-      todayDebit: 0,
+      todayDebit: 40,
       tomorrowDebit: 40,
       newRemainingToday: 0,
     });
   });
 
-  it("rejects a message that would exceed quota+grace combined", () => {
+  it("locks out further messages once grace has been used today", () => {
+    // After accepting an overflow message, usedToday lands above dailyQuota.
+    // Any subsequent message — even a tiny one — must be rejected with no
+    // remaining room, regardless of how much grace would technically be left.
     expect(
       decideQuota({
-        usedToday: 320,
-        dailyQuota: QUOTA,
-        graceSeconds: GRACE,
-        messageDuration: 50,
-      }),
-    ).toEqual({ ok: false, reason: "no-room", remainingIncludingGrace: 40 });
-  });
-
-  it("rejects when grace is fully consumed too", () => {
-    expect(
-      decideQuota({
-        usedToday: 360,
+        usedToday: 330,
         dailyQuota: QUOTA,
         graceSeconds: GRACE,
         messageDuration: 5,
       }),
     ).toEqual({ ok: false, reason: "no-room", remainingIncludingGrace: 0 });
+  });
+
+  it("rejects a long message that would push past quota+grace combined", () => {
+    // User's example: usedToday=250, msg=140 → 250 + 140 = 390 > 360.
+    // Grace is untouched, the rejection just shows the actual headroom.
+    expect(
+      decideQuota({
+        usedToday: 250,
+        dailyQuota: QUOTA,
+        graceSeconds: GRACE,
+        messageDuration: 140,
+      }),
+    ).toEqual({ ok: false, reason: "no-room", remainingIncludingGrace: 110 });
   });
 
   it("with grace=0 falls back to plain quota semantics", () => {

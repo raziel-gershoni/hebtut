@@ -27,23 +27,33 @@ export type QuotaDecision =
  * Pure quota decision: given today's usage and an incoming message duration,
  * decide whether to accept it and how to split between today and tomorrow.
  *
- * Soft cap is `dailyQuota`; messages that push usage into the
- * [dailyQuota, dailyQuota + graceSeconds] window are still accepted today,
- * but the portion beyond `dailyQuota` is recorded as tomorrow-debit so
- * tomorrow's bucket starts that much smaller. Anything beyond the grace
- * window is rejected outright.
+ * Grace is single-shot per day: the FIRST message whose tail crosses
+ * `dailyQuota` into the grace window is accepted, and the entire message is
+ * charged today (so today's bucket is now over-quota and signals that grace
+ * has been used). The portion beyond `dailyQuota` is also debited from
+ * tomorrow's bucket. Any subsequent message — once `usedToday > dailyQuota` —
+ * is rejected outright. Messages too long to fit the remaining
+ * `quota + grace` headroom are also rejected.
  */
 export function decideQuota(input: QuotaInput): QuotaDecision {
   const { usedToday, dailyQuota, graceSeconds, messageDuration } = input;
+  // Single-shot grace: any prior message that already crossed today's quota
+  // means no more messages today, full stop.
+  if (usedToday > dailyQuota) {
+    return { ok: false, reason: "no-room", remainingIncludingGrace: 0 };
+  }
   const totalAllowed = dailyQuota + graceSeconds;
   const remainingIncludingGrace = Math.max(0, totalAllowed - usedToday);
   if (messageDuration > remainingIncludingGrace) {
     return { ok: false, reason: "no-room", remainingIncludingGrace };
   }
-  const todayRoom = Math.max(0, dailyQuota - usedToday);
-  const todayDebit = Math.min(messageDuration, todayRoom);
-  const tomorrowDebit = messageDuration - todayDebit;
-  const newRemainingToday = Math.max(0, dailyQuota - (usedToday + todayDebit));
+  // Accept: the whole message counts against today (so usedToday crosses
+  // into the grace zone and locks out further messages); the part beyond
+  // the daily quota is also debited from tomorrow's bucket.
+  const overflow = Math.max(0, usedToday + messageDuration - dailyQuota);
+  const todayDebit = messageDuration;
+  const tomorrowDebit = overflow;
+  const newRemainingToday = Math.max(0, dailyQuota - (usedToday + messageDuration));
   return { ok: true, todayDebit, tomorrowDebit, newRemainingToday };
 }
 

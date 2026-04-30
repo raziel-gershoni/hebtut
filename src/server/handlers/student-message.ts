@@ -78,7 +78,11 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
     messageDuration: duration,
   });
   if (!decision.ok) {
-    await ctx.reply(ru.overQuota(formatDuration(decision.remainingIncludingGrace)));
+    await ctx.reply(
+      decision.remainingIncludingGrace > 0
+        ? ru.overQuota(formatDuration(decision.remainingIncludingGrace))
+        : ru.overQuotaExhausted,
+    );
     return true;
   }
 

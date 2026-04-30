@@ -13,7 +13,8 @@ export const ru = {
   noTeachers:
     "Сообщение принято, но за тобой пока не закреплён ни один тренер. Сообщи администратору.",
   overQuota: (remaining: string) =>
-    `На сегодня лимит почти исчерпан — осталось ${remaining}. Попробуй завтра или сократи запись.`,
+    `На сегодня осталось ${remaining}. Сократи запись или попробуй завтра.`,
+  overQuotaExhausted: "Лимит на сегодня исчерпан. Попробуй завтра.",
   acceptedStudent: (remaining: string) => `✅ Отправлено! Осталось ${remaining} на сегодня.`,
   acceptedStudentLow: (remaining: string) =>
     `✅ Отправлено! ⚠️ Осталось ${remaining} — меньше минуты на сегодня.`,
