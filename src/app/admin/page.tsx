@@ -6,7 +6,8 @@ import {
   AdminConnectionsPanel,
   type Connection,
 } from "@/components/AdminConnectionsPanel";
-import { PendingInbox } from "@/components/PendingInbox";
+import { TeacherInvites } from "@/components/TeacherInvites";
+import { BannedUsersPanel } from "@/components/BannedUsersPanel";
 
 export default function AdminPage() {
   return (
@@ -71,8 +72,9 @@ function AdminBody({ jwt }: { jwt: string }) {
 
   return (
     <>
-      <PendingInbox jwt={jwt} users={users} refetch={refetch} />
+      <TeacherInvites jwt={jwt} />
       <AdminUsersTable jwt={jwt} users={users} loaded={loaded} refetch={refetch} />
+      <BannedUsersPanel jwt={jwt} />
       <AdminConnectionsPanel jwt={jwt} users={users} links={links} refetch={refetch} />
     </>
   );

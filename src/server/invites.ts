@@ -1,0 +1,125 @@
+import { getServiceRoleClient } from "@/lib/supabase-server";
+
+const PAYLOAD_PREFIX = "invite_";
+
+/**
+ * Strips the `invite_` prefix and validates the token's shape. Returns null if
+ * the payload isn't an invite payload or the token is malformed. No DB hit.
+ *
+ * Token shape is base64url (24 random bytes → 32 chars), matching what
+ * `POST /api/admin/invites` mints. Length-bounded so a junk payload doesn't
+ * trigger a DB lookup.
+ */
+export function parseInvitePayload(payload: string | undefined | null): string | null {
+  if (!payload) return null;
+  if (!payload.startsWith(PAYLOAD_PREFIX)) return null;
+  const token = payload.slice(PAYLOAD_PREFIX.length);
+  if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) return null;
+  return token;
+}
+
+export function buildInviteUrl(botUsername: string, token: string): string {
+  return `https://t.me/${botUsername}?start=${PAYLOAD_PREFIX}${token}`;
+}
+
+/** SELECT-only validity check. Used to *decide* the welcome path. */
+export async function isInviteValid(token: string): Promise<boolean> {
+  const sb = getServiceRoleClient();
+  const { data } = await sb
+    .from("teacher_invites")
+    .select("id")
+    .eq("token", token)
+    .is("consumed_at", null)
+    .is("revoked_at", null)
+    .maybeSingle();
+  return !!data;
+}
+
+/**
+ * Atomically marks the invite consumed and flips the user's role to teacher.
+ * Returns true iff exactly one invite row was claimed by this call (so two
+ * concurrent /start clicks don't both succeed). The role update follows only
+ * if the consume won the race.
+ */
+export async function consumeInviteAndUpgrade(
+  token: string,
+  userId: number,
+): Promise<boolean> {
+  const sb = getServiceRoleClient();
+  const { data: claimed } = await sb
+    .from("teacher_invites")
+    .update({ consumed_at: new Date().toISOString(), consumed_by: userId })
+    .eq("token", token)
+    .is("consumed_at", null)
+    .is("revoked_at", null)
+    .select("id")
+    .maybeSingle();
+  if (!claimed) return false;
+  await sb
+    .from("users")
+    .update({ role: "teacher", role_changed_at: new Date().toISOString() })
+    .eq("id", userId);
+  return true;
+}
+
+/**
+ * For a brand-new user opening a teacher invite link: insert the user row as
+ * a teacher and consume the invite in two steps. If the consume loses a race
+ * (another click took the same invite first), we roll the insert back so the
+ * caller can fall through to the student path.
+ */
+export async function createTeacherWithInvite(args: {
+  tgUserId: number;
+  tgChatId: number;
+  name: string;
+  token: string;
+}): Promise<{ id: number } | null> {
+  const sb = getServiceRoleClient();
+  const { data: inserted } = await sb
+    .from("users")
+    .insert({
+      tg_user_id: args.tgUserId,
+      tg_chat_id: args.tgChatId,
+      name: args.name,
+      role: "teacher",
+    })
+    .select("id")
+    .single();
+  if (!inserted) return null;
+  const won = await consumeInviteAndUpgrade(args.token, inserted.id);
+  if (!won) {
+    // Race lost — undo so the caller can retry as a plain student.
+    await sb.from("users").delete().eq("id", inserted.id);
+    return null;
+  }
+  return inserted;
+}
+
+export async function createStudent(args: {
+  tgUserId: number;
+  tgChatId: number;
+  name: string;
+}): Promise<{ id: number } | null> {
+  const sb = getServiceRoleClient();
+  const { data: inserted } = await sb
+    .from("users")
+    .insert({
+      tg_user_id: args.tgUserId,
+      tg_chat_id: args.tgChatId,
+      name: args.name,
+      role: "student",
+    })
+    .select("id")
+    .single();
+  return inserted;
+}
+
+export async function isTgUserBanned(tgUserId: number): Promise<boolean> {
+  const sb = getServiceRoleClient();
+  const { data } = await sb
+    .from("banned_tg_users")
+    .select("tg_user_id")
+    .eq("tg_user_id", tgUserId)
+    .maybeSingle();
+  return !!data;
+}

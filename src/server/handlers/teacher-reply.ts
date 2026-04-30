@@ -4,6 +4,7 @@ import { getBot } from "@/lib/tg";
 import { serverEnv } from "@/lib/env";
 import { ru } from "@/lib/i18n";
 import { editAllNotificationsForMessage } from "@/server/notifications";
+import { isTgUserBanned } from "@/server/invites";
 
 export interface ReplyContext {
   replyToMessageId: number;
@@ -28,16 +29,22 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
   const note = msg.video_note;
   if (!voice && !note) return false;
 
+  if (await isTgUserBanned(ctx.from.id)) return true;
+
   const replyTo = msg.reply_to_message;
 
   const sb = getServiceRoleClient();
   const { data: teacher } = await sb
     .from("users")
-    .select("id, role, name")
+    .select("id, role, name, status")
     .eq("tg_user_id", ctx.from.id)
     .maybeSingle();
   if (!teacher || teacher.role !== "teacher") {
     return false; // not a teacher → not our route, fall through to student-message
+  }
+  if (teacher.status === "suspended") {
+    await ctx.reply(ru.suspendedNotice);
+    return true;
   }
 
   if (!replyTo) {
@@ -176,7 +183,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
         claimed_by_teacher_id: teacher.id,
       })
       .eq("id", original.id);
-    const teacherName = teacher.name ?? "Преподаватель";
+    const teacherName = teacher.name ?? "Тренер";
     await editAllNotificationsForMessage(original.id, ru.teacherNotificationTaken(teacherName));
   }
 

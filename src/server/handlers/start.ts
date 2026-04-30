@@ -3,11 +3,22 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { ru, formatDuration } from "@/lib/i18n";
 import { getRemainingForToday } from "@/server/quota";
 import { refreshUserAvatar } from "@/server/avatars";
+import {
+  parseInvitePayload,
+  isInviteValid,
+  consumeInviteAndUpgrade,
+  createTeacherWithInvite,
+  createStudent,
+  isTgUserBanned,
+} from "@/server/invites";
 
 export async function handleStart(ctx: Context): Promise<void> {
   const from = ctx.from;
   const chat = ctx.chat;
   if (!from || !chat) return;
+
+  // Banned: silent block. No reply, no row touched.
+  if (await isTgUserBanned(from.id)) return;
 
   const sb = getServiceRoleClient();
   const display =
@@ -17,44 +28,95 @@ export async function handleStart(ctx: Context): Promise<void> {
 
   const { data: existing } = await sb
     .from("users")
-    .select("id, role, is_admin, tz")
+    .select("id, role, is_admin, status, tz")
     .eq("tg_user_id", from.id)
     .maybeSingle();
 
-  if (!existing) {
-    const { data: inserted } = await sb
+  const payload = typeof ctx.match === "string" ? ctx.match : "";
+  const token = parseInvitePayload(payload);
+
+  if (existing) {
+    if (existing.status === "suspended") {
+      await ctx.reply(ru.suspendedNotice);
+      return;
+    }
+    await sb
       .from("users")
-      .insert({
-        tg_user_id: from.id,
-        tg_chat_id: chat.id,
-        name: display,
-        role: "pending",
-      })
-      .select("id")
-      .single();
-    if (inserted) await refreshUserAvatar(inserted.id, from.id);
-    await ctx.reply(ru.greetingRegistered);
+      .update({ tg_chat_id: chat.id, name: display })
+      .eq("id", existing.id);
+    await refreshUserAvatar(existing.id, from.id);
+
+    // Existing student opening a fresh invite link → upgrade to teacher.
+    if (token && existing.role === "student") {
+      const upgraded = await consumeInviteAndUpgrade(token, existing.id);
+      if (upgraded) {
+        await welcomeUpgradedTeacher(ctx);
+        return;
+      }
+      // Token invalid or already consumed — fall through to standard greeting.
+      await ctx.reply(ru.inviteRevokedOrUsed);
+    }
+
+    await welcomeExistingUser(ctx, existing);
     return;
   }
 
-  // Refresh chat_id and name (the user may have re-/started or changed display name).
-  await sb.from("users").update({ tg_chat_id: chat.id, name: display }).eq("id", existing.id);
-  // Opportunistic avatar refresh on every /start.
-  await refreshUserAvatar(existing.id, from.id);
+  // New user. Decide the path *before* the insert so each welcome flow can
+  // run its own onboarding (e.g., a future student-only video guide).
+  if (token && (await isInviteValid(token))) {
+    const teacher = await createTeacherWithInvite({
+      tgUserId: from.id,
+      tgChatId: chat.id,
+      name: display,
+      token,
+    });
+    if (teacher) {
+      await refreshUserAvatar(teacher.id, from.id);
+      await welcomeNewTeacher(ctx);
+      return;
+    }
+    // Race lost — invite consumed between validity check and insert. Tell
+    // the user, then fall through and register them as a student.
+    await ctx.reply(ru.inviteRevokedOrUsed);
+  }
 
-  // Greeting precedence:
-  //   admin (with or without a working role) → teacher/admin greeting
-  //   role=teacher → teacher/admin greeting
-  //   role=student → student greeting with quota
-  //   role=pending && !is_admin → wait-for-admin greeting
-  if (existing.is_admin || existing.role === "teacher") {
+  const student = await createStudent({
+    tgUserId: from.id,
+    tgChatId: chat.id,
+    name: display,
+  });
+  if (student) await refreshUserAvatar(student.id, from.id);
+  await welcomeNewStudent(ctx);
+}
+
+async function welcomeNewStudent(ctx: Context): Promise<void> {
+  // TODO(onboarding): send the student welcome video guide here. This is the
+  // student-only seam — the teacher path must not run this code.
+  await ctx.reply(ru.greetingStudentNew);
+}
+
+async function welcomeNewTeacher(ctx: Context): Promise<void> {
+  await ctx.reply(ru.inviteConsumedTeacher);
+}
+
+async function welcomeUpgradedTeacher(ctx: Context): Promise<void> {
+  await ctx.reply(ru.upgradedToTeacher);
+}
+
+async function welcomeExistingUser(
+  ctx: Context,
+  user: { role: string; is_admin: boolean; id: number; tz: string },
+): Promise<void> {
+  if (user.is_admin || user.role === "teacher") {
     await ctx.reply(ru.greetingTeacher);
     return;
   }
-  if (existing.role === "student") {
-    const remaining = await getRemainingForToday(existing.id, existing.tz);
+  if (user.role === "student") {
+    const remaining = await getRemainingForToday(user.id, user.tz);
     await ctx.reply(ru.greetingStudent(formatDuration(remaining)));
     return;
   }
+  // Legacy 'pending' rows (pre-rework). Should be empty after the migration's
+  // backfill, but keep a sane fallback.
   await ctx.reply(ru.greetingRegistered);
 }

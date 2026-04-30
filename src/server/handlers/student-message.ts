@@ -3,6 +3,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { ru, formatDuration } from "@/lib/i18n";
 import { getRemainingForToday, commitUsage } from "@/server/quota";
 import { fanOutToTeachers } from "@/server/notifications";
+import { isTgUserBanned } from "@/server/invites";
 
 export async function handleStudentMedia(ctx: Context): Promise<boolean> {
   const msg = ctx.message;
@@ -11,22 +12,29 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
   const note = msg.video_note;
   if (!voice && !note) return false;
 
+  if (await isTgUserBanned(ctx.from.id)) return true;
+
   const sb = getServiceRoleClient();
   const { data: user } = await sb
     .from("users")
-    .select("id, role, tz, tg_chat_id")
+    .select("id, role, status, tz, tg_chat_id")
     .eq("tg_user_id", ctx.from.id)
     .maybeSingle();
 
   if (!user) {
-    // Self-register, then retry on the next inbound message.
+    // Self-register as student (the new default) and retry on the next inbound.
     await sb.from("users").insert({
       tg_user_id: ctx.from.id,
       tg_chat_id: ctx.chat.id,
       name: ctx.from.first_name ?? ctx.from.username ?? `user ${ctx.from.id}`,
-      role: "pending",
+      role: "student",
     });
-    await ctx.reply(ru.greetingRegistered);
+    await ctx.reply(ru.greetingStudentNew);
+    return true;
+  }
+
+  if (user.status === "suspended") {
+    await ctx.reply(ru.suspendedNotice);
     return true;
   }
 
@@ -40,6 +48,7 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
   const duration = (voice?.duration ?? note?.duration ?? 0) as number;
 
   if (user.role === "pending") {
+    // Legacy row pre-rework. Treat as orphaned, same as before.
     await sb.from("messages").insert({
       student_id: user.id,
       direction: "in",
