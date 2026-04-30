@@ -18,12 +18,26 @@ export type AdminUser = {
   role_changed_at: string | null;
 };
 
-const ROLES: AdminUser["role"][] = ["pending", "student", "teacher"];
-
 const ROLE_LABEL: Record<AdminUser["role"], string> = {
   pending: "Ожидает",
   student: "Ученик",
   teacher: "Тренер",
+};
+
+const ROLE_DEFS: Record<
+  Exclude<AdminUser["role"], "pending">,
+  { emoji: string; fillClass: string; label: string }
+> = {
+  student: {
+    emoji: "🎓",
+    fillClass: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+    label: "Ученик",
+  },
+  teacher: {
+    emoji: "🎯",
+    fillClass: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+    label: "Тренер",
+  },
 };
 
 type PendingChange =
@@ -78,12 +92,6 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
     await refetch();
   }
 
-  function isDestructiveRole(current: AdminUser["role"], next: AdminUser["role"]): boolean {
-    if (current === next) return false;
-    if (current === "teacher" || current === "student") return true;
-    return false;
-  }
-
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return users;
@@ -113,6 +121,23 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
           ↻ {users.length}
         </button>
       </header>
+
+      <div className="mb-2 flex items-center gap-2 text-xs text-tg-text-hint flex-wrap">
+        <span className="inline-flex items-center gap-1">
+          <span aria-hidden>🎓</span>
+          <span>Ученик</span>
+        </span>
+        <span aria-hidden>·</span>
+        <span className="inline-flex items-center gap-1">
+          <span aria-hidden>🎯</span>
+          <span>Тренер</span>
+        </span>
+        <span aria-hidden>·</span>
+        <span className="inline-flex items-center gap-1">
+          <span aria-hidden>🛡️</span>
+          <span>Админ</span>
+        </span>
+      </div>
 
       <input
         type="search"
@@ -175,38 +200,48 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                 )}
               </div>
             </div>
-            <select
-              aria-label="Роль"
-              className="shrink-0 h-8 pl-2 pr-7 rounded-lg bg-tg-bg-secondary text-tg-text text-xs font-medium outline-none focus:ring-2 focus:ring-tg-button/40"
-              value={u.role}
-              onChange={(e) => {
-                const next = e.target.value as AdminUser["role"];
-                if (next === u.role) return;
-                if (isDestructiveRole(u.role, next))
-                  setPending({ kind: "role", id: u.id, role: next });
-                else void patchRole(u.id, { role: next });
+            {(() => {
+              const def = u.role !== "pending" ? ROLE_DEFS[u.role] : null;
+              const nextRole: AdminUser["role"] = u.role === "teacher" ? "student" : "teacher";
+              const nextLabel = ROLE_LABEL[nextRole];
+              return (
+                <button
+                  type="button"
+                  title={def ? `Сделать ${nextLabel.toLowerCase()}` : "Не назначено"}
+                  aria-label={def ? `Сделать ${nextLabel.toLowerCase()}` : "Роль не назначена"}
+                  disabled={!def}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!def) return;
+                    setPending({ kind: "role", id: u.id, role: nextRole });
+                  }}
+                  className={`shrink-0 w-7 h-7 inline-flex items-center justify-center rounded-lg text-base transition-transform active:scale-95 disabled:opacity-50 ${
+                    def ? def.fillClass : "bg-tg-bg-secondary text-tg-text-hint"
+                  }`}
+                >
+                  <span aria-hidden>{def?.emoji ?? "❓"}</span>
+                </button>
+              );
+            })()}
+            <button
+              type="button"
+              title={u.is_admin ? "Снять права админа" : "Сделать админом"}
+              aria-label={u.is_admin ? "Снять права админа" : "Сделать админом"}
+              aria-pressed={u.is_admin}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (u.is_admin)
+                  setPending({ kind: "admin", id: u.id, is_admin: false });
+                else void patchRole(u.id, { is_admin: true });
               }}
+              className={`shrink-0 w-7 h-7 inline-flex items-center justify-center rounded-lg text-base transition-transform active:scale-95 ${
+                u.is_admin
+                  ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                  : "bg-tg-bg-secondary text-tg-text-hint/60"
+              }`}
             >
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {ROLE_LABEL[r]}
-                </option>
-              ))}
-            </select>
-            <label className="shrink-0 inline-flex items-center gap-1.5 text-xs text-tg-text-hint cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={u.is_admin}
-                onChange={(e) => {
-                  const next = e.target.checked;
-                  if (!next && u.is_admin)
-                    setPending({ kind: "admin", id: u.id, is_admin: false });
-                  else void patchRole(u.id, { is_admin: next });
-                }}
-                className="h-4 w-4 rounded accent-tg-button"
-              />
-              <span>Админ</span>
-            </label>
+              <span aria-hidden>🛡️</span>
+            </button>
             <div className="relative shrink-0">
               <button
                 type="button"
