@@ -6,6 +6,7 @@ import { ensureBootstrapAdmin } from "@/server/bootstrap";
 import { refreshUserAvatar } from "@/server/avatars";
 import { readJsonBody } from "@/lib/http";
 import { noStoreHeaders } from "@/lib/no-cache";
+import { userHandle } from "@/lib/handle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,10 +29,11 @@ export async function POST(req: NextRequest) {
     [parsed.user.first_name, parsed.user.last_name].filter(Boolean).join(" ").trim() ||
     parsed.user.username ||
     `user ${parsed.user.id}`;
+  const tgUsername = parsed.user.username ?? null;
 
   const { data: existing } = await sb
     .from("users")
-    .select("id, role, is_admin, name, avatar_file_id, avatar_fetched_at")
+    .select("id, role, is_admin, name, tg_username, avatar_file_id, avatar_fetched_at")
     .eq("tg_user_id", parsed.user.id)
     .maybeSingle();
 
@@ -43,22 +45,26 @@ export async function POST(req: NextRequest) {
     avatar_file_id: string | null;
   };
   if (!existing) {
+    const h = userHandle(parsed.user.id);
     const { data, error } = await sb
       .from("users")
       .insert({
         tg_user_id: parsed.user.id,
         tg_chat_id: parsed.user.id, // best-effort; real chat_id arrives via the bot webhook
         name: display,
-        role: "pending",
+        tg_username: tgUsername,
+        display_handle: h.handle,
+        display_emoji: h.emoji,
+        role: "student",
       })
       .select("id, role, is_admin, name, avatar_file_id")
       .single();
     if (error || !data) return Response.json({ error: error?.message ?? "insert failed" }, { status: 500 });
     userRow = data;
-  } else if (existing.name !== display) {
+  } else if (existing.name !== display || existing.tg_username !== tgUsername) {
     const { data, error } = await sb
       .from("users")
-      .update({ name: display })
+      .update({ name: display, tg_username: tgUsername })
       .eq("id", existing.id)
       .select("id, role, is_admin, name, avatar_file_id")
       .single();

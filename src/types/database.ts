@@ -18,6 +18,9 @@ export interface Database {
           tg_user_id: number;
           tg_chat_id: number;
           name: string | null;
+          tg_username: string | null;
+          display_handle: string | null;
+          display_emoji: string | null;
           role: UserRole;
           is_admin: boolean;
           status: UserStatus;
@@ -33,6 +36,9 @@ export interface Database {
           tg_user_id: number;
           tg_chat_id: number;
           name?: string | null;
+          tg_username?: string | null;
+          display_handle?: string | null;
+          display_emoji?: string | null;
           role?: UserRole;
           is_admin?: boolean;
           status?: UserStatus;

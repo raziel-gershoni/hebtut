@@ -25,6 +25,7 @@ export async function handleStart(ctx: Context): Promise<void> {
     [from.first_name, from.last_name].filter(Boolean).join(" ").trim() ||
     from.username ||
     `user ${from.id}`;
+  const tgUsername = from.username ?? null;
 
   const { data: existing } = await sb
     .from("users")
@@ -42,7 +43,7 @@ export async function handleStart(ctx: Context): Promise<void> {
     }
     await sb
       .from("users")
-      .update({ tg_chat_id: chat.id, name: display })
+      .update({ tg_chat_id: chat.id, name: display, tg_username: tgUsername })
       .eq("id", existing.id);
     await refreshUserAvatar(existing.id, from.id);
 
@@ -68,6 +69,7 @@ export async function handleStart(ctx: Context): Promise<void> {
       tgUserId: from.id,
       tgChatId: chat.id,
       name: display,
+      tgUsername,
       token,
     });
     if (teacher) {
@@ -84,6 +86,7 @@ export async function handleStart(ctx: Context): Promise<void> {
     tgUserId: from.id,
     tgChatId: chat.id,
     name: display,
+    tgUsername,
   });
   if (student) await refreshUserAvatar(student.id, from.id);
   await welcomeNewStudent(ctx);

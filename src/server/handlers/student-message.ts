@@ -5,6 +5,7 @@ import { getUsedForToday, decideQuota, commitUsageSplit } from "@/server/quota";
 import { serverEnv } from "@/lib/env";
 import { fanOutToTeachers } from "@/server/notifications";
 import { isTgUserBanned } from "@/server/invites";
+import { userHandle } from "@/lib/handle";
 
 export async function handleStudentMedia(ctx: Context): Promise<boolean> {
   const msg = ctx.message;
@@ -24,10 +25,14 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
 
   if (!user) {
     // Self-register as student (the new default) and retry on the next inbound.
+    const h = userHandle(ctx.from.id);
     await sb.from("users").insert({
       tg_user_id: ctx.from.id,
       tg_chat_id: ctx.chat.id,
       name: ctx.from.first_name ?? ctx.from.username ?? `user ${ctx.from.id}`,
+      tg_username: ctx.from.username ?? null,
+      display_handle: h.handle,
+      display_emoji: h.emoji,
       role: "student",
     });
     await ctx.reply(ru.greetingStudentNew);

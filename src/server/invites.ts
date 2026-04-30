@@ -1,4 +1,5 @@
 import { getServiceRoleClient } from "@/lib/supabase-server";
+import { userHandle } from "@/lib/handle";
 
 const PAYLOAD_PREFIX = "invite_";
 
@@ -72,15 +73,20 @@ export async function createTeacherWithInvite(args: {
   tgUserId: number;
   tgChatId: number;
   name: string;
+  tgUsername: string | null;
   token: string;
 }): Promise<{ id: number } | null> {
   const sb = getServiceRoleClient();
+  const h = userHandle(args.tgUserId);
   const { data: inserted } = await sb
     .from("users")
     .insert({
       tg_user_id: args.tgUserId,
       tg_chat_id: args.tgChatId,
       name: args.name,
+      tg_username: args.tgUsername,
+      display_handle: h.handle,
+      display_emoji: h.emoji,
       role: "teacher",
     })
     .select("id")
@@ -99,14 +105,19 @@ export async function createStudent(args: {
   tgUserId: number;
   tgChatId: number;
   name: string;
+  tgUsername: string | null;
 }): Promise<{ id: number } | null> {
   const sb = getServiceRoleClient();
+  const h = userHandle(args.tgUserId);
   const { data: inserted } = await sb
     .from("users")
     .insert({
       tg_user_id: args.tgUserId,
       tg_chat_id: args.tgChatId,
       name: args.name,
+      tg_username: args.tgUsername,
+      display_handle: h.handle,
+      display_emoji: h.emoji,
       role: "student",
     })
     .select("id")
