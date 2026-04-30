@@ -34,7 +34,7 @@ const ROLE_DEFS: Record<
     label: "Ученик",
   },
   teacher: {
-    emoji: "🎯",
+    emoji: "📚",
     fillClass: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
     label: "Тренер",
   },
@@ -129,12 +129,12 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
         </span>
         <span aria-hidden>·</span>
         <span className="inline-flex items-center gap-1">
-          <span aria-hidden>🎯</span>
+          <span aria-hidden>📚</span>
           <span>Тренер</span>
         </span>
         <span aria-hidden>·</span>
         <span className="inline-flex items-center gap-1">
-          <span aria-hidden>🛡️</span>
+          <span aria-hidden>👑</span>
           <span>Админ</span>
         </span>
       </div>
@@ -240,7 +240,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                   : "bg-tg-bg-secondary text-tg-text-hint/60"
               }`}
             >
-              <span aria-hidden>🛡️</span>
+              <span aria-hidden>{u.is_admin ? "👑" : "👤"}</span>
             </button>
             <div className="relative shrink-0">
               <button
