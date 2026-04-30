@@ -64,7 +64,7 @@ export async function fanOutToTeachers(messageId: number): Promise<void> {
   }[] = [];
   for (const t of teachers) {
     const text =
-      handlerId && handlerId !== t.id ? taken(handlerName ?? "Преподаватель") : actionable;
+      handlerId && handlerId !== t.id ? taken(handlerName ?? "Тренер") : actionable;
     try {
       const sent = await bot.api.sendMessage(t.tg_chat_id, text);
       rows.push({

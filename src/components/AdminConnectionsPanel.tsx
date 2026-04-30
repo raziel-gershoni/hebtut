@@ -24,7 +24,7 @@ type Mode = "student" | "teacher";
 /**
  * Combined view + add panel for the student↔teacher connection pool.
  * Top: compact add row (with already-linked detection).
- * Middle: filter input + по-ученикам / по-преподавателям segmented toggle.
+ * Middle: filter input + по-ученикам / по-тренерам segmented toggle.
  * Bottom: groups, one card per primary entity, rows are the secondary
  * side with a per-row unlink ✕.
  */
@@ -162,13 +162,13 @@ export function AdminConnectionsPanel({
       {/* Add controls */}
       <div className="rounded-2xl bg-tg-bg-section p-4 space-y-3 mb-3">
         <PickerRow
-          label="Студент"
+          label="Ученик"
           options={students}
           value={studentId}
           onChange={setStudentId}
         />
         <PickerRow
-          label="Преподаватель"
+          label="Тренер"
           options={teachers}
           value={teacherId}
           onChange={setTeacherId}
@@ -196,7 +196,7 @@ export function AdminConnectionsPanel({
             По ученикам
           </ToggleButton>
           <ToggleButton active={mode === "teacher"} onClick={() => setMode("teacher")}>
-            По преподавателям
+            По тренерам
           </ToggleButton>
         </div>
       </div>

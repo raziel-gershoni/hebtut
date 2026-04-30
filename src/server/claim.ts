@@ -139,7 +139,7 @@ export async function startReply(messageId: number, teacherId: number): Promise<
   // these notifications are already in that state; calling the helper is a
   // safe no-op (TG returns 400 'message is not modified', which we swallow).
   if (decision.kind === "claim") {
-    const teacherName = teacher.name ?? "Преподаватель";
+    const teacherName = teacher.name ?? "Тренер";
     const { data: pendingMsgs } = await sb
       .from("messages")
       .select("id")

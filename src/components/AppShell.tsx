@@ -22,7 +22,7 @@ interface AppShellProps {
 const ROLE_LABEL: Record<string, string> = {
   pending: "ожидание",
   student: "ученик",
-  teacher: "преподаватель",
+  teacher: "тренер",
 };
 
 export function AppShell({ title, back, children }: AppShellProps) {

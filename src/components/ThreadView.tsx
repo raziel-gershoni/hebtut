@@ -144,7 +144,7 @@ export function ThreadView({
     }
     const t = msg.teacher;
     return {
-      name: t?.name ?? "Преподаватель",
+      name: t?.name ?? "Тренер",
       avatarUrl: t?.has_avatar
         ? `/api/avatar/${t.id}?token=${encodeURIComponent(jwt)}`
         : undefined,

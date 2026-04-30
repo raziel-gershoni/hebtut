@@ -99,12 +99,12 @@ export async function GET(req: NextRequest) {
       .select("id, name")
       .in("id", claimTeacherIds);
     const teacherNameById = new Map(
-      (teacherRows ?? []).map((t) => [t.id, t.name ?? "Преподаватель"]),
+      (teacherRows ?? []).map((t) => [t.id, t.name ?? "Тренер"]),
     );
     for (const c of claimRows) {
       claimByStudent.set(c.student_id, {
         teacher_id: c.teacher_id,
-        teacher_name: teacherNameById.get(c.teacher_id) ?? "Преподаватель",
+        teacher_name: teacherNameById.get(c.teacher_id) ?? "Тренер",
       });
     }
   }

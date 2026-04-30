@@ -88,7 +88,7 @@ export function MessageBubble({
         // landing in the teacher's TG chat is visible.
         window.Telegram?.WebApp?.close?.();
       } else if (r.reason === "taken-by-other") {
-        setFeedback("Берёт другой преподаватель");
+        setFeedback("Берёт другой тренер");
       } else {
         setFeedback(`Ошибка: ${r.reason ?? "неизвестная"}`);
       }

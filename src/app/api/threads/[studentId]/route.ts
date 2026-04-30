@@ -104,7 +104,7 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
       .single();
     claim = {
       teacher_id: claimRow.teacher_id,
-      teacher_name: t?.name ?? "Преподаватель",
+      teacher_name: t?.name ?? "Тренер",
       expires_at: claimRow.expires_at,
     };
   }

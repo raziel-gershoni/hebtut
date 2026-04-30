@@ -10,7 +10,7 @@ export default function StudentThreadPage({ params }: { params: { id: string } }
         if (role !== "teacher" && !isAdmin) {
           return (
             <div className="rounded-2xl bg-tg-bg-section p-6 text-sm text-tg-text-hint">
-              Только для преподавателей.
+              Только для тренеров.
             </div>
           );
         }

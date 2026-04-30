@@ -10,16 +10,23 @@ export type AdminUser = {
   role: "pending" | "student" | "teacher";
   is_admin: boolean;
   has_avatar: boolean;
-  status: string;
+  status: "active" | "suspended";
   created_at: string;
   role_changed_at: string | null;
 };
 
 const ROLES: AdminUser["role"][] = ["pending", "student", "teacher"];
 
+const ROLE_LABEL: Record<AdminUser["role"], string> = {
+  pending: "Ожидает",
+  student: "Ученик",
+  teacher: "Тренер",
+};
+
 type PendingChange =
   | { kind: "role"; id: number; role: AdminUser["role"] }
-  | { kind: "admin"; id: number; is_admin: boolean };
+  | { kind: "admin"; id: number; is_admin: boolean }
+  | { kind: "delete"; id: number; name: string; ban: boolean };
 
 interface AdminUsersTableProps {
   jwt: string;
@@ -36,13 +43,34 @@ function avatarUrl(jwt: string, u: { id: number; has_avatar: boolean }): string 
 export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTableProps) {
   const [pending, setPending] = useState<PendingChange | null>(null);
   const [filter, setFilter] = useState("");
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
 
-  async function patch(id: number, body: { role?: AdminUser["role"]; is_admin?: boolean }) {
+  async function patchRole(id: number, body: { role?: AdminUser["role"]; is_admin?: boolean }) {
     await fetch(`/api/admin/users/${id}/role`, {
       method: "PATCH",
       cache: "no-store",
       headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
+    });
+    await refetch();
+  }
+
+  async function patchStatus(id: number, status: AdminUser["status"]) {
+    await fetch(`/api/admin/users/${id}/status`, {
+      method: "PATCH",
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    await refetch();
+  }
+
+  async function deleteUser(id: number, ban: boolean) {
+    const url = `/api/admin/users/${id}${ban ? "?ban=1" : ""}`;
+    await fetch(url, {
+      method: "DELETE",
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${jwt}` },
     });
     await refetch();
   }
@@ -60,17 +88,20 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
       (u) =>
         (u.name ?? "").toLowerCase().includes(q) ||
         String(u.tg_user_id).includes(q) ||
-        u.role.includes(q),
+        ROLE_LABEL[u.role].toLowerCase().includes(q),
     );
   }, [users, filter]);
 
   return (
-    <section>
+    <section onClick={() => setOpenMenuId(null)}>
       <header className="flex items-baseline justify-between gap-3 mb-3">
         <h2 className="text-lg font-semibold tracking-tight">Пользователи</h2>
         <button
           type="button"
-          onClick={() => void refetch()}
+          onClick={(e) => {
+            e.stopPropagation();
+            void refetch();
+          }}
           className="text-xs text-tg-text-link tracking-wider uppercase tabular-nums transition-opacity active:opacity-60"
           aria-label="Обновить список"
         >
@@ -112,8 +143,13 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
               imageUrl={avatarUrl(jwt, u)}
             />
             <div className="min-w-0 flex-1 leading-tight">
-              <div className="font-medium tracking-tight truncate">
-                {u.name ?? "—"}
+              <div className="font-medium tracking-tight truncate flex items-center gap-2">
+                <span className="truncate">{u.name ?? "—"}</span>
+                {u.status === "suspended" && (
+                  <span className="shrink-0 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold">
+                    На паузе
+                  </span>
+                )}
               </div>
               <div className="text-xs text-tg-text-hint tabular-nums truncate">
                 {u.tg_user_id}
@@ -128,12 +164,12 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                 if (next === u.role) return;
                 if (isDestructiveRole(u.role, next))
                   setPending({ kind: "role", id: u.id, role: next });
-                else void patch(u.id, { role: next });
+                else void patchRole(u.id, { role: next });
               }}
             >
               {ROLES.map((r) => (
                 <option key={r} value={r}>
-                  {r}
+                  {ROLE_LABEL[r]}
                 </option>
               ))}
             </select>
@@ -145,33 +181,95 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                   const next = e.target.checked;
                   if (!next && u.is_admin)
                     setPending({ kind: "admin", id: u.id, is_admin: false });
-                  else void patch(u.id, { is_admin: next });
+                  else void patchRole(u.id, { is_admin: next });
                 }}
                 className="h-4 w-4 rounded accent-tg-button"
               />
               <span>Админ</span>
             </label>
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                aria-label="Действия"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenMenuId(openMenuId === u.id ? null : u.id);
+                }}
+                className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-tg-text-hint hover:text-tg-text transition-colors"
+              >
+                ⋯
+              </button>
+              {openMenuId === u.id && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute right-0 top-9 z-10 w-44 rounded-xl bg-tg-bg-section border border-tg-text-hint/15 shadow-xl py-1 text-sm"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      void patchStatus(u.id, u.status === "suspended" ? "active" : "suspended");
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-tg-bg-secondary transition-colors"
+                  >
+                    {u.status === "suspended" ? "Возобновить" : "Приостановить"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      setPending({ kind: "delete", id: u.id, name: u.name ?? "", ban: false });
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-tg-bg-secondary transition-colors text-tg-text-destructive"
+                  >
+                    Удалить
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      setPending({ kind: "delete", id: u.id, name: u.name ?? "", ban: true });
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-tg-bg-secondary transition-colors text-tg-text-destructive"
+                  >
+                    Заблокировать навсегда
+                  </button>
+                </div>
+              )}
+            </div>
           </li>
         ))}
       </ul>
 
       <ConfirmDialog
         open={!!pending}
-        title={pending?.kind === "admin" ? "Снять права админа?" : "Подтвердить смену роли"}
+        title={
+          pending?.kind === "admin"
+            ? "Снять права админа?"
+            : pending?.kind === "delete"
+              ? pending.ban
+                ? "Заблокировать навсегда?"
+                : "Удалить пользователя?"
+              : "Подтвердить смену роли"
+        }
         body={
           pending?.kind === "admin"
             ? "Без прав админа этот пользователь больше не сможет управлять пользователями и связями."
-            : "Это действие может разорвать существующие связи студент↔преподаватель. Продолжить?"
+            : pending?.kind === "delete"
+              ? pending.ban
+                ? `${pending.name || "Пользователь"} не сможет зарегистрироваться заново. Все его сообщения будут удалены.`
+                : `${pending.name || "Пользователь"} будет удалён вместе с сообщениями. Он сможет зарегистрироваться заново.`
+              : "Это действие может разорвать существующие связи ученик↔тренер. Продолжить?"
         }
         onCancel={() => setPending(null)}
         onConfirm={async () => {
           if (!pending) return;
-          if (pending.kind === "role") await patch(pending.id, { role: pending.role });
-          else await patch(pending.id, { is_admin: pending.is_admin });
+          if (pending.kind === "role") await patchRole(pending.id, { role: pending.role });
+          else if (pending.kind === "admin") await patchRole(pending.id, { is_admin: pending.is_admin });
+          else if (pending.kind === "delete") await deleteUser(pending.id, pending.ban);
           setPending(null);
         }}
       />
     </section>
   );
 }
-

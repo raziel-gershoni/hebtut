@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell";
 const ROLE_LABEL: Record<string, string> = {
   pending: "ждём подтверждения",
   student: "ученик",
-  teacher: "преподаватель",
+  teacher: "тренер",
 };
 
 export default function Home() {
@@ -34,7 +34,7 @@ export default function Home() {
             )}
             {role === "student" && (
               <p className="mt-3 text-sm text-tg-text-subtitle">
-                Запиши голосовое или круглое видео в чат с ботом — преподаватель ответит вам.
+                Запиши голосовое или круглое видео в чат с ботом — тренер ответит вам.
               </p>
             )}
             {isAdmin && role !== "teacher" && (
@@ -61,7 +61,7 @@ export default function Home() {
             <ActionCard
               href="/admin"
               title="Админка"
-              subtitle="Пользователи и связи студент↔преподаватель"
+              subtitle="Пользователи и связи ученик↔тренер"
               icon="⚙️"
             />
           )}
