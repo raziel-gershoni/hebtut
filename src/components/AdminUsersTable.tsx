@@ -6,7 +6,10 @@ import { Avatar } from "./Avatar";
 export type AdminUser = {
   id: number;
   tg_user_id: number;
+  tg_username: string | null;
   name: string | null;
+  display_handle: string | null;
+  display_emoji: string | null;
   role: "pending" | "student" | "teacher";
   is_admin: boolean;
   has_avatar: boolean;
@@ -87,6 +90,8 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
     return users.filter(
       (u) =>
         (u.name ?? "").toLowerCase().includes(q) ||
+        (u.tg_username ?? "").toLowerCase().includes(q) ||
+        (u.display_handle ?? "").toLowerCase().includes(q) ||
         String(u.tg_user_id).includes(q) ||
         ROLE_LABEL[u.role].toLowerCase().includes(q),
     );
@@ -113,7 +118,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
         type="search"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
-        placeholder="Поиск по имени, ID или роли"
+        placeholder="Поиск по имени, @username, псевдониму, ID или роли"
         className="w-full mb-3 h-10 px-3 rounded-xl bg-tg-bg-secondary text-tg-text placeholder:text-tg-text-hint outline-none focus:ring-2 focus:ring-tg-button/40"
       />
 
@@ -151,8 +156,23 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                   </span>
                 )}
               </div>
-              <div className="text-xs text-tg-text-hint tabular-nums truncate">
-                {u.tg_user_id}
+              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-tg-text-hint min-w-0 flex-wrap">
+                {u.tg_username && (
+                  <>
+                    <span className="truncate">@{u.tg_username}</span>
+                    <span aria-hidden>·</span>
+                  </>
+                )}
+                <span className="tabular-nums">{u.tg_user_id}</span>
+                {u.display_handle && (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-tg-bg-secondary/60 text-tg-text">
+                      <span aria-hidden>{u.display_emoji ?? "·"}</span>
+                      <span>{u.display_handle}</span>
+                    </span>
+                  </>
+                )}
               </div>
             </div>
             <select
