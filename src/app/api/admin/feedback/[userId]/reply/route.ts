@@ -8,6 +8,7 @@ import { recordAudit } from "@/server/audit";
 import { getBot } from "@/lib/tg";
 import { ru } from "@/lib/i18n";
 import { serverEnv } from "@/lib/env";
+import { userHandle } from "@/lib/handle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,6 +47,37 @@ export async function POST(
       headers: noStoreHeaders,
     });
 
+  // Claim guard: only the holder can reply. Refresh the TTL on success so
+  // the active admin's session sticks while they're engaged.
+  const { data: existingClaim } = await sb
+    .from("feedback_claims")
+    .select("admin_id, expires_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const claimActive =
+    !!existingClaim && new Date(existingClaim.expires_at).getTime() > Date.now();
+  if (claimActive && existingClaim.admin_id !== me.id) {
+    const { data: holder } = await sb
+      .from("users")
+      .select("name, display_handle, tg_user_id")
+      .eq("id", existingClaim.admin_id)
+      .single();
+    return Response.json(
+      {
+        ok: false,
+        reason: "taken-by-other",
+        holder: {
+          id: existingClaim.admin_id,
+          name: holder?.name ?? null,
+          handle:
+            holder?.display_handle ??
+            userHandle(holder?.tg_user_id ?? 0).handle,
+        },
+      },
+      { status: 409, headers: noStoreHeaders },
+    );
+  }
+
   const { data: row, error } = await sb
     .from("feedback_messages")
     .insert({
@@ -61,6 +93,27 @@ export async function POST(
       status: 500,
       headers: noStoreHeaders,
     });
+
+  // Refresh / acquire the claim — keeps the session sticky and silently
+  // takes ownership if it had expired between mount and send.
+  const ttlMs = serverEnv.CLAIM_TTL_MINUTES * 60_000;
+  const claimExpiresAt = new Date(Date.now() + ttlMs).toISOString();
+  await sb.from("feedback_claims").upsert(
+    {
+      user_id: userId,
+      admin_id: me.id,
+      claimed_at: new Date().toISOString(),
+      expires_at: claimExpiresAt,
+    },
+    { onConflict: "user_id" },
+  );
+  await recordAudit({
+    action: "feedback.claim_refresh",
+    actorId: me.id,
+    subjectType: "user",
+    subjectId: userId,
+    meta: { kind: "reply-tail", expires_at: claimExpiresAt },
+  });
 
   // Wake-up DM with a web_app button straight to /feedback.
   const url = `${serverEnv.APP_BASE_URL.replace(/\/$/, "")}/feedback`;

@@ -83,6 +83,37 @@ export async function GET(
         : null,
   }));
 
+  // Active claim for this user, if any.
+  const nowIso = new Date().toISOString();
+  const { data: claimRow } = await sb
+    .from("feedback_claims")
+    .select("admin_id, expires_at")
+    .eq("user_id", userId)
+    .gt("expires_at", nowIso)
+    .maybeSingle();
+  let claim:
+    | {
+        admin_id: number;
+        admin_handle: string;
+        is_self: boolean;
+        expires_at: string;
+      }
+    | null = null;
+  if (claimRow) {
+    const { data: holder } = await sb
+      .from("users")
+      .select("display_handle, tg_user_id")
+      .eq("id", claimRow.admin_id)
+      .single();
+    claim = {
+      admin_id: claimRow.admin_id,
+      admin_handle:
+        holder?.display_handle ?? userHandle(holder?.tg_user_id ?? 0).handle,
+      is_self: claimRow.admin_id === me.id,
+      expires_at: claimRow.expires_at,
+    };
+  }
+
   return Response.json(
     {
       user: {
@@ -95,6 +126,7 @@ export async function GET(
         has_avatar: !!targetUser.avatar_file_id,
       },
       messages,
+      claim,
     },
     { headers: noStoreHeaders },
   );

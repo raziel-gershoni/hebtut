@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
+import { userHandle } from "@/lib/handle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,6 +64,38 @@ export async function GET(req: NextRequest) {
     for (const r of (rows ?? []) as RawUser[]) usersById.set(r.id, r);
   }
 
+  // Active feedback_claims for these users so the list can show "Берёт X".
+  const nowIso = new Date().toISOString();
+  const claimByUser = new Map<
+    number,
+    { admin_id: number; admin_handle: string; is_self: boolean }
+  >();
+  if (userIds.length > 0) {
+    const { data: claimRows } = await sb
+      .from("feedback_claims")
+      .select("user_id, admin_id")
+      .in("user_id", userIds)
+      .gt("expires_at", nowIso);
+    if (claimRows && claimRows.length > 0) {
+      const adminIds = Array.from(new Set(claimRows.map((c) => c.admin_id)));
+      const { data: adminRows } = await sb
+        .from("users")
+        .select("id, display_handle, tg_user_id")
+        .in("id", adminIds);
+      const adminHandle = new Map<number, string>();
+      for (const a of adminRows ?? []) {
+        adminHandle.set(a.id, a.display_handle ?? userHandle(a.tg_user_id).handle);
+      }
+      for (const c of claimRows) {
+        claimByUser.set(c.user_id, {
+          admin_id: c.admin_id,
+          admin_handle: adminHandle.get(c.admin_id) ?? "Админ",
+          is_self: c.admin_id === user.id,
+        });
+      }
+    }
+  }
+
   const chats = userIds
     .map((uid) => {
       const u = usersById.get(uid);
@@ -85,6 +118,7 @@ export async function GET(req: NextRequest) {
           created_at: last.created_at,
         },
         unread_count: unreadByUser.get(uid) ?? 0,
+        claim: claimByUser.get(uid) ?? null,
       };
     })
     .filter((c) => c.user !== null)
