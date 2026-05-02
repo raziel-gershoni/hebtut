@@ -57,6 +57,17 @@ export default function Home() {
             />
           )}
 
+          <ActionCard
+            href={isAdmin ? "/admin/feedback" : "/feedback"}
+            title="Обратная связь"
+            subtitle={
+              isAdmin
+                ? "Сообщения от пользователей в админ-пул"
+                : "Связаться с админом"
+            }
+            icon="💬"
+          />
+
           {isAdmin && (
             <ActionCard
               href="/admin"

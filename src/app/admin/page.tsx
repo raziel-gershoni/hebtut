@@ -73,7 +73,13 @@ function AdminBody({ jwt }: { jwt: string }) {
 
   return (
     <>
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex flex-wrap items-center justify-end gap-3">
+        <Link
+          href="/admin/feedback"
+          className="inline-flex items-center gap-1 text-sm font-semibold text-tg-text-link"
+        >
+          → Обратная связь
+        </Link>
         <Link
           href="/admin/audit"
           className="inline-flex items-center gap-1 text-sm font-semibold text-tg-text-link"

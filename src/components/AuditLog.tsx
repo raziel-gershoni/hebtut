@@ -36,6 +36,8 @@ const ACTION_DEFS: Record<string, { label: string; tone: string; group: string }
   "invite.consume": { label: "Активировал ссылку", tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", group: "Приглашения" },
   "signup.student": { label: "Регистрация ученика", tone: "bg-sky-500/15 text-sky-700 dark:text-sky-400", group: "Регистрация" },
   "signup.teacher": { label: "Регистрация тренера", tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", group: "Регистрация" },
+  "feedback.in": { label: "Обратная связь", tone: "bg-sky-500/15 text-sky-700 dark:text-sky-400", group: "Связь" },
+  "feedback.out": { label: "Ответ админа", tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: "Связь" },
 };
 
 const ACTION_OPTIONS = Object.entries(ACTION_DEFS).map(([value, def]) => ({
