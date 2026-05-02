@@ -28,6 +28,13 @@ interface UserMeta {
   has_avatar: boolean;
 }
 
+interface ClaimInfo {
+  admin_id: number;
+  admin_handle: string;
+  is_self: boolean;
+  expires_at: string;
+}
+
 function formatTime(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
@@ -53,6 +60,7 @@ export function FeedbackThread({
 }) {
   const [user, setUser] = useState<UserMeta | null>(null);
   const [messages, setMessages] = useState<FeedbackMessage[]>([]);
+  const [claim, setClaim] = useState<ClaimInfo | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -65,9 +73,14 @@ export function FeedbackThread({
       headers: { Authorization: `Bearer ${jwt}` },
     });
     if (r.ok) {
-      const d = (await r.json()) as { user: UserMeta; messages: FeedbackMessage[] };
+      const d = (await r.json()) as {
+        user: UserMeta;
+        messages: FeedbackMessage[];
+        claim: ClaimInfo | null;
+      };
       setUser(d.user);
       setMessages(d.messages);
+      setClaim(d.claim);
     }
     setLoaded(true);
   }, [jwt, userId]);
@@ -85,6 +98,38 @@ export function FeedbackThread({
       body: JSON.stringify({}),
     });
   }, [jwt, userId]);
+
+  // Auto-claim on mount: if no other admin holds it, take ownership so the
+  // input is enabled. If another admin holds it, the API returns 409 with
+  // the holder's handle and the input stays disabled until that claim
+  // expires (or is released by the cron).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const r = await fetch(`/api/admin/feedback/${userId}/claim`, {
+        method: "POST",
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (cancelled) return;
+      // The realtime subscription will deliver the new claim row to load(),
+      // but call it directly so the UI updates without waiting for the round-trip.
+      await load();
+      if (!r.ok) {
+        const d = (await r.json().catch(() => ({}))) as {
+          reason?: string;
+          holder?: { handle?: string };
+        };
+        if (d.reason === "taken-by-other" && d.holder?.handle) {
+          setError(null); // banner handles it; not a true error
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [jwt, userId, load]);
 
   useRealtimeFeedback(jwt, load);
 
@@ -108,6 +153,13 @@ export function FeedbackThread({
       });
       if (r.ok) {
         setDraft("");
+        await load();
+      } else if (r.status === 409) {
+        const d = (await r.json().catch(() => ({}))) as {
+          holder?: { handle?: string };
+        };
+        const h = d.holder?.handle ?? "другой админ";
+        setError(`Сейчас отвечает ${h} — попробуй позже`);
         await load();
       } else {
         setError("Не удалось отправить — попробуй ещё раз");
@@ -191,6 +243,12 @@ export function FeedbackThread({
         })}
       </div>
 
+      {claim && !claim.is_self && (
+        <div className="mb-2 text-xs text-tg-text-hint bg-tg-bg-section rounded-xl px-3 py-2 shrink-0">
+          Сейчас отвечает {claim.admin_handle}. Подожди или попробуй позже — клейм истекает автоматически.
+        </div>
+      )}
+
       {error && <div className="mb-2 text-xs text-tg-text-destructive">{error}</div>}
 
       <div className="flex items-end gap-2 shrink-0">
@@ -204,13 +262,14 @@ export function FeedbackThread({
             }
           }}
           rows={1}
-          placeholder="Ответ"
-          className="flex-1 min-w-0 px-3 py-2 rounded-2xl bg-tg-bg-secondary text-tg-text text-sm placeholder:text-tg-text-hint outline-none focus:ring-2 focus:ring-tg-button/40 resize-none max-h-32"
+          placeholder={claim && !claim.is_self ? `Берёт ${claim.admin_handle}` : "Ответ"}
+          disabled={!!(claim && !claim.is_self)}
+          className="flex-1 min-w-0 px-3 py-2 rounded-2xl bg-tg-bg-secondary text-tg-text text-sm placeholder:text-tg-text-hint outline-none focus:ring-2 focus:ring-tg-button/40 resize-none max-h-32 disabled:opacity-50"
         />
         <button
           type="button"
           onClick={() => void send()}
-          disabled={sending || draft.trim().length === 0}
+          disabled={sending || draft.trim().length === 0 || !!(claim && !claim.is_self)}
           className="shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-full bg-tg-button text-tg-button-text font-semibold transition-transform active:scale-95 disabled:opacity-50"
           aria-label="Отправить"
         >

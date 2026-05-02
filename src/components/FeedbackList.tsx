@@ -20,6 +20,7 @@ interface ChatRow {
     created_at: string;
   };
   unread_count: number;
+  claim: { admin_id: number; admin_handle: string; is_self: boolean } | null;
 }
 
 function formatRel(iso: string): string {
@@ -118,6 +119,15 @@ export function FeedbackList({ jwt }: { jwt: string }) {
                         {u.display_emoji} {u.display_handle}
                       </span>
                     )}
+                  </div>
+                )}
+                {c.claim && (
+                  <div
+                    className={`mt-0.5 text-[11px] truncate ${
+                      c.claim.is_self ? "text-emerald-600 dark:text-emerald-400" : "text-tg-text-hint"
+                    }`}
+                  >
+                    {c.claim.is_self ? "Берёшь ты" : `Берёт ${c.claim.admin_handle}`}
                   </div>
                 )}
               </div>

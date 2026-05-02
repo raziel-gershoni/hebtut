@@ -11,7 +11,7 @@ export function useRealtimeFeedback(jwt: string, onChange: () => void): void {
   useEffect(() => {
     const sb = createBrowserClient(jwt);
     const channel = sb
-      .channel("feedback-messages-stream")
+      .channel("feedback-stream")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "feedback_messages" },
@@ -20,6 +20,21 @@ export function useRealtimeFeedback(jwt: string, onChange: () => void): void {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "feedback_messages" },
+        () => onChange(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "feedback_claims" },
+        () => onChange(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "feedback_claims" },
+        () => onChange(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "feedback_claims" },
         () => onChange(),
       )
       .subscribe();

@@ -38,6 +38,8 @@ const ACTION_DEFS: Record<string, { label: string; tone: string; group: string }
   "signup.teacher": { label: "Регистрация тренера", tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", group: "Регистрация" },
   "feedback.in": { label: "Обратная связь", tone: "bg-sky-500/15 text-sky-700 dark:text-sky-400", group: "Связь" },
   "feedback.out": { label: "Ответ админа", tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: "Связь" },
+  "feedback.claim_refresh": { label: "Берёт обратную связь", tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", group: "Связь" },
+  "feedback.claim_expire": { label: "Истёк клейм связи", tone: "bg-tg-bg-secondary text-tg-text-hint", group: "Связь" },
 };
 
 const ACTION_OPTIONS = Object.entries(ACTION_DEFS).map(([value, def]) => ({
