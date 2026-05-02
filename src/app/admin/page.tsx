@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { AdminUsersTable, type AdminUser } from "@/components/AdminUsersTable";
 import {
@@ -72,6 +73,14 @@ function AdminBody({ jwt }: { jwt: string }) {
 
   return (
     <>
+      <div className="mb-3 flex justify-end">
+        <Link
+          href="/admin/audit"
+          className="inline-flex items-center gap-1 text-sm font-semibold text-tg-text-link"
+        >
+          → Журнал действий
+        </Link>
+      </div>
       <TeacherInvites jwt={jwt} />
       <AdminUsersTable jwt={jwt} users={users} loaded={loaded} refetch={refetch} />
       <BannedUsersPanel jwt={jwt} />
