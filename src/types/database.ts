@@ -228,6 +228,28 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["banned_tg_users"]["Insert"]>;
         Relationships: [];
       };
+      audit_events: {
+        Row: {
+          id: number;
+          created_at: string;
+          actor_id: number | null;
+          action: string;
+          subject_type: string | null;
+          subject_id: number | null;
+          meta: Json;
+        };
+        Insert: {
+          id?: number;
+          created_at?: string;
+          actor_id?: number | null;
+          action: string;
+          subject_type?: string | null;
+          subject_id?: number | null;
+          meta?: Json;
+        };
+        Update: Partial<Database["public"]["Tables"]["audit_events"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
