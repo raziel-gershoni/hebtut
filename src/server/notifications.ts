@@ -73,7 +73,7 @@ export async function fanOutToTeachers(messageId: number): Promise<void> {
   const kindLabel = msg.kind === "voice" ? "голосовое" : "круглое видео";
   const durationLabel = formatDuration(msg.duration);
   const actionable = ru.teacherNotificationActionable(studentHandle, kindLabel, durationLabel);
-  const taken = (name: string) => ru.teacherNotificationTaken(name);
+  const taken = (name: string) => ru.teacherNotificationTaken(name, studentHandle);
 
   const rows: {
     message_id: number;

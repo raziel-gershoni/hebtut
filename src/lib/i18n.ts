@@ -32,7 +32,8 @@ export const ru = {
     `📩 Кому: ${studentName}. Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
   teacherNotificationActionable: (studentName: string, kindLabel: string, durationLabel: string) =>
     `🔔 Новое: ${kindLabel} ${durationLabel} от ${studentName}. Открой мини-приложение, чтобы взять в работу.`,
-  teacherNotificationTaken: (handler: string) => `✓ В работе: ${handler}.`,
+  teacherNotificationTaken: (handler: string, studentHandle: string) =>
+    `✓ ${studentHandle}: в работе у ${handler}.`,
   teacherNotificationExpired: "⚠️ Время на ответ истекло, сообщение снова доступно.",
 };
 

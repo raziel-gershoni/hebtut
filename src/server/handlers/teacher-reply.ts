@@ -127,7 +127,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
 
   const { data: student } = await sb
     .from("users")
-    .select("tg_chat_id")
+    .select("tg_chat_id, tg_user_id, display_handle")
     .eq("id", prompt.student_id)
     .single();
   if (!student) {
@@ -201,7 +201,11 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
       })
       .eq("id", original.id);
     const teacherHandle = teacher.display_handle ?? userHandle(teacher.tg_user_id).handle;
-    await editAllNotificationsForMessage(original.id, ru.teacherNotificationTaken(teacherHandle));
+    const studentHandle = student.display_handle ?? userHandle(student.tg_user_id).handle;
+    await editAllNotificationsForMessage(
+      original.id,
+      ru.teacherNotificationTaken(teacherHandle, studentHandle),
+    );
   }
 
   // Refresh the (S, T) session — the teacher is engaged.

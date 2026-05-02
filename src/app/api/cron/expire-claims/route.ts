@@ -4,6 +4,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { getBot } from "@/lib/tg";
 import { ru, formatDuration } from "@/lib/i18n";
 import { editAllNotificationsForMessage } from "@/server/notifications";
+import { userHandle } from "@/lib/handle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,18 +68,20 @@ async function handler(req: NextRequest): Promise<Response> {
         .in("student_message_id", pendingIds);
 
       // Restore other teachers' notifications for the student's pending
-      // messages back to actionable copy.
+      // messages back to actionable copy. Use the anonymous handle, never
+      // the real name — peer surfaces stay anonymous.
       const { data: student } = await sb
         .from("users")
-        .select("name")
+        .select("tg_user_id, display_handle")
         .eq("id", student_id)
         .single();
-      const studentName = student?.name ?? "ученик";
+      const studentHandle =
+        student?.display_handle ?? userHandle(student?.tg_user_id ?? 0).handle;
       for (const m of pendingMsgs ?? []) {
         const kindLabel = m.kind === "voice" ? "голосовое" : "круглое видео";
         await editAllNotificationsForMessage(
           m.id,
-          ru.teacherNotificationActionable(studentName, kindLabel, formatDuration(m.duration)),
+          ru.teacherNotificationActionable(studentHandle, kindLabel, formatDuration(m.duration)),
         );
       }
     }

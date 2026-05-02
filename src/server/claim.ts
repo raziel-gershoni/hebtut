@@ -166,7 +166,10 @@ export async function startReply(messageId: number, teacherId: number): Promise<
       .eq("student_id", msg.student_id)
       .eq("status", "pending");
     for (const m of pendingMsgs ?? []) {
-      await editAllNotificationsForMessage(m.id, ru.teacherNotificationTaken(teacherHandle));
+      await editAllNotificationsForMessage(
+        m.id,
+        ru.teacherNotificationTaken(teacherHandle, studentHandle),
+      );
     }
   }
 
@@ -228,6 +231,9 @@ export async function startInitiation(
     teacherId,
   });
   if (!decision.ok) return decision;
+  // Only edit other teachers' notifications on a *fresh* claim — not when
+  // the same teacher already holds it and we're just refreshing the TTL.
+  const isFreshClaim = !(claimActive && claim.teacher_id === teacherId);
 
   const ttlMs = serverEnv.CLAIM_TTL_MINUTES * 60_000;
   const expiresAt = new Date(Date.now() + ttlMs).toISOString();
@@ -253,7 +259,11 @@ export async function startInitiation(
       .select("tg_user_id, display_handle")
       .eq("id", studentId)
       .single(),
-    sb.from("users").select("tg_chat_id").eq("id", teacherId).single(),
+    sb
+      .from("users")
+      .select("tg_user_id, tg_chat_id, display_handle")
+      .eq("id", teacherId)
+      .single(),
   ]);
   if (!teacher) return { ok: false, reason: "fatal" };
 
@@ -270,6 +280,25 @@ export async function startInitiation(
     tg_chat_id: teacher.tg_chat_id,
     tg_prompt_message_id: sent.message_id,
   });
+
+  // Mirror startReply: when the claim freshly transfers (or freshly opens),
+  // mark every other linked teacher's existing pending-message notifications
+  // for this student as "in работе у X" so they don't try to claim something
+  // we now own.
+  if (isFreshClaim) {
+    const teacherHandle = handleFromRow(teacher);
+    const { data: pendingMsgs } = await sb
+      .from("messages")
+      .select("id")
+      .eq("student_id", studentId)
+      .eq("status", "pending");
+    for (const m of pendingMsgs ?? []) {
+      await editAllNotificationsForMessage(
+        m.id,
+        ru.teacherNotificationTaken(teacherHandle, studentHandle),
+      );
+    }
+  }
 
   return { ok: true, kind: "initiate", promptMessageId: sent.message_id };
 }
