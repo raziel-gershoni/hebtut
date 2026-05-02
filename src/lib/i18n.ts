@@ -30,6 +30,10 @@ export const ru = {
     `📩 Доп. ответ. От: ${studentName}. Голосовое ${dur} (отправлено ${when}). Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
   teacherInitiatePrompt: (studentName: string) =>
     `📩 Кому: ${studentName}. Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
+  adminFeedbackPing: (userLabel: string, snippet: string) =>
+    `💬 От ${userLabel}: «${snippet}». Открой админку, чтобы ответить.`,
+  userFeedbackReplyPing:
+    "💬 Новый ответ от админа. Открой обратную связь, чтобы прочитать и ответить.",
   teacherNotificationActionable: (studentName: string, kindLabel: string, durationLabel: string) =>
     `🔔 Новое: ${kindLabel} ${durationLabel} от ${studentName}. Открой мини-приложение, чтобы взять в работу.`,
   teacherNotificationTaken: (handler: string, studentHandle: string) =>

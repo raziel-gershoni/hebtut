@@ -250,6 +250,30 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["audit_events"]["Insert"]>;
         Relationships: [];
       };
+      feedback_messages: {
+        Row: {
+          id: number;
+          user_id: number;
+          direction: "in" | "out";
+          author_id: number | null;
+          text_content: string;
+          status: "sent" | "read";
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          user_id: number;
+          direction: "in" | "out";
+          author_id?: number | null;
+          text_content: string;
+          status?: "sent" | "read";
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["feedback_messages"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
