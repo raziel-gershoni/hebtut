@@ -5,6 +5,7 @@ import { getBot } from "@/lib/tg";
 import { ru, formatDuration } from "@/lib/i18n";
 import { editAllNotificationsForMessage } from "@/server/notifications";
 import { userHandle } from "@/lib/handle";
+import { recordAudit } from "@/server/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +33,14 @@ async function handler(req: NextRequest): Promise<Response> {
 
   for (const row of expired) {
     const { student_id, teacher_id } = row;
+
+    await recordAudit({
+      action: "claim.expire",
+      actorId: null,
+      subjectType: "claim",
+      subjectId: student_id,
+      meta: { teacher_id },
+    });
 
     // The teacher's prompts for this student's pending messages are now stale.
     const { data: pendingMsgs } = await sb

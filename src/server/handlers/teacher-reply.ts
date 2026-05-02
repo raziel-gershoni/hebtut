@@ -6,6 +6,7 @@ import { ru } from "@/lib/i18n";
 import { editAllNotificationsForMessage } from "@/server/notifications";
 import { isTgUserBanned } from "@/server/invites";
 import { userHandle } from "@/lib/handle";
+import { recordAudit } from "@/server/audit";
 
 export interface ReplyContext {
   replyToMessageId: number;
@@ -176,17 +177,34 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     return true;
   }
 
-  await sb.from("messages").insert({
-    student_id: prompt.student_id,
-    direction: "out",
-    teacher_id: teacher.id,
-    kind,
-    file_id: newFileId,
-    file_unique_id: newFileUniqueId,
-    duration,
-    status: "answered",
-    reply_to_id: original?.id ?? null,
-    tg_message_id_in_student_chat: sentMessageId,
+  const { data: outRow } = await sb
+    .from("messages")
+    .insert({
+      student_id: prompt.student_id,
+      direction: "out",
+      teacher_id: teacher.id,
+      kind,
+      file_id: newFileId,
+      file_unique_id: newFileUniqueId,
+      duration,
+      status: "answered",
+      reply_to_id: original?.id ?? null,
+      tg_message_id_in_student_chat: sentMessageId,
+    })
+    .select("id")
+    .single();
+
+  await recordAudit({
+    action: "message.out",
+    actorId: teacher.id,
+    subjectType: "message",
+    subjectId: outRow?.id ?? null,
+    meta: {
+      kind,
+      duration,
+      student_id: prompt.student_id,
+      reply_to_id: original?.id ?? null,
+    },
   });
 
   // "First answer" + notification edits only apply when there's an original
@@ -222,6 +240,13 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
       },
       { onConflict: "student_id" },
     );
+  await recordAudit({
+    action: "claim.refresh",
+    actorId: teacher.id,
+    subjectType: "claim",
+    subjectId: prompt.student_id,
+    meta: { kind: "reply-tail", expires_at: expiresAt },
+  });
 
   await ctx.reply(ru.teacherReplyDelivered);
   return true;

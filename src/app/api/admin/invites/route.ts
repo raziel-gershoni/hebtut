@@ -5,6 +5,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { serverEnv } from "@/lib/env";
 import { buildInviteUrl } from "@/server/invites";
+import { recordAudit } from "@/server/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,6 +82,13 @@ export async function POST(req: NextRequest) {
     .select("id, token, created_at")
     .single();
   if (error || !data) return new Response(error?.message ?? "insert failed", { status: 500 });
+
+  await recordAudit({
+    action: "admin.invite_create",
+    actorId: user.id,
+    subjectType: "invite",
+    subjectId: data.id,
+  });
 
   return Response.json(
     {

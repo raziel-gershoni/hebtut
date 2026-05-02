@@ -4,6 +4,7 @@ import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { readJsonBody } from "@/lib/http";
 import { noStoreHeaders } from "@/lib/no-cache";
+import { recordAudit } from "@/server/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,6 +65,14 @@ export async function POST(req: NextRequest) {
   if (error) {
     return new Response(error.message, { status: 400, headers: noStoreHeaders });
   }
+
+  await recordAudit({
+    action: "admin.link_create",
+    actorId: user.id,
+    subjectType: "link",
+    meta: { student_id: parsed.data.studentId, teacher_id: parsed.data.teacherId },
+  });
+
   return Response.json({ ok: true }, { headers: noStoreHeaders });
 }
 
@@ -85,5 +94,13 @@ export async function DELETE(req: NextRequest) {
   if (error) {
     return new Response(error.message, { status: 500, headers: noStoreHeaders });
   }
+
+  await recordAudit({
+    action: "admin.link_delete",
+    actorId: user.id,
+    subjectType: "link",
+    meta: { student_id: parsed.data.studentId, teacher_id: parsed.data.teacherId },
+  });
+
   return Response.json({ ok: true }, { headers: noStoreHeaders });
 }

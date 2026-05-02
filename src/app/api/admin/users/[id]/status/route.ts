@@ -4,6 +4,7 @@ import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { readJsonBody } from "@/lib/http";
 import { noStoreHeaders } from "@/lib/no-cache";
+import { recordAudit } from "@/server/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,10 +26,26 @@ export async function PATCH(
   if (!Number.isInteger(targetId)) return new Response("bad id", { status: 400, headers: noStoreHeaders });
 
   const sb = getServiceRoleClient();
+  const { data: prior } = await sb
+    .from("users")
+    .select("status")
+    .eq("id", targetId)
+    .single();
   const { error } = await sb
     .from("users")
     .update({ status: parsed.data.status })
     .eq("id", targetId);
   if (error) return new Response(error.message, { status: 500, headers: noStoreHeaders });
+
+  if (prior && prior.status !== parsed.data.status) {
+    await recordAudit({
+      action: "admin.status_change",
+      actorId: user.id,
+      subjectType: "user",
+      subjectId: targetId,
+      meta: { from: prior.status, to: parsed.data.status },
+    });
+  }
+
   return Response.json({ ok: true }, { headers: noStoreHeaders });
 }

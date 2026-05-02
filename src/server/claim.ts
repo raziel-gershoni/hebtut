@@ -5,6 +5,7 @@ import { ru, formatDuration } from "@/lib/i18n";
 import { formatWhen } from "@/lib/time";
 import { userHandle } from "@/lib/handle";
 import { editAllNotificationsForMessage } from "./notifications";
+import { recordAudit } from "./audit";
 import type { MessageDirection, MessageStatus } from "@/types/database";
 
 function handleFromRow(
@@ -121,6 +122,19 @@ export async function startReply(messageId: number, teacherId: number): Promise<
     console.error("claim upsert failed", upsertErr.message);
     return { ok: false, reason: "fatal" };
   }
+
+  await recordAudit({
+    action: "claim.refresh",
+    actorId: teacherId,
+    subjectType: "claim",
+    subjectId: msg.student_id,
+    meta: {
+      kind: decision.kind,
+      expires_at: expiresAt,
+      message_id: messageId,
+      student_id: msg.student_id,
+    },
+  });
 
   // Send prompt DM to the teacher.
   const [{ data: student }, { data: teacher }] = await Promise.all([
@@ -252,6 +266,18 @@ export async function startInitiation(
     console.error("initiation claim upsert failed", upsertErr.message);
     return { ok: false, reason: "fatal" };
   }
+
+  await recordAudit({
+    action: "claim.refresh",
+    actorId: teacherId,
+    subjectType: "claim",
+    subjectId: studentId,
+    meta: {
+      kind: isFreshClaim ? "initiate" : "session-refresh",
+      expires_at: expiresAt,
+      student_id: studentId,
+    },
+  });
 
   const [{ data: student }, { data: teacher }] = await Promise.all([
     sb

@@ -11,6 +11,7 @@ import {
   createStudent,
   isTgUserBanned,
 } from "@/server/invites";
+import { recordAudit } from "@/server/audit";
 
 export async function handleStart(ctx: Context): Promise<void> {
   const from = ctx.from;
@@ -51,6 +52,13 @@ export async function handleStart(ctx: Context): Promise<void> {
     if (token && existing.role === "student") {
       const upgraded = await consumeInviteAndUpgrade(token, existing.id);
       if (upgraded) {
+        await recordAudit({
+          action: "invite.consume",
+          actorId: existing.id,
+          subjectType: "user",
+          subjectId: existing.id,
+          meta: { via: "invite-upgrade", role_to: "teacher" },
+        });
         await welcomeUpgradedTeacher(ctx);
         return;
       }
@@ -74,6 +82,13 @@ export async function handleStart(ctx: Context): Promise<void> {
     });
     if (teacher) {
       await refreshUserAvatar(teacher.id, from.id);
+      await recordAudit({
+        action: "signup.teacher",
+        actorId: teacher.id,
+        subjectType: "user",
+        subjectId: teacher.id,
+        meta: { via: "invite", tg_user_id: from.id },
+      });
       await welcomeNewTeacher(ctx);
       return;
     }
@@ -88,7 +103,16 @@ export async function handleStart(ctx: Context): Promise<void> {
     name: display,
     tgUsername,
   });
-  if (student) await refreshUserAvatar(student.id, from.id);
+  if (student) {
+    await refreshUserAvatar(student.id, from.id);
+    await recordAudit({
+      action: "signup.student",
+      actorId: student.id,
+      subjectType: "user",
+      subjectId: student.id,
+      meta: { tg_user_id: from.id },
+    });
+  }
   await welcomeNewStudent(ctx);
 }
 

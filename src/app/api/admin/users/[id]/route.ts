@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
+import { recordAudit } from "@/server/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,10 +31,11 @@ export async function DELETE(
 
   const sb = getServiceRoleClient();
 
-  // Snapshot tg_user_id and name before delete — needed for the ban list row.
+  // Snapshot tg_user_id and name before delete — needed for the ban list row
+  // and for an audit-log snapshot that survives the row deletion.
   const { data: target } = await sb
     .from("users")
-    .select("tg_user_id, name")
+    .select("tg_user_id, name, role, display_handle")
     .eq("id", targetId)
     .single();
   if (!target) return new Response("not found", { status: 404, headers: noStoreHeaders });
@@ -55,5 +57,21 @@ export async function DELETE(
 
   const { error } = await sb.rpc("delete_user_cascade", { target_id: targetId });
   if (error) return new Response(error.message, { status: 500, headers: noStoreHeaders });
+
+  await recordAudit({
+    action: banAlso ? "admin.user_ban" : "admin.user_delete",
+    actorId: user.id,
+    subjectType: "user",
+    subjectId: targetId,
+    meta: {
+      snapshot: {
+        name: target.name,
+        tg_user_id: target.tg_user_id,
+        role: target.role,
+        display_handle: target.display_handle,
+      },
+    },
+  });
+
   return Response.json({ ok: true }, { headers: noStoreHeaders });
 }

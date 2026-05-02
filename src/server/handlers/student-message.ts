@@ -6,6 +6,7 @@ import { serverEnv } from "@/lib/env";
 import { fanOutToTeachers } from "@/server/notifications";
 import { isTgUserBanned } from "@/server/invites";
 import { userHandle } from "@/lib/handle";
+import { recordAudit } from "@/server/audit";
 
 export async function handleStudentMedia(ctx: Context): Promise<boolean> {
   const msg = ctx.message;
@@ -119,6 +120,14 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
     await ctx.reply(ru.unknownInput);
     return true;
   }
+
+  await recordAudit({
+    action: "message.in",
+    actorId: user.id,
+    subjectType: "message",
+    subjectId: inserted.id,
+    meta: { kind, duration, student_id: user.id },
+  });
 
   await commitUsageSplit(user.id, user.tz, decision.todayDebit, decision.tomorrowDebit);
 

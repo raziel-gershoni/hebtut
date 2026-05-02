@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { readJsonBody } from "@/lib/http";
+import { recordAudit } from "@/server/audit";
 import type { UserRole } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -59,5 +60,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const { error } = await sb.from("users").update(update).eq("id", targetId);
   if (error) return new Response(error.message, { status: 500 });
+
+  if (parsed.data.role !== undefined && parsed.data.role !== target.role) {
+    await recordAudit({
+      action: "admin.role_change",
+      actorId: user.id,
+      subjectType: "user",
+      subjectId: targetId,
+      meta: { from: target.role, to: parsed.data.role },
+    });
+  }
+  if (parsed.data.is_admin !== undefined && parsed.data.is_admin !== target.is_admin) {
+    await recordAudit({
+      action: "admin.is_admin_change",
+      actorId: user.id,
+      subjectType: "user",
+      subjectId: targetId,
+      meta: { from: target.is_admin, to: parsed.data.is_admin },
+    });
+  }
+
   return Response.json({ ok: true });
 }
