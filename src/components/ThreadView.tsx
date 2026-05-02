@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { MessageBubble, type ThreadMsg, type Speaker } from "./MessageBubble";
 import { Avatar } from "./Avatar";
 import { speakerColor, type SpeakerColorClasses } from "@/lib/speaker-color";
@@ -48,6 +48,7 @@ export function ThreadView({
   const [loaded, setLoaded] = useState(false);
   const [initiateBusy, setInitiateBusy] = useState(false);
   const [initiateError, setInitiateError] = useState<string | null>(null);
+  const initialScrollDoneRef = useRef(false);
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/threads/${studentId}`, {
@@ -72,6 +73,21 @@ export function ThreadView({
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Open at the latest message — Telegram convention. Only the FIRST render
+  // with messages auto-scrolls; subsequent realtime updates don't yank the
+  // viewport if the teacher has scrolled up to read history.
+  useEffect(() => {
+    if (loaded && messages.length > 0 && !initialScrollDoneRef.current) {
+      initialScrollDoneRef.current = true;
+      // Defer one frame so message bubbles have rendered and contributed
+      // their height to document.body.
+      const t = window.setTimeout(() => {
+        window.scrollTo({ top: document.body.scrollHeight, behavior: "auto" });
+      }, 0);
+      return () => window.clearTimeout(t);
+    }
+  }, [loaded, messages.length]);
 
   // Mark this chat as read on mount — fire-and-forget.
   useEffect(() => {

@@ -15,6 +15,7 @@ interface MessageRow {
   kind: "voice" | "video_note";
   duration: number;
   status: "pending" | "answered" | "expired" | "orphaned";
+  teacher_id: number | null;
   created_at: string;
 }
 
@@ -29,10 +30,18 @@ interface InboxChat {
         kind: "voice" | "video_note";
         duration: number;
         status: "pending" | "answered" | "expired" | "orphaned";
+        teacher_id: number | null;
         created_at: string;
       }
     | null;
   unread_count: number;
+  /**
+   * True when the latest message in the thread is an unanswered student
+   * message — i.e. the conversation tail is "student spoke, no reply yet."
+   * This is tighter than "any inbound is pending": a single stale pending
+   * row buried in the history doesn't keep the badge lit forever after the
+   * thread has moved on.
+   */
   has_unanswered: boolean;
   claim:
     | { teacher_id: number; teacher_handle: string; teacher_emoji: string; is_self: boolean }
@@ -73,7 +82,7 @@ export async function GET(req: NextRequest) {
   // 2) Recent message slice across all my linked students.
   const { data: msgsRaw } = await sb
     .from("messages")
-    .select("id, student_id, direction, kind, duration, status, created_at")
+    .select("id, student_id, direction, kind, duration, status, teacher_id, created_at")
     .in("student_id", studentIds)
     .in("status", ["pending", "answered", "expired"])
     .order("created_at", { ascending: false })
@@ -127,14 +136,13 @@ export async function GET(req: NextRequest) {
   }
 
   // Reduce per-student in JS — small N.
+  // msgs is already ordered DESC by created_at (the .order("created_at",
+  // { ascending: false }) above), so the FIRST seen message per student_id
+  // is the most recent one in that thread.
   const lastByStudent = new Map<number, MessageRow>();
-  const unansweredByStudent = new Map<number, boolean>();
   const unreadByStudent = new Map<number, number>();
   for (const m of msgs) {
     if (!lastByStudent.has(m.student_id)) lastByStudent.set(m.student_id, m);
-    if (m.direction === "in" && m.status === "pending") {
-      unansweredByStudent.set(m.student_id, true);
-    }
     if (m.direction === "in") {
       const ls = lastSeenByStudent.get(m.student_id);
       const isUnread = !ls || new Date(m.created_at).getTime() > new Date(ls).getTime();
@@ -165,11 +173,13 @@ export async function GET(req: NextRequest) {
               kind: last.kind,
               duration: last.duration,
               status: last.status,
+              teacher_id: last.teacher_id,
               created_at: last.created_at,
             }
           : null,
         unread_count: unreadByStudent.get(sid) ?? 0,
-        has_unanswered: unansweredByStudent.get(sid) ?? false,
+        has_unanswered:
+          last !== null && last.direction === "in" && last.status !== "answered",
         claim: claim
           ? {
               teacher_id: claim.teacher_id,

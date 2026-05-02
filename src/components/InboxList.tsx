@@ -13,6 +13,7 @@ type LastMessage = {
   kind: "voice" | "video_note";
   duration: number;
   status: "pending" | "answered" | "expired" | "orphaned";
+  teacher_id: number | null;
   created_at: string;
 };
 
@@ -64,9 +65,6 @@ export function InboxList({
 
   useRealtimeMessages(jwt, load);
 
-  // Suppress the unused warning in the loop scope.
-  void myUserId;
-
   const isTeacher = role === "teacher";
 
   return (
@@ -96,7 +94,7 @@ export function InboxList({
       ) : (
         <ul className="space-y-1">
           {chats.map((c) => (
-            <ChatRow key={c.student_id} chat={c} jwt={jwt} />
+            <ChatRow key={c.student_id} chat={c} jwt={jwt} myUserId={myUserId} />
           ))}
         </ul>
       )}
@@ -106,7 +104,15 @@ export function InboxList({
   );
 }
 
-function ChatRow({ chat, jwt }: { chat: Chat; jwt: string }) {
+function ChatRow({
+  chat,
+  jwt,
+  myUserId,
+}: {
+  chat: Chat;
+  jwt: string;
+  myUserId: number;
+}) {
   void jwt;
   const name = chat.student_handle;
   const time = chat.last_message ? formatChatTimestamp(chat.last_message.created_at) : "";
@@ -138,7 +144,7 @@ function ChatRow({ chat, jwt }: { chat: Chat; jwt: string }) {
           </div>
           <div className="mt-0.5 flex items-center gap-2">
             <span className="min-w-0 flex-1 truncate text-sm text-tg-text-hint">
-              <Preview chat={chat} />
+              <Preview chat={chat} myUserId={myUserId} />
             </span>
             {chat.unread_count > 0 && (
               <span className="shrink-0 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-tg-button text-tg-button-text text-[11px] font-semibold tabular-nums">
@@ -157,12 +163,15 @@ function ChatRow({ chat, jwt }: { chat: Chat; jwt: string }) {
   );
 }
 
-function Preview({ chat }: { chat: Chat }) {
+function Preview({ chat, myUserId }: { chat: Chat; myUserId: number }) {
   const m = chat.last_message;
   if (!m) return <span>Пока пусто</span>;
   const icon = m.kind === "voice" ? "🎙️" : "🟢";
   const dur = formatDuration(m.duration);
-  const prefix = m.direction === "out" ? "Ты: " : "";
+  // "Ты:" only when the LAST out-message was sent by the viewer. With
+  // multi-teacher threads, a peer's reply must not be misattributed.
+  const prefix =
+    m.direction === "out" && m.teacher_id === myUserId ? "Ты: " : "";
   const tail = chat.has_unanswered ? " · ждёт ответа" : "";
   return (
     <span>
