@@ -250,6 +250,22 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["audit_events"]["Insert"]>;
         Relationships: [];
       };
+      feedback_claims: {
+        Row: {
+          user_id: number;
+          admin_id: number;
+          claimed_at: string;
+          expires_at: string;
+        };
+        Insert: {
+          user_id: number;
+          admin_id: number;
+          claimed_at?: string;
+          expires_at: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["feedback_claims"]["Insert"]>;
+        Relationships: [];
+      };
       feedback_messages: {
         Row: {
           id: number;

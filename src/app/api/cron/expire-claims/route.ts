@@ -27,7 +27,30 @@ async function handler(req: NextRequest): Promise<Response> {
     .lt("expires_at", nowIso)
     .select("student_id, teacher_id");
 
-  if (!expired?.length) return Response.json({ released: 0 });
+  // Sweep feedback claims in the same pass — same TTL semantics, no
+  // prompts/notifications to clean up (the admin's reply box just becomes
+  // available again on the next realtime push).
+  const { data: expiredFeedback } = await sb
+    .from("feedback_claims")
+    .delete()
+    .lt("expires_at", nowIso)
+    .select("user_id, admin_id");
+  for (const row of expiredFeedback ?? []) {
+    await recordAudit({
+      action: "feedback.claim_expire",
+      actorId: null,
+      subjectType: "user",
+      subjectId: row.user_id,
+      meta: { admin_id: row.admin_id },
+    });
+  }
+
+  if (!expired?.length) {
+    return Response.json({
+      released: 0,
+      feedback_released: expiredFeedback?.length ?? 0,
+    });
+  }
 
   const bot = getBot();
 
@@ -96,7 +119,10 @@ async function handler(req: NextRequest): Promise<Response> {
     }
   }
 
-  return Response.json({ released: expired.length });
+  return Response.json({
+    released: expired.length,
+    feedback_released: expiredFeedback?.length ?? 0,
+  });
 }
 
 export { handler as GET, handler as POST };
