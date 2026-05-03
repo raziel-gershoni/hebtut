@@ -1,9 +1,10 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatDuration } from "@/lib/i18n";
 import { Spinner } from "./Spinner";
 import { Avatar } from "./Avatar";
 import type { SpeakerColorClasses } from "@/lib/speaker-color";
+import { usePlaybackSpeed, formatSpeed } from "@/hooks/usePlaybackSpeed";
 
 export type ThreadMsg = {
   id: number;
@@ -185,6 +186,15 @@ function VoicePlayer({ src, totalSeconds }: { src: string; totalSeconds: number 
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
+  const { speed, cycle } = usePlaybackSpeed();
+
+  // Mirror the cycle-button choice onto the live element. Browsers honour
+  // playbackRate mutation on a playing element, so cycling mid-play takes
+  // effect immediately.
+  useEffect(() => {
+    const a = audioRef.current;
+    if (a) a.playbackRate = speed;
+  }, [speed]);
 
   function toggle() {
     const a = audioRef.current;
@@ -217,6 +227,22 @@ function VoicePlayer({ src, totalSeconds }: { src: string; totalSeconds: number 
         </div>
         <div className="mt-1 text-[11px] tabular-nums text-tg-text-hint">{elapsedDisplay}</div>
       </div>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          cycle();
+        }}
+        aria-label={`Скорость воспроизведения: ${formatSpeed(speed)}`}
+        title="Скорость"
+        className={`shrink-0 inline-flex items-center justify-center min-w-[2.25rem] h-7 px-2 rounded-full text-[11px] font-semibold tabular-nums transition-colors active:scale-95 ${
+          speed !== 1
+            ? "bg-tg-text-accent/15 text-tg-text-accent"
+            : "bg-tg-bg-secondary/60 text-tg-text-hint"
+        }`}
+      >
+        {formatSpeed(speed)}
+      </button>
       <audio
         ref={audioRef}
         src={src}
@@ -242,6 +268,14 @@ function VideoNote({ src, totalSeconds }: { src: string; totalSeconds: number })
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
+  const { speed, cycle } = usePlaybackSpeed();
+
+  // Mirror onto the live element. Same `<video>` is used both inline and
+  // when lifted to the fullscreen overlay, so the rate persists across modes.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (v) v.playbackRate = speed;
+  }, [speed]);
 
   function toggle() {
     const v = videoRef.current;
@@ -334,7 +368,26 @@ function VideoNote({ src, totalSeconds }: { src: string; totalSeconds: number })
           />
         </svg>
       </button>
-        <span className="mt-1.5 text-[11px] tabular-nums text-tg-text-hint">{elapsedDisplay}</span>
+        <div className="mt-1.5 flex items-center gap-2 text-[11px] tabular-nums text-tg-text-hint">
+          <span>{elapsedDisplay}</span>
+          <span aria-hidden>·</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              cycle();
+            }}
+            aria-label={`Скорость воспроизведения: ${formatSpeed(speed)}`}
+            title="Скорость"
+            className={`inline-flex items-center justify-center min-w-[2rem] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums transition-colors active:scale-95 ${
+              speed !== 1
+                ? "bg-tg-text-accent/15 text-tg-text-accent"
+                : "bg-tg-bg-secondary/60 text-tg-text-hint"
+            }`}
+          >
+            {formatSpeed(speed)}
+          </button>
+        </div>
       </div>
     </>
   );
