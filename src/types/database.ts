@@ -266,6 +266,22 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["feedback_claims"]["Insert"]>;
         Relationships: [];
       };
+      app_settings: {
+        Row: {
+          key: string;
+          value: Json;
+          updated_by: number | null;
+          updated_at: string;
+        };
+        Insert: {
+          key: string;
+          value: Json;
+          updated_by?: number | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["app_settings"]["Insert"]>;
+        Relationships: [];
+      };
       feedback_messages: {
         Row: {
           id: number;
