@@ -4,6 +4,7 @@ export const ru = {
   greetingTeacher: "Привет, тренер! Открой мини-приложение, чтобы видеть входящие.",
   greetingStudent: (remaining: string) =>
     `Привет! Я готов слушать. На сегодня у тебя осталось ${remaining}.`,
+  greetingStudentNeutral: "Привет! Я готов слушать.",
   inviteConsumedTeacher: "Привет, тренер! Ссылка активирована.",
   upgradedToTeacher: "Готово — теперь ты тренер.",
   inviteRevokedOrUsed: "Ссылка недействительна или уже использована.",
@@ -15,6 +16,12 @@ export const ru = {
   overQuota: (remaining: string) =>
     `На сегодня осталось ${remaining}. Сократи запись или попробуй завтра.`,
   overQuotaExhausted: "Лимит на сегодня исчерпан. Попробуй завтра.",
+  // Neutral variants used when chat-side quota notifications are off (the
+  // admin toggle in app_settings). Quota is still enforced; the student
+  // sees their remaining time on the Mini App home card instead.
+  quotaRejectedNeutral:
+    "Не удалось отправить. Открой мини-приложение, чтобы посмотреть статус.",
+  acceptedStudentNeutral: "✅ Отправлено.",
   acceptedStudent: (remaining: string) => `✅ Отправлено! Осталось ${remaining} на сегодня.`,
   acceptedStudentLow: (remaining: string) =>
     `✅ Отправлено! ⚠️ Осталось ${remaining} — меньше минуты на сегодня.`,

@@ -12,6 +12,7 @@ import {
   isTgUserBanned,
 } from "@/server/invites";
 import { recordAudit } from "@/server/audit";
+import { getQuotaChatNotificationsEnabled } from "@/server/settings";
 
 export async function handleStart(ctx: Context): Promise<void> {
   const from = ctx.from;
@@ -139,8 +140,12 @@ async function welcomeExistingUser(
     return;
   }
   if (user.role === "student") {
-    const remaining = await getRemainingForToday(user.id, user.tz);
-    await ctx.reply(ru.greetingStudent(formatDuration(remaining)));
+    if (await getQuotaChatNotificationsEnabled()) {
+      const remaining = await getRemainingForToday(user.id, user.tz);
+      await ctx.reply(ru.greetingStudent(formatDuration(remaining)));
+    } else {
+      await ctx.reply(ru.greetingStudentNeutral);
+    }
     return;
   }
   // Legacy 'pending' rows (pre-rework). Should be empty after the migration's

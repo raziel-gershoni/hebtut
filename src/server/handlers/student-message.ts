@@ -7,6 +7,7 @@ import { fanOutToTeachers } from "@/server/notifications";
 import { isTgUserBanned } from "@/server/invites";
 import { userHandle } from "@/lib/handle";
 import { recordAudit } from "@/server/audit";
+import { getQuotaChatNotificationsEnabled } from "@/server/settings";
 
 export async function handleStudentMedia(ctx: Context): Promise<boolean> {
   const msg = ctx.message;
@@ -83,12 +84,18 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
     graceSeconds: serverEnv.OVERFLOW_GRACE_SECONDS,
     messageDuration: duration,
   });
+  // Single read, reused for both the rejection and the success replies below.
+  const quotaChat = await getQuotaChatNotificationsEnabled();
   if (!decision.ok) {
-    await ctx.reply(
-      decision.remainingIncludingGrace > 0
-        ? ru.overQuota(formatDuration(decision.remainingIncludingGrace))
-        : ru.overQuotaExhausted,
-    );
+    if (quotaChat) {
+      await ctx.reply(
+        decision.remainingIncludingGrace > 0
+          ? ru.overQuota(formatDuration(decision.remainingIncludingGrace))
+          : ru.overQuotaExhausted,
+      );
+    } else {
+      await ctx.reply(ru.quotaRejectedNeutral);
+    }
     return true;
   }
 
@@ -133,8 +140,13 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
 
   // Choose the reply: overflow > low-warning > normal. Each takes priority
   // because the more urgent state should not be hidden by the cheerier copy.
+  // When the global toggle is off the entire quota narrative is suppressed —
+  // the student gets a flat "✅ Отправлено." and reads remaining time on the
+  // Mini App dashboard instead.
   let reply: string;
-  if (decision.tomorrowDebit > 0) {
+  if (!quotaChat) {
+    reply = ru.acceptedStudentNeutral;
+  } else if (decision.tomorrowDebit > 0) {
     reply = ru.acceptedStudentOverflow(formatDuration(decision.tomorrowDebit));
   } else if (decision.newRemainingToday > 0 && decision.newRemainingToday <= 60) {
     reply = ru.acceptedStudentLow(formatDuration(decision.newRemainingToday));

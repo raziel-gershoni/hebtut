@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { StudentQuotaCard } from "@/components/StudentQuotaCard";
 
 const ROLE_LABEL: Record<string, string> = {
   pending: "ждём подтверждения",
@@ -11,7 +12,7 @@ const ROLE_LABEL: Record<string, string> = {
 export default function Home() {
   return (
     <AppShell>
-      {({ role, isAdmin, name }) => (
+      {({ jwt, role, isAdmin, name }) => (
         <div className="space-y-6">
           <section className="rounded-2xl bg-tg-bg-section p-5">
             <div className="flex items-center gap-2">
@@ -43,6 +44,8 @@ export default function Home() {
               </p>
             )}
           </section>
+
+          {role === "student" && <StudentQuotaCard jwt={jwt} />}
 
           {(role === "teacher" || isAdmin) && (
             <ActionCard

@@ -9,6 +9,7 @@ import {
 } from "@/components/AdminConnectionsPanel";
 import { TeacherInvites } from "@/components/TeacherInvites";
 import { BannedUsersPanel } from "@/components/BannedUsersPanel";
+import { AdminSettingsPanel } from "@/components/AdminSettingsPanel";
 
 export default function AdminPage() {
   return (
@@ -87,6 +88,7 @@ function AdminBody({ jwt }: { jwt: string }) {
           → Журнал действий
         </Link>
       </div>
+      <AdminSettingsPanel jwt={jwt} />
       <TeacherInvites jwt={jwt} />
       <AdminUsersTable jwt={jwt} users={users} loaded={loaded} refetch={refetch} />
       <BannedUsersPanel jwt={jwt} />
