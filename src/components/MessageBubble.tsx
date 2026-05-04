@@ -234,11 +234,11 @@ function VoicePlayer({ src, totalSeconds }: { src: string; totalSeconds: number 
           cycle();
         }}
         aria-label={`Скорость воспроизведения: ${formatSpeed(speed)}`}
-        title="Скорость"
-        className={`shrink-0 inline-flex items-center justify-center min-w-[2.25rem] h-7 px-2 rounded-full text-[11px] font-semibold tabular-nums transition-colors active:scale-95 ${
+        title="Скорость воспроизведения — нажми, чтобы изменить"
+        className={`shrink-0 inline-flex items-center justify-center min-w-[2.75rem] h-7 px-2.5 rounded-full text-xs font-semibold tabular-nums tracking-tight transition-all duration-150 active:scale-95 ${
           speed !== 1
-            ? "bg-tg-text-accent/15 text-tg-text-accent"
-            : "bg-tg-bg-secondary/60 text-tg-text-hint"
+            ? "bg-tg-text-accent text-white shadow-sm shadow-tg-text-accent/30 ring-1 ring-tg-text-accent/40"
+            : "bg-tg-bg-secondary text-tg-text ring-1 ring-tg-text-hint/30 hover:ring-tg-text-hint/60 hover:bg-tg-bg-section shadow-sm"
         }`}
       >
         {formatSpeed(speed)}
@@ -370,7 +370,6 @@ function VideoNote({ src, totalSeconds }: { src: string; totalSeconds: number })
       </button>
         <div className="mt-1.5 flex items-center gap-2 text-[11px] tabular-nums text-tg-text-hint">
           <span>{elapsedDisplay}</span>
-          <span aria-hidden>·</span>
           <button
             type="button"
             onClick={(e) => {
@@ -378,11 +377,11 @@ function VideoNote({ src, totalSeconds }: { src: string; totalSeconds: number })
               cycle();
             }}
             aria-label={`Скорость воспроизведения: ${formatSpeed(speed)}`}
-            title="Скорость"
-            className={`inline-flex items-center justify-center min-w-[2rem] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums transition-colors active:scale-95 ${
+            title="Скорость воспроизведения — нажми, чтобы изменить"
+            className={`inline-flex items-center justify-center min-w-[2.5rem] h-6 px-2 rounded-full text-[11px] font-semibold tabular-nums tracking-tight transition-all duration-150 active:scale-95 ${
               speed !== 1
-                ? "bg-tg-text-accent/15 text-tg-text-accent"
-                : "bg-tg-bg-secondary/60 text-tg-text-hint"
+                ? "bg-tg-text-accent text-white shadow-sm shadow-tg-text-accent/30 ring-1 ring-tg-text-accent/40"
+                : "bg-tg-bg-secondary text-tg-text ring-1 ring-tg-text-hint/30 hover:ring-tg-text-hint/60 hover:bg-tg-bg-section shadow-sm"
             }`}
           >
             {formatSpeed(speed)}
