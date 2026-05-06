@@ -55,11 +55,40 @@ async function main() {
     console.warn(`${TAG} unexpected list payload: ${JSON.stringify(schedules)}`);
     return;
   }
-  const existing = schedules.find((s) => s?.destination === destination);
-  if (existing) {
-    console.log(
-      `${TAG} schedule already present (id=${existing.scheduleId}, cron=${existing.cron}) — not modifying`,
-    );
+  // Match by URL pathname, not full string equality. Earlier versions of this
+  // script did a strict `s.destination === destination` check, which was
+  // brittle: any drift in scheme (`http` vs `https`), trailing slash, host
+  // (custom domain swap), or even a benign `:443` suffix would cause the
+  // matcher to miss an existing schedule and create a duplicate. Our
+  // `ENDPOINT_PATH` is unique per project, so a path-suffix match is the
+  // correct invariant.
+  const matches = schedules.filter((s) => {
+    if (typeof s?.destination !== "string") return false;
+    try {
+      const p = new URL(s.destination).pathname.replace(/\/$/, "");
+      return p === ENDPOINT_PATH;
+    } catch {
+      return false;
+    }
+  });
+  if (matches.length > 0) {
+    if (matches.length > 1) {
+      // Surface duplicates loudly — they double-fire the cron and waste the
+      // QStash quota. The deploy log is our oversight surface for this.
+      console.warn(
+        `${TAG} found ${matches.length} schedules at ${ENDPOINT_PATH} — duplicates in QStash. Delete extras manually:\n` +
+          matches
+            .map(
+              (m) =>
+                `  - id=${m.scheduleId} cron=${m.cron} destination=${m.destination} createdAt=${m.createdAt ?? "?"}`,
+            )
+            .join("\n"),
+      );
+    } else {
+      console.log(
+        `${TAG} schedule already present (id=${matches[0].scheduleId}, cron=${matches[0].cron}) — not modifying`,
+      );
+    }
     return;
   }
 
