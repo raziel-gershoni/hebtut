@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Create the QStash schedule for /api/cron/expire-claims on first production
-// deploy. Idempotent: if a schedule with the same destination already exists,
-// we leave it alone (so any manually-created schedule survives untouched).
-// Failures never block the build — claim expiry degrades gracefully without
-// the cron, see INFRA.md §5.
+// Create QStash schedules for our cron endpoints on first production deploy.
+// Idempotent: each schedule is matched by URL pathname (so hostname/scheme
+// drift across deploys doesn't spawn duplicates), and existing schedules at
+// the same path are left alone — manually-created schedules survive.
+// Failures never block the build — claim expiry / subscription tick degrade
+// gracefully without the cron, see INFRA.md §5.
 
 const TAG = "[qstash-sync]";
 
@@ -15,14 +16,20 @@ const {
   VERCEL_ENV,
 } = process.env;
 
-const ENDPOINT_PATH = "/api/cron/expire-claims";
-const CRON = "*/5 * * * *";
-// Default to the global endpoint; users on a regional account
-// (e.g. https://qstash-us-east-1.upstash.io) override via QSTASH_URL.
+// Add new entries here when a new cron endpoint is introduced. Each schedule
+// is independently matched + created; failure on one doesn't block the others.
+const SCHEDULES = [
+  { path: "/api/cron/expire-claims", cron: "*/5 * * * *" },
+  // Subscription tick: trial→trial_expired, active→lapsed, frozen→active,
+  // and 24h-pre / day-of renewal reminders. Hourly is enough — quota state
+  // is read on every inbound event so a few-minute lag in the canonical
+  // status flip is invisible to users.
+  { path: "/api/cron/subscriptions", cron: "0 * * * *" },
+];
+
 const QSTASH = `${(QSTASH_URL ?? "https://qstash.upstash.io").replace(/\/$/, "")}/v2/schedules`;
 
 async function main() {
-  // Only sync on production deploys. Previews / local builds are no-ops.
   if (VERCEL_ENV && VERCEL_ENV !== "production") {
     console.log(`${TAG} skip — VERCEL_ENV=${VERCEL_ENV}`);
     return;
@@ -36,15 +43,11 @@ async function main() {
     return;
   }
 
-  // Normalize: if APP_BASE_URL is set to a bare hostname (no scheme), prepend
-  // https:// so QStash accepts the destination. Vercel sometimes provides
-  // hostnames without scheme via VERCEL_URL — same pitfall.
   let base = APP_BASE_URL.replace(/\/$/, "");
   if (!/^https?:\/\//i.test(base)) base = `https://${base}`;
-  const destination = `${base}${ENDPOINT_PATH}`;
   const auth = { Authorization: `Bearer ${QSTASH_TOKEN}` };
 
-  // 1) List schedules and check whether ours already exists.
+  // List once; reuse for every schedule's match check below.
   const listRes = await fetch(QSTASH, { headers: auth });
   if (!listRes.ok) {
     console.warn(`${TAG} list failed (${listRes.status}): ${await listRes.text()}`);
@@ -55,28 +58,31 @@ async function main() {
     console.warn(`${TAG} unexpected list payload: ${JSON.stringify(schedules)}`);
     return;
   }
-  // Match by URL pathname, not full string equality. Earlier versions of this
-  // script did a strict `s.destination === destination` check, which was
-  // brittle: any drift in scheme (`http` vs `https`), trailing slash, host
-  // (custom domain swap), or even a benign `:443` suffix would cause the
-  // matcher to miss an existing schedule and create a duplicate. Our
-  // `ENDPOINT_PATH` is unique per project, so a path-suffix match is the
-  // correct invariant.
+
+  for (const { path, cron } of SCHEDULES) {
+    await syncOne({ path, cron, base, schedules, auth });
+  }
+}
+
+async function syncOne({ path, cron, base, schedules, auth }) {
+  const destination = `${base}${path}`;
+
+  // Match by URL pathname, not full string equality — see comment in the
+  // earlier single-schedule version of this file. Path-based match makes the
+  // matcher robust to hostname/scheme drift.
   const matches = schedules.filter((s) => {
     if (typeof s?.destination !== "string") return false;
     try {
       const p = new URL(s.destination).pathname.replace(/\/$/, "");
-      return p === ENDPOINT_PATH;
+      return p === path;
     } catch {
       return false;
     }
   });
   if (matches.length > 0) {
     if (matches.length > 1) {
-      // Surface duplicates loudly — they double-fire the cron and waste the
-      // QStash quota. The deploy log is our oversight surface for this.
       console.warn(
-        `${TAG} found ${matches.length} schedules at ${ENDPOINT_PATH} — duplicates in QStash. Delete extras manually:\n` +
+        `${TAG} found ${matches.length} schedules at ${path} — duplicates in QStash. Delete extras manually:\n` +
           matches
             .map(
               (m) =>
@@ -86,33 +92,35 @@ async function main() {
       );
     } else {
       console.log(
-        `${TAG} schedule already present (id=${matches[0].scheduleId}, cron=${matches[0].cron}) — not modifying`,
+        `${TAG} ${path}: schedule already present (id=${matches[0].scheduleId}, cron=${matches[0].cron}) — not modifying`,
       );
     }
     return;
   }
 
-  // 2) Create the schedule. The destination URL goes directly into the
-  // path — NOT URL-encoded. QStash's router treats the path opaquely, so
-  // percent-encoded `https%3A%2F%2F…` is rejected as having no scheme.
+  // Create. Destination URL goes directly into the path — NOT URL-encoded.
+  // QStash's router treats the path opaquely; encoded URLs are rejected.
   const createRes = await fetch(`${QSTASH}/${destination}`, {
     method: "POST",
     headers: {
       ...auth,
-      "Upstash-Cron": CRON,
+      "Upstash-Cron": cron,
       "Upstash-Method": "POST",
-      // Upstash-Forward-* headers have the prefix stripped and forwarded to
-      // the destination. The bare `Authorization` header would be intercepted
-      // by QStash for its own signature, hence the prefix.
-      "Upstash-Forward-Authorization": `Bearer ${CRON_SECRET}`,
+      // Upstash-Forward-* prefix is stripped before forwarding; the bare
+      // Authorization header would be intercepted by QStash's own auth.
+      "Upstash-Forward-Authorization": `Bearer ${process.env.CRON_SECRET}`,
     },
   });
   if (!createRes.ok) {
-    console.warn(`${TAG} create failed (${createRes.status}): ${await createRes.text()}`);
+    console.warn(
+      `${TAG} ${path}: create failed (${createRes.status}): ${await createRes.text()}`,
+    );
     return;
   }
   const body = await createRes.json().catch(() => ({}));
-  console.log(`${TAG} created schedule (id=${body?.scheduleId ?? "?"}) → ${destination}`);
+  console.log(
+    `${TAG} ${path}: created schedule (id=${body?.scheduleId ?? "?"}, cron=${cron}) → ${destination}`,
+  );
 }
 
 main().catch((e) => {
