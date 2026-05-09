@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { StudentQuotaCard } from "@/components/StudentQuotaCard";
+import { SubscriberSummary } from "@/components/SubscriberSummary";
 
 const ROLE_LABEL: Record<string, string> = {
   pending: "ждём подтверждения",
@@ -45,7 +45,7 @@ export default function Home() {
             )}
           </section>
 
-          {role === "student" && <StudentQuotaCard jwt={jwt} />}
+          {role === "student" && <SubscriberSummary jwt={jwt} />}
 
           {(role === "teacher" || isAdmin) && (
             <ActionCard
