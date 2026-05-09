@@ -118,14 +118,31 @@ export async function pickMotivationForUser(input: {
 }): Promise<{ key: string; text: string }> {
   const sb = getServiceRoleClient();
 
+  // "Teacher waiting for reply" = the last message in the thread is from a
+  // teacher AND the student hasn't responded since. We approximate by
+  // comparing the most-recent outbound to the most-recent inbound timestamps;
+  // outbound > inbound (or only outbound exists) → teacher is waiting.
   const { data: lastOutbound } = await sb
     .from("messages")
-    .select("direction, created_at")
+    .select("created_at")
     .eq("student_id", input.userId)
+    .eq("direction", "out")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const teacherWaitingForReply = lastOutbound?.direction === "out";
+  const { data: lastInbound } = await sb
+    .from("messages")
+    .select("created_at")
+    .eq("student_id", input.userId)
+    .eq("direction", "in")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const teacherWaitingForReply =
+    lastOutbound != null &&
+    (!lastInbound ||
+      new Date(lastOutbound.created_at).getTime() >
+        new Date(lastInbound.created_at).getTime());
 
   const { data: row } = await sb
     .from("subscriptions")
