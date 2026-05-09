@@ -8,6 +8,7 @@ import { isTgUserBanned } from "@/server/invites";
 import { userHandle } from "@/lib/handle";
 import { recordAudit } from "@/server/audit";
 import { getQuotaChatNotificationsEnabled } from "@/server/settings";
+import { getStatus, canSendMedia, shouldReplyToLockedUser } from "@/server/subscriptions";
 
 export async function handleStudentMedia(ctx: Context): Promise<boolean> {
   const msg = ctx.message;
@@ -74,6 +75,44 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
   if (user.role !== "student") {
     // teacher/admin sending media outside of a reply — not our concern here.
     return false;
+  }
+
+  // Subscription gate. Locked statuses (trial_expired / lapsed / payment_failed
+  // / frozen) reject the message before we touch quota. We reply once per 24h
+  // so a student furiously retrying doesn't get the same template ten times in
+  // a row — the silent rejections still fail closed (no fan-out, no row).
+  const sub = await getStatus(user.id);
+  if (sub && !canSendMedia(sub.derived)) {
+    if (shouldReplyToLockedUser(sub.raw.last_lockout_replied_at, new Date())) {
+      if (sub.derived.kind === "frozen") {
+        const until = sub.derived.untilDate.toLocaleDateString("ru-RU", {
+          day: "2-digit",
+          month: "2-digit",
+        });
+        await ctx.reply(ru.frozenNotice(until));
+      } else {
+        await ctx.reply(ru.lockedTemplateText, {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: ru.lockedTemplateButton,
+                  url: `https://t.me/${serverEnv.TELEGRAM_BOT_USERNAME}?startapp=pay`,
+                },
+              ],
+            ],
+          },
+        });
+      }
+      await sb
+        .from("subscriptions")
+        .update({
+          last_lockout_replied_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", user.id);
+    }
+    return true;
   }
 
   // Duration is read straight from the webhook payload — never download to measure.

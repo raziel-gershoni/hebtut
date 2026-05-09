@@ -22,6 +22,16 @@ export const ru = {
   quotaRejectedNeutral:
     "Не удалось отправить. Открой мини-приложение, чтобы посмотреть статус.",
   acceptedStudentNeutral: "✅ Отправлено.",
+  // Access gate: shown ONCE per 24h to a locked subscriber when they try to
+  // send media. Server still rejects the message; this template gives them a
+  // way back via the Mini App. Subsequent retries within 24h are silent.
+  lockedTemplateText:
+    "Сейчас сообщение не дошло до тренера.\n" +
+    "Доступ к практике закончился, поэтому новые сообщения не передаются.\n\n" +
+    "Чтобы продолжить разговор, нужно получить доступ.",
+  lockedTemplateButton: "Оплатить",
+  frozenNotice: (until: string) =>
+    `Заморозка активна до ${until}. Сообщения снова начнут приходить тренеру после неё.`,
   acceptedStudent: (remaining: string) => `✅ Отправлено! Осталось ${remaining} на сегодня.`,
   acceptedStudentLow: (remaining: string) =>
     `✅ Отправлено! ⚠️ Осталось ${remaining} — меньше минуты на сегодня.`,
