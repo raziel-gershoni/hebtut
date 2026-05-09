@@ -117,7 +117,12 @@ function StatusStrip({ status }: { status: ApiStatus }) {
 function stripText(s: ApiStatus): string | null {
   switch (s.kind) {
     case "trial":
-      return `Пробный период • ${s.daysLeft} ${pluralDay(s.daysLeft)} ${s.daysLeft === 1 ? "остался" : "осталось"}`;
+      // Verb agreement must match the noun's plural class — "21 день остался"
+      // (masc sing), "22 дня осталось" (paucal), "5 дней осталось" (genitive
+      // plural). The previous code hard-coded `=== 1` which broke at 21 / 31.
+      return `Пробный период • ${s.daysLeft} ${pluralDay(s.daysLeft)} ${
+        isSingularDay(s.daysLeft) ? "остался" : "осталось"
+      }`;
     case "trial_ending":
       return s.daysLeft === 0
         ? "Пробный период заканчивается сегодня"
@@ -157,6 +162,11 @@ function pluralDay(n: number): string {
   if (n10 === 1) return "день";
   if (n10 >= 2 && n10 <= 4) return "дня";
   return "дней";
+}
+
+/** True for n where Russian uses the masculine-singular form ("1 день остался" / "21 день остался"). */
+function isSingularDay(n: number): boolean {
+  return n % 10 === 1 && n % 100 !== 11;
 }
 
 /* -------------------------------------------------------------------------
