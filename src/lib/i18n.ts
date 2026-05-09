@@ -39,6 +39,10 @@ export const ru = {
   trialEndsToday: "Сегодня последний день пробного периода. Не теряй темп — оплати, пока не остановилось.",
   subscriptionEndsTomorrow: "Завтра заканчивается подписка. Продли, чтобы тренер не пропадал.",
   subscriptionEndsToday: "Сегодня заканчивается подписка. Продли — практика продолжится без перерыва.",
+  freezeActivated: (days: number) => {
+    const word = days === 1 ? "день" : days >= 2 && days <= 4 ? "дня" : "дней";
+    return `Заморозка включена на ${days} ${word}.\nПодписка автоматически продлится.`;
+  },
   referralCreditApplied: (days: number) =>
     `🎁 Твой друг оплатил подписку — твой доступ продлён на ${days} ${days === 1 ? "день" : days >= 2 && days <= 4 ? "дня" : "дней"}.`,
   acceptedStudent: (remaining: string) => `✅ Отправлено! Осталось ${remaining} на сегодня.`,

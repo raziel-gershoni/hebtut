@@ -5,6 +5,47 @@ import { recordAudit } from "@/server/audit";
 
 const REFERRER_BONUS_CAP_DAYS = 90;
 const REFERRAL_BONUS_PER_SIDE_DAYS = 30;
+export const FREEZE_BUDGET_DAYS_PER_MONTH = 3;
+
+/**
+ * Returns the freeze budget remaining for THIS calendar month, lazily
+ * resetting `freeze_days_used_in_period` when the month rolls over since
+ * the last reset. Pure but the writeback is async — pulls + recomputes from
+ * the row, then writes back the reset if needed.
+ */
+export async function lazyResetFreezeBudget(userId: number): Promise<number> {
+  const sb = getServiceRoleClient();
+  const { data: row } = await sb
+    .from("subscriptions")
+    .select("freeze_days_used_in_period, freeze_period_started_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!row) return FREEZE_BUDGET_DAYS_PER_MONTH;
+
+  const now = new Date();
+  const lastReset = row.freeze_period_started_at
+    ? new Date(row.freeze_period_started_at)
+    : null;
+  const monthRolledOver =
+    !lastReset ||
+    lastReset.getUTCFullYear() !== now.getUTCFullYear() ||
+    lastReset.getUTCMonth() !== now.getUTCMonth();
+  if (monthRolledOver) {
+    await sb
+      .from("subscriptions")
+      .update({
+        freeze_days_used_in_period: 0,
+        freeze_period_started_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      })
+      .eq("user_id", userId);
+    return FREEZE_BUDGET_DAYS_PER_MONTH;
+  }
+  return Math.max(
+    0,
+    FREEZE_BUDGET_DAYS_PER_MONTH - (row.freeze_days_used_in_period ?? 0),
+  );
+}
 
 export type SubscriptionRow = Database["public"]["Tables"]["subscriptions"]["Row"];
 
