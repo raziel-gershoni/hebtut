@@ -12,6 +12,11 @@ export const FREEZE_BUDGET_DAYS_PER_MONTH = 3;
  * resetting `freeze_days_used_in_period` when the month rolls over since
  * the last reset. Pure but the writeback is async — pulls + recomputes from
  * the row, then writes back the reset if needed.
+ *
+ * TODO(tz-budget): Roll-over check uses UTC month boundaries, so a student
+ * in Auckland/Apia near month-end sees their budget reset up to ~14h early
+ * or late vs. their local calendar. Subscriptions already store
+ * response_window_tz; using that here would be a small follow-up.
  */
 export async function lazyResetFreezeBudget(userId: number): Promise<number> {
   const sb = getServiceRoleClient();
@@ -235,34 +240,26 @@ export async function applySuccessfulPayment(input: {
   if (!row) return null;
 
   const now = new Date();
-  // Anchor: if the user is currently active or trial-with-time-left, extend
-  // from the existing end. Otherwise (lapsed, trial_expired, payment_failed),
-  // anchor at "now" — they're not in a current period.
-  const existingEnd = (() => {
-    if (
-      (row.status === "active" || row.status === "frozen") &&
-      row.current_period_ends_at &&
-      new Date(row.current_period_ends_at) > now
-    ) {
-      return new Date(row.current_period_ends_at);
-    }
-    if (row.status === "trial" && new Date(row.trial_ends_at) > now) {
-      return new Date(row.trial_ends_at);
-    }
-    return now;
-  })();
-  const newEnd = addDays(existingEnd, input.periodDays);
-
-  // First paid period = no current_period_starts_at yet.
+  const existingEnd = pickPaymentAnchor(row, now);
+  const baseEnd = addDays(existingEnd, input.periodDays);
   const wasFirstPaid = row.current_period_starts_at == null;
+
+  // Compute the FINAL end date up front so the audit row records the same
+  // value the row will hold post-update. Pre-fix this happened in two
+  // separate updates with the audit captured between them, leaving a
+  // diagnostic mismatch when referral bonus applied.
+  const refereeWillGetReferralBonus = wasFirstPaid && row.referred_by_user_id != null;
+  const refereeFinalEnd = refereeWillGetReferralBonus
+    ? addDays(baseEnd, REFERRAL_BONUS_PER_SIDE_DAYS)
+    : baseEnd;
 
   await sb
     .from("subscriptions")
     .update({
       status: "active",
       current_period_starts_at: row.current_period_starts_at ?? now.toISOString(),
-      current_period_ends_at: newEnd.toISOString(),
-      next_renewal_at: newEnd.toISOString(),
+      current_period_ends_at: refereeFinalEnd.toISOString(),
+      next_renewal_at: refereeFinalEnd.toISOString(),
       provider: input.provider,
       provider_subscription_id: input.providerPaymentId,
       last_lockout_replied_at: null,
@@ -281,33 +278,24 @@ export async function applySuccessfulPayment(input: {
       provider_payment_id: input.providerPaymentId,
       period_days: input.periodDays,
       first_paid_period: wasFirstPaid,
-      new_period_ends_at: newEnd.toISOString(),
+      // Reflects the row's final state (incl. referral bonus when it applied).
+      new_period_ends_at: refereeFinalEnd.toISOString(),
+      referral_bonus_applied: refereeWillGetReferralBonus,
     },
   });
 
-  // Referral credits — only on the user's FIRST successful paid period, and
-  // only if they were referred. Both sides get +30d; the referrer caps at
-  // +90d total credit ever, so we look up how much they've already received.
+  // Referrer-side credit — only on referee's FIRST successful paid period.
+  // Capped at REFERRER_BONUS_CAP_DAYS total ever, summed from prior
+  // billing.referral_credit audit rows.
   let referrerCreditedDays = 0;
-  if (wasFirstPaid && row.referred_by_user_id) {
-    const refereeNewEndAfterCredit = addDays(newEnd, REFERRAL_BONUS_PER_SIDE_DAYS);
-    await sb
-      .from("subscriptions")
-      .update({
-        current_period_ends_at: refereeNewEndAfterCredit.toISOString(),
-        next_renewal_at: refereeNewEndAfterCredit.toISOString(),
-        updated_at: now.toISOString(),
-      })
-      .eq("user_id", input.userId);
-
-    // Look up the referrer; bump their period_ends or trial_ends as needed.
+  if (refereeWillGetReferralBonus && row.referred_by_user_id != null) {
     const { data: refRow } = await sb
       .from("subscriptions")
       .select("*")
       .eq("user_id", row.referred_by_user_id)
       .maybeSingle();
     if (refRow) {
-      // Audit how much referral credit has already been granted to enforce the cap.
+      // Cap is per-referrer-lifetime, summed from prior credit-audit rows.
       const { data: priorAudits } = await sb
         .from("audit_events")
         .select("meta")
@@ -321,19 +309,7 @@ export async function applySuccessfulPayment(input: {
       const remainingCap = Math.max(0, REFERRER_BONUS_CAP_DAYS - alreadyGranted);
       const grant = Math.min(REFERRAL_BONUS_PER_SIDE_DAYS, remainingCap);
       if (grant > 0) {
-        const refExistingEnd = (() => {
-          if (
-            refRow.current_period_ends_at &&
-            new Date(refRow.current_period_ends_at) > now
-          ) {
-            return new Date(refRow.current_period_ends_at);
-          }
-          if (refRow.status === "trial" && new Date(refRow.trial_ends_at) > now) {
-            return new Date(refRow.trial_ends_at);
-          }
-          return now;
-        })();
-        const refNewEnd = addDays(refExistingEnd, grant);
+        const refNewEnd = addDays(pickPaymentAnchor(refRow, now), grant);
         const refIsActive =
           refRow.status === "active" || refRow.status === "frozen";
         // Don't downgrade the referrer's status — only push their end out.
@@ -362,15 +338,40 @@ export async function applySuccessfulPayment(input: {
         referrerCreditedDays = grant;
       }
     }
-
-    return {
-      wasFirstPaid,
-      refereeNewEndsAt: refereeNewEndAfterCredit,
-      referrerCreditedDays,
-    };
   }
 
-  return { wasFirstPaid, refereeNewEndsAt: newEnd, referrerCreditedDays: 0 };
+  return { wasFirstPaid, refereeNewEndsAt: refereeFinalEnd, referrerCreditedDays };
+}
+
+/**
+ * Pick the date a new period extension should anchor on:
+ * - Active or frozen with a future period_ends_at → anchor on that (so paying
+ *   mid-period stacks).
+ * - Trial with time left → anchor on trial_ends_at (so paying mid-trial
+ *   doesn't waste the trial days).
+ * - Anything else (lapsed / trial_expired / payment_failed / period in past)
+ *   → anchor at `now`.
+ *
+ * Pure — extracted so the four anchor cases can be unit-tested without DB.
+ */
+export function pickPaymentAnchor(
+  row: Pick<
+    SubscriptionRow,
+    "status" | "current_period_ends_at" | "trial_ends_at"
+  >,
+  now: Date,
+): Date {
+  if (
+    (row.status === "active" || row.status === "frozen") &&
+    row.current_period_ends_at &&
+    new Date(row.current_period_ends_at) > now
+  ) {
+    return new Date(row.current_period_ends_at);
+  }
+  if (row.status === "trial" && new Date(row.trial_ends_at) > now) {
+    return new Date(row.trial_ends_at);
+  }
+  return now;
 }
 
 async function maybeWriteBackTransitions(

@@ -98,6 +98,9 @@ export async function GET(req: NextRequest): Promise<Response> {
       },
       streak_days: streakDays,
       motivation: { key: motivation.key, text: motivation.text },
+      // TODO(progress-metric): spec calls for a single rotating metric like
+      // "+12% speed" / "fewer errors" / "48 words" once an analysis pipeline
+      // exists. null hides the row in the card.
       progress_metric: null,
     },
     { headers: noStoreHeaders },

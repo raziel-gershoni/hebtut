@@ -3,6 +3,7 @@ import {
   deriveStatus,
   canSendMedia,
   shouldReplyToLockedUser,
+  pickPaymentAnchor,
   type SubscriptionRow,
 } from "@/server/subscriptions";
 
@@ -157,6 +158,50 @@ describe("shouldReplyToLockedUser", () => {
   it("replies when last reply was much older", () => {
     const week = new Date(NOW.getTime() - 7 * 86_400_000).toISOString();
     expect(shouldReplyToLockedUser(week, NOW)).toBe(true);
+  });
+});
+
+describe("pickPaymentAnchor", () => {
+  it("anchors on current_period_ends_at when active and in the future (stacks)", () => {
+    const r = row({
+      status: "active",
+      current_period_ends_at: "2026-06-01T00:00:00Z",
+    });
+    expect(pickPaymentAnchor(r, NOW).toISOString()).toBe("2026-06-01T00:00:00.000Z");
+  });
+  it("anchors on current_period_ends_at when frozen with a future end", () => {
+    const r = row({
+      status: "frozen",
+      current_period_ends_at: "2026-06-15T00:00:00Z",
+      frozen_until: "2026-05-15T00:00:00Z",
+    });
+    expect(pickPaymentAnchor(r, NOW).toISOString()).toBe("2026-06-15T00:00:00.000Z");
+  });
+  it("anchors on trial_ends_at when still in trial (don't waste trial days)", () => {
+    const r = row({ status: "trial", trial_ends_at: "2026-05-11T00:00:00Z" });
+    expect(pickPaymentAnchor(r, NOW).toISOString()).toBe("2026-05-11T00:00:00.000Z");
+  });
+  it("anchors at now when lapsed", () => {
+    const r = row({
+      status: "lapsed",
+      current_period_ends_at: "2026-04-01T00:00:00Z",
+    });
+    expect(pickPaymentAnchor(r, NOW).getTime()).toBe(NOW.getTime());
+  });
+  it("anchors at now when trial_expired", () => {
+    const r = row({ status: "trial_expired" });
+    expect(pickPaymentAnchor(r, NOW).getTime()).toBe(NOW.getTime());
+  });
+  it("anchors at now when payment_failed", () => {
+    const r = row({ status: "payment_failed" });
+    expect(pickPaymentAnchor(r, NOW).getTime()).toBe(NOW.getTime());
+  });
+  it("anchors at now when active but period already past (cron didn't tick yet)", () => {
+    const r = row({
+      status: "active",
+      current_period_ends_at: "2026-04-01T00:00:00Z",
+    });
+    expect(pickPaymentAnchor(r, NOW).getTime()).toBe(NOW.getTime());
   });
 });
 
