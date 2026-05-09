@@ -59,6 +59,10 @@ const ServerSchema = z.object({
   // today; the part beyond DAILY_QUOTA is debited against tomorrow.
   OVERFLOW_GRACE_SECONDS: z.coerce.number().int().nonnegative().default(60),
   CLAIM_TTL_MINUTES: z.coerce.number().int().positive().default(15),
+  // Telegram Stars price for one 30-day subscription period. Stars are 1:1
+  // with USD-cents at TG's rate; 100 stars ≈ $1.50 at the time of writing.
+  // Tune via env without a deploy of code changes.
+  MONTHLY_SUBSCRIPTION_STARS: z.coerce.number().int().positive().default(100),
   DEFAULT_TZ: z.string().default("Asia/Jerusalem"),
   CRON_SECRET: z.string().min(8),
 });
