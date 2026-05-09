@@ -8,6 +8,13 @@ export type UserStatus = "active" | "suspended";
 export type MessageDirection = "in" | "out";
 export type MessageKind = "voice" | "video_note";
 export type MessageStatus = "pending" | "answered" | "expired" | "orphaned";
+export type SubscriptionStatus =
+  | "trial"
+  | "active"
+  | "trial_expired"
+  | "lapsed"
+  | "payment_failed"
+  | "frozen";
 
 export interface Database {
   public: {
@@ -264,6 +271,60 @@ export interface Database {
           expires_at: string;
         };
         Update: Partial<Database["public"]["Tables"]["feedback_claims"]["Insert"]>;
+        Relationships: [];
+      };
+      subscriptions: {
+        Row: {
+          user_id: number;
+          status: SubscriptionStatus;
+          trial_started_at: string;
+          trial_ends_at: string;
+          current_period_starts_at: string | null;
+          current_period_ends_at: string | null;
+          next_renewal_at: string | null;
+          freeze_days_used_in_period: number;
+          freeze_period_started_at: string | null;
+          frozen_until: string | null;
+          response_window_start: string | null;
+          response_window_end: string | null;
+          response_window_tz: string;
+          provider: string | null;
+          provider_subscription_id: string | null;
+          provider_customer_id: string | null;
+          referred_by_user_id: number | null;
+          last_motivation_key: string | null;
+          last_motivation_shown_on: string | null;
+          last_lockout_replied_at: string | null;
+          last_renewal_reminder_sent_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: number;
+          status?: SubscriptionStatus;
+          trial_started_at?: string;
+          trial_ends_at?: string;
+          current_period_starts_at?: string | null;
+          current_period_ends_at?: string | null;
+          next_renewal_at?: string | null;
+          freeze_days_used_in_period?: number;
+          freeze_period_started_at?: string | null;
+          frozen_until?: string | null;
+          response_window_start?: string | null;
+          response_window_end?: string | null;
+          response_window_tz?: string;
+          provider?: string | null;
+          provider_subscription_id?: string | null;
+          provider_customer_id?: string | null;
+          referred_by_user_id?: number | null;
+          last_motivation_key?: string | null;
+          last_motivation_shown_on?: string | null;
+          last_lockout_replied_at?: string | null;
+          last_renewal_reminder_sent_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["subscriptions"]["Insert"]>;
         Relationships: [];
       };
       app_settings: {
