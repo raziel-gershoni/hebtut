@@ -208,7 +208,20 @@ With three Telegram accounts (or a friend + a second device):
 
 If any step fails, check Vercel function logs and Supabase tables.
 
-## 9. Optional: reduce CLAIM_TTL for testing the cron
+## 9. Support flow & no-pay video re-engagement
+
+Students reach support from the Mini App home (`/` → "Поддержка" → `/feedback`)
+or from a bot DM. Both paths land in the same `feedback_messages` thread,
+which admins claim and reply to from `/admin/feedback`. There's no separate
+support inbox to manage.
+
+When a student lapses without paying, the bot may DM them a short video
+asking "почему решили не оплачивать?" (sent manually by an admin for now —
+URM automation is a future task). The student replies in chat; the reply
+lands in the same `/feedback` thread as any other support message — no
+extra wiring.
+
+## 10. Optional: reduce CLAIM_TTL for testing the cron
 
 Temporarily set `CLAIM_TTL_MINUTES=1` in Vercel env, redeploy, claim a message, then wait up to `CLAIM_TTL_MINUTES + 5` minutes (1 min for the claim to go stale + up to 5 min for the next QStash tick):
 

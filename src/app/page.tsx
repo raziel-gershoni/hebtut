@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { SubscriberSummary } from "@/components/SubscriberSummary";
+import { MiniAppMenu } from "@/components/MiniAppMenu";
 
 const ROLE_LABEL: Record<string, string> = {
   pending: "ждём подтверждения",
@@ -45,7 +46,12 @@ export default function Home() {
             )}
           </section>
 
-          {role === "student" && <SubscriberSummary jwt={jwt} />}
+          {role === "student" && (
+            <>
+              <SubscriberSummary jwt={jwt} />
+              <MiniAppMenu />
+            </>
+          )}
 
           {(role === "teacher" || isAdmin) && (
             <ActionCard
@@ -60,16 +66,18 @@ export default function Home() {
             />
           )}
 
-          <ActionCard
-            href={isAdmin ? "/admin/feedback" : "/feedback"}
-            title="Обратная связь"
-            subtitle={
-              isAdmin
-                ? "Сообщения от пользователей в админ-пул"
-                : "Связаться с админом"
-            }
-            icon="💬"
-          />
+          {role !== "student" && (
+            <ActionCard
+              href={isAdmin ? "/admin/feedback" : "/feedback"}
+              title="Обратная связь"
+              subtitle={
+                isAdmin
+                  ? "Сообщения от пользователей в админ-пул"
+                  : "Связаться с админом"
+              }
+              icon="💬"
+            />
+          )}
 
           {isAdmin && (
             <ActionCard
