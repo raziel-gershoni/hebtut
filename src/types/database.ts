@@ -329,6 +329,38 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["subscriptions"]["Insert"]>;
         Relationships: [];
       };
+      scheduled_outbound: {
+        Row: {
+          id: number;
+          student_id: number;
+          teacher_id: number;
+          kind: MessageKind;
+          file_id: string;
+          duration: number;
+          original_message_id: number | null;
+          tg_chat_id: number;
+          deliver_at: string;
+          status: "queued" | "delivered" | "failed" | "cancelled";
+          delivered_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          student_id: number;
+          teacher_id: number;
+          kind: MessageKind;
+          file_id: string;
+          duration: number;
+          original_message_id?: number | null;
+          tg_chat_id: number;
+          deliver_at: string;
+          status?: "queued" | "delivered" | "failed" | "cancelled";
+          delivered_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["scheduled_outbound"]["Insert"]>;
+        Relationships: [];
+      };
       app_settings: {
         Row: {
           key: string;

@@ -25,6 +25,10 @@ const SCHEDULES = [
   // is read on every inbound event so a few-minute lag in the canonical
   // status flip is invisible to users.
   { path: "/api/cron/subscriptions", cron: "0 * * * *" },
+  // Scheduled-outbound delivery: drains teacher-initiated messages that
+  // were held while the student's response window was closed. Once a
+  // minute keeps the apparent latency low when the window opens.
+  { path: "/api/cron/deliver-scheduled", cron: "*/1 * * * *" },
 ];
 
 const QSTASH = `${(QSTASH_URL ?? "https://qstash.upstash.io").replace(/\/$/, "")}/v2/schedules`;

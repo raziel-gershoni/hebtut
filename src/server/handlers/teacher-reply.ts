@@ -7,6 +7,8 @@ import { editAllNotificationsForMessage } from "@/server/notifications";
 import { isTgUserBanned } from "@/server/invites";
 import { userHandle } from "@/lib/handle";
 import { recordAudit } from "@/server/audit";
+import { nextWindowOpen } from "@/server/response-window";
+import { formatInTimeZone } from "date-fns-tz";
 
 export interface ReplyContext {
   replyToMessageId: number;
@@ -140,6 +142,52 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
   const kind: "voice" | "video_note" = voice ? "voice" : "video_note";
   const fileId = (voice?.file_id ?? note?.file_id) as string;
   const duration = (voice?.duration ?? note?.duration ?? 0) as number;
+
+  // Response-window gate. Replies to a student-initiated thread (`original`
+  // is set) deliver immediately — the conversational expectation is "now."
+  // Pure initiation (`original === null`) is held until the student's
+  // response window opens, if they've configured one.
+  if (!original) {
+    const { data: sub } = await sb
+      .from("subscriptions")
+      .select("response_window_start, response_window_end, response_window_tz")
+      .eq("user_id", prompt.student_id)
+      .maybeSingle();
+    const nextOpen = sub
+      ? nextWindowOpen(
+          new Date(),
+          sub.response_window_start,
+          sub.response_window_end,
+          sub.response_window_tz,
+        )
+      : null;
+    if (nextOpen) {
+      await sb.from("scheduled_outbound").insert({
+        student_id: prompt.student_id,
+        teacher_id: teacher.id,
+        kind,
+        file_id: fileId,
+        duration,
+        original_message_id: null,
+        tg_chat_id: student.tg_chat_id,
+        deliver_at: nextOpen.toISOString(),
+      });
+      await recordAudit({
+        action: "message.scheduled",
+        actorId: teacher.id,
+        subjectType: "user",
+        subjectId: prompt.student_id,
+        meta: { kind, duration, deliver_at: nextOpen.toISOString() },
+      });
+      const localTime = formatInTimeZone(
+        nextOpen,
+        sub?.response_window_tz ?? "Asia/Jerusalem",
+        "HH:mm",
+      );
+      await ctx.reply(ru.teacherReplyScheduled(localTime));
+      return true;
+    }
+  }
 
   // TG-reply to the student's original message when one exists. Initiation
   // prompts have no original — the message lands as a fresh top-level note.

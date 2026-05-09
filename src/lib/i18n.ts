@@ -53,6 +53,8 @@ export const ru = {
   teacherReplyMissingContext:
     "Чтобы ответить ученику, открой мини-приложение, нажми «Ответить» рядом с его сообщением, и потом свайпни по подсказке.",
   teacherReplyDelivered: "✅ Ответ отправлен ученику.",
+  teacherReplyScheduled: (time: string) =>
+    `✅ Запланировано. Ученик получит сообщение в ${time} — он попросил приходить только в это время.`,
   teacherReplyFailed: "Не удалось отправить ответ. Попробуй ещё раз через мини-приложение.",
   teacherClaimPrompt: (studentName: string, dur: string, when: string) =>
     `📩 От: ${studentName}. Голосовое ${dur}, отправлено ${when}. Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
