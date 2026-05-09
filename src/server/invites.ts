@@ -2,6 +2,23 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { userHandle } from "@/lib/handle";
 
 const PAYLOAD_PREFIX = "invite_";
+const REF_PREFIX = "ref_";
+
+/**
+ * Strips the `ref_` prefix and validates a referral token's shape. Same
+ * length / charset bounds as invite tokens — see parseInvitePayload.
+ */
+export function parseRefPayload(payload: string | undefined | null): string | null {
+  if (!payload) return null;
+  if (!payload.startsWith(REF_PREFIX)) return null;
+  const token = payload.slice(REF_PREFIX.length);
+  if (!/^[A-Za-z0-9_-]{8,32}$/.test(token)) return null;
+  return token;
+}
+
+export function buildReferralUrl(botUsername: string, token: string): string {
+  return `https://t.me/${botUsername}?start=${REF_PREFIX}${token}`;
+}
 
 /**
  * Strips the `invite_` prefix and validates the token's shape. Returns null if

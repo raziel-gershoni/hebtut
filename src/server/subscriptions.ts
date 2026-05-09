@@ -121,6 +121,11 @@ export function deriveStatus(row: SubscriptionRow, now: Date): DerivedStatus {
  * transitions that have crossed a time boundary since the last access.
  * Hot path: called from the home-screen summary fetch and the access gate.
  *
+ * If the user has no subscription row yet (e.g., a student created after
+ * the initial backfill), one is provisioned with the default 3-day trial
+ * starting now. This keeps the access gate & the home card consistent for
+ * every student, regardless of when they joined.
+ *
  * Writebacks are best-effort — if the update fails the next call retries.
  */
 export async function getStatus(
@@ -132,7 +137,28 @@ export async function getStatus(
     .select("*")
     .eq("user_id", userId)
     .maybeSingle();
-  if (!raw) return null;
+  if (!raw) {
+    // Provision a fresh trial. We INSERT (not UPSERT) so we audit the
+    // creation distinctly from a re-read. Race-safe: a duplicate insert from
+    // a concurrent caller raises a primary-key conflict; we catch and re-read.
+    const { error } = await sb
+      .from("subscriptions")
+      .insert({ user_id: userId });
+    if (error && error.code !== "23505") {
+      console.warn("subscription provisioning failed", {
+        user_id: userId,
+        reason: error.message,
+      });
+      return null;
+    }
+    const { data: provisioned } = await sb
+      .from("subscriptions")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!provisioned) return null;
+    return { raw: provisioned, derived: deriveStatus(provisioned, new Date()) };
+  }
 
   const now = new Date();
   const derived = deriveStatus(raw, now);

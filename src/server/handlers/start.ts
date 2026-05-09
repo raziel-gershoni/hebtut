@@ -5,6 +5,7 @@ import { getRemainingForToday } from "@/server/quota";
 import { refreshUserAvatar } from "@/server/avatars";
 import {
   parseInvitePayload,
+  parseRefPayload,
   isInviteValid,
   consumeInviteAndUpgrade,
   createTeacherWithInvite,
@@ -37,6 +38,7 @@ export async function handleStart(ctx: Context): Promise<void> {
 
   const payload = typeof ctx.match === "string" ? ctx.match : "";
   const token = parseInvitePayload(payload);
+  const refToken = parseRefPayload(payload);
 
   if (existing) {
     if (existing.status === "suspended") {
@@ -106,12 +108,42 @@ export async function handleStart(ctx: Context): Promise<void> {
   });
   if (student) {
     await refreshUserAvatar(student.id, from.id);
+    // Referral attribution: only valid for fresh signups, never re-attribution
+    // for an existing student. Look up the referrer by token; ignore unknown
+    // tokens silently (don't reveal whether a token exists).
+    if (refToken) {
+      const { data: referrer } = await sb
+        .from("users")
+        .select("id")
+        .eq("referral_token", refToken)
+        .maybeSingle();
+      if (referrer && referrer.id !== student.id) {
+        // Upsert: a student row may not have a subscription yet (lazy
+        // provisioning), so we create-with-attribution in one shot rather
+        // than count on getStatus running first.
+        await sb.from("subscriptions").upsert(
+          {
+            user_id: student.id,
+            referred_by_user_id: referrer.id,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id" },
+        );
+        await recordAudit({
+          action: "referral.attributed",
+          actorId: student.id,
+          subjectType: "user",
+          subjectId: student.id,
+          meta: { referrer_user_id: referrer.id },
+        });
+      }
+    }
     await recordAudit({
       action: "signup.student",
       actorId: student.id,
       subjectType: "user",
       subjectId: student.id,
-      meta: { tg_user_id: from.id },
+      meta: { tg_user_id: from.id, ref_token_present: !!refToken },
     });
   }
   await welcomeNewStudent(ctx);
