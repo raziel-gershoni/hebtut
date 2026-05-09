@@ -32,6 +32,10 @@ export const ru = {
   lockedTemplateButton: "Оплатить",
   frozenNotice: (until: string) =>
     `Заморозка активна до ${until}. Сообщения снова начнут приходить тренеру после неё.`,
+  paymentSucceeded: (until: string) =>
+    `Спасибо! Подписка активна до ${until}. Запиши голосовое — тренер уже ждёт.`,
+  referralCreditApplied: (days: number) =>
+    `🎁 Твой друг оплатил подписку — твой доступ продлён на ${days} ${days === 1 ? "день" : days >= 2 && days <= 4 ? "дня" : "дней"}.`,
   acceptedStudent: (remaining: string) => `✅ Отправлено! Осталось ${remaining} на сегодня.`,
   acceptedStudentLow: (remaining: string) =>
     `✅ Отправлено! ⚠️ Осталось ${remaining} — меньше минуты на сегодня.`,

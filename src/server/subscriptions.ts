@@ -1,5 +1,10 @@
+import { addDays } from "date-fns";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import type { Database, SubscriptionStatus } from "@/types/database";
+import { recordAudit } from "@/server/audit";
+
+const REFERRER_BONUS_CAP_DAYS = 90;
+const REFERRAL_BONUS_PER_SIDE_DAYS = 30;
 
 export type SubscriptionRow = Database["public"]["Tables"]["subscriptions"]["Row"];
 
@@ -133,6 +138,172 @@ export async function getStatus(
   const derived = deriveStatus(raw, now);
   await maybeWriteBackTransitions(raw, derived);
   return { raw, derived };
+}
+
+/**
+ * Applies a confirmed successful payment to the subscription row:
+ * extends `current_period_ends_at` by `periodDays` (treating the existing end
+ * as the anchor when in the future, or now() when already lapsed), flips
+ * status to 'active', records the provider payment ID, clears the lockout
+ * cooldown, and on first paid period applies referral credits to both sides.
+ *
+ * Returns `{ wasFirstPaid, refereeNewEndsAt }` so the webhook can DM the
+ * student a confirmation with the right date.
+ */
+export async function applySuccessfulPayment(input: {
+  userId: number;
+  periodDays: number;
+  provider: "tg_stars" | "tg_payments" | "stripe";
+  providerPaymentId: string;
+}): Promise<
+  | { wasFirstPaid: boolean; refereeNewEndsAt: Date; referrerCreditedDays: number }
+  | null
+> {
+  const sb = getServiceRoleClient();
+  const { data: row } = await sb
+    .from("subscriptions")
+    .select("*")
+    .eq("user_id", input.userId)
+    .maybeSingle();
+  if (!row) return null;
+
+  const now = new Date();
+  // Anchor: if the user is currently active or trial-with-time-left, extend
+  // from the existing end. Otherwise (lapsed, trial_expired, payment_failed),
+  // anchor at "now" — they're not in a current period.
+  const existingEnd = (() => {
+    if (
+      (row.status === "active" || row.status === "frozen") &&
+      row.current_period_ends_at &&
+      new Date(row.current_period_ends_at) > now
+    ) {
+      return new Date(row.current_period_ends_at);
+    }
+    if (row.status === "trial" && new Date(row.trial_ends_at) > now) {
+      return new Date(row.trial_ends_at);
+    }
+    return now;
+  })();
+  const newEnd = addDays(existingEnd, input.periodDays);
+
+  // First paid period = no current_period_starts_at yet.
+  const wasFirstPaid = row.current_period_starts_at == null;
+
+  await sb
+    .from("subscriptions")
+    .update({
+      status: "active",
+      current_period_starts_at: row.current_period_starts_at ?? now.toISOString(),
+      current_period_ends_at: newEnd.toISOString(),
+      next_renewal_at: newEnd.toISOString(),
+      provider: input.provider,
+      provider_subscription_id: input.providerPaymentId,
+      last_lockout_replied_at: null,
+      last_renewal_reminder_sent_at: null,
+      updated_at: now.toISOString(),
+    })
+    .eq("user_id", input.userId);
+
+  await recordAudit({
+    action: "billing.payment_succeeded",
+    actorId: input.userId,
+    subjectType: "user",
+    subjectId: input.userId,
+    meta: {
+      provider: input.provider,
+      provider_payment_id: input.providerPaymentId,
+      period_days: input.periodDays,
+      first_paid_period: wasFirstPaid,
+      new_period_ends_at: newEnd.toISOString(),
+    },
+  });
+
+  // Referral credits — only on the user's FIRST successful paid period, and
+  // only if they were referred. Both sides get +30d; the referrer caps at
+  // +90d total credit ever, so we look up how much they've already received.
+  let referrerCreditedDays = 0;
+  if (wasFirstPaid && row.referred_by_user_id) {
+    const refereeNewEndAfterCredit = addDays(newEnd, REFERRAL_BONUS_PER_SIDE_DAYS);
+    await sb
+      .from("subscriptions")
+      .update({
+        current_period_ends_at: refereeNewEndAfterCredit.toISOString(),
+        next_renewal_at: refereeNewEndAfterCredit.toISOString(),
+        updated_at: now.toISOString(),
+      })
+      .eq("user_id", input.userId);
+
+    // Look up the referrer; bump their period_ends or trial_ends as needed.
+    const { data: refRow } = await sb
+      .from("subscriptions")
+      .select("*")
+      .eq("user_id", row.referred_by_user_id)
+      .maybeSingle();
+    if (refRow) {
+      // Audit how much referral credit has already been granted to enforce the cap.
+      const { data: priorAudits } = await sb
+        .from("audit_events")
+        .select("meta")
+        .eq("action", "billing.referral_credit")
+        .eq("actor_id", refRow.user_id);
+      const alreadyGranted = (priorAudits ?? []).reduce((acc, ev) => {
+        const meta = ev.meta as { credited_days?: unknown } | null;
+        const days = typeof meta?.credited_days === "number" ? meta.credited_days : 0;
+        return acc + days;
+      }, 0);
+      const remainingCap = Math.max(0, REFERRER_BONUS_CAP_DAYS - alreadyGranted);
+      const grant = Math.min(REFERRAL_BONUS_PER_SIDE_DAYS, remainingCap);
+      if (grant > 0) {
+        const refExistingEnd = (() => {
+          if (
+            refRow.current_period_ends_at &&
+            new Date(refRow.current_period_ends_at) > now
+          ) {
+            return new Date(refRow.current_period_ends_at);
+          }
+          if (refRow.status === "trial" && new Date(refRow.trial_ends_at) > now) {
+            return new Date(refRow.trial_ends_at);
+          }
+          return now;
+        })();
+        const refNewEnd = addDays(refExistingEnd, grant);
+        const refIsActive =
+          refRow.status === "active" || refRow.status === "frozen";
+        // Don't downgrade the referrer's status — only push their end out.
+        // If they're trial/lapsed/etc., still extend current_period_ends_at
+        // so when they pay it stacks on top.
+        await sb
+          .from("subscriptions")
+          .update({
+            current_period_ends_at: refNewEnd.toISOString(),
+            next_renewal_at: refIsActive ? refNewEnd.toISOString() : refRow.next_renewal_at,
+            updated_at: now.toISOString(),
+          })
+          .eq("user_id", refRow.user_id);
+        await recordAudit({
+          action: "billing.referral_credit",
+          actorId: refRow.user_id,
+          subjectType: "user",
+          subjectId: refRow.user_id,
+          meta: {
+            referee_user_id: input.userId,
+            credited_days: grant,
+            cap_remaining_after: remainingCap - grant,
+            new_period_ends_at: refNewEnd.toISOString(),
+          },
+        });
+        referrerCreditedDays = grant;
+      }
+    }
+
+    return {
+      wasFirstPaid,
+      refereeNewEndsAt: refereeNewEndAfterCredit,
+      referrerCreditedDays,
+    };
+  }
+
+  return { wasFirstPaid, refereeNewEndsAt: newEnd, referrerCreditedDays: 0 };
 }
 
 async function maybeWriteBackTransitions(

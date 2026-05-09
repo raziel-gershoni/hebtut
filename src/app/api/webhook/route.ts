@@ -7,6 +7,7 @@ import { handleStart } from "@/server/handlers/start";
 import { handleStudentMedia } from "@/server/handlers/student-message";
 import { handleTeacherReply } from "@/server/handlers/teacher-reply";
 import { handleUnknown } from "@/server/handlers/unknown";
+import { handlePreCheckoutQuery, handleSuccessfulPayment } from "@/server/handlers/billing-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +17,10 @@ function installHandlers(): void {
   if (installed) return;
   const bot = getBot();
   bot.command("start", handleStart);
+  // Billing events come BEFORE the generic message handler so successful_payment
+  // service messages don't fall through to handleUnknown.
+  bot.on("pre_checkout_query", handlePreCheckoutQuery);
+  bot.on("message:successful_payment", handleSuccessfulPayment);
   bot.on(["message:voice", "message:video_note"], async (ctx) => {
     // Prefer the teacher-reply route (reply_to_message present + sender is teacher).
     const handledAsTeacher = await handleTeacherReply(ctx);

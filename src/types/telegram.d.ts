@@ -12,6 +12,11 @@ declare global {
         ready: () => void;
         expand: () => void;
         close?: () => void;
+        // Stars / TG Payments invoice opener. Returns a status string
+        // ('paid' | 'cancelled' | 'failed' | 'pending') via the optional
+        // callback — we don't depend on the result; the bot webhook is the
+        // source of truth for billing state.
+        openInvoice?: (url: string, callback?: (status: string) => void) => void;
         BackButton?: {
           show: () => void;
           hide: () => void;

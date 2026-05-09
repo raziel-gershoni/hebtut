@@ -243,28 +243,55 @@ function StreakChip({ days }: { days: number }) {
  * at `/pay` placeholder. Wave 2 wires `openInvoice` via the BillingProvider.
  * ----------------------------------------------------------------------- */
 function PayCTA({ status, jwt }: { status: ApiStatus; jwt: string }) {
+  const [busy, setBusy] = useState(false);
   const visible =
     status.kind === "trial_ending" ||
     status.kind === "trial_expired" ||
     status.kind === "lapsed" ||
     status.kind === "payment_failed";
   if (!visible) return null;
-  void jwt; // wired in Wave 2 to call /api/billing/invoice
 
   const label =
     status.kind === "payment_failed" ? "Обновить оплату" : "Оплатить — 30 дней";
 
+  async function pay() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const r = await fetch("/api/billing/invoice", {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          "Content-Type": "application/json",
+        },
+        body: "{}",
+      });
+      if (!r.ok) {
+        window.alert("Не удалось открыть оплату. Попробуй ещё раз.");
+        return;
+      }
+      const { url } = (await r.json()) as { url: string };
+      const tg = window.Telegram?.WebApp;
+      if (tg?.openInvoice) {
+        tg.openInvoice(url);
+      } else {
+        // Fallback for browser preview / non-TG contexts.
+        window.open(url, "_blank");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <button
       type="button"
-      onClick={() => {
-        // Placeholder: in Wave 2 this calls /api/billing/invoice and opens the
-        // returned URL via window.Telegram.WebApp.openInvoice.
-        window.alert("Скоро здесь появится оплата.");
-      }}
-      className="w-full inline-flex items-center justify-center h-10 rounded-2xl bg-tg-button text-tg-button-text text-sm font-semibold tracking-tight transition-transform active:scale-[0.99]"
+      disabled={busy}
+      onClick={() => void pay()}
+      className="w-full inline-flex items-center justify-center h-10 rounded-2xl bg-tg-button text-tg-button-text text-sm font-semibold tracking-tight transition-transform active:scale-[0.99] disabled:opacity-60"
     >
-      {label}
+      {busy ? "Открываем…" : label}
     </button>
   );
 }
