@@ -31,6 +31,18 @@ export const ru = {
     "Чтобы продолжить разговор, нужно получить доступ.",
   lockedTemplateButton: "Оплатить",
   manualBillingButton: "Связаться с админом",
+  subscriptionGrantedDM: (days: number, until: string) => {
+    const word = days % 10 === 1 && days % 100 !== 11
+      ? "день"
+      : days % 10 >= 2 && days % 10 <= 4 && (days % 100 < 11 || days % 100 > 14)
+        ? "дня"
+        : "дней";
+    return `🎁 Тренер активировал подписку на ${days} ${word}. Активна до ${until}. Записывай голосовые!`;
+  },
+  subscriptionResetDM:
+    "Подписка сброшена на пробный период (3 дня). Запиши голосовое — тренер ждёт.",
+  subscriptionLapsedDM:
+    "Подписка приостановлена. Свяжись с админом, чтобы возобновить.",
   frozenNotice: (until: string) =>
     `Заморозка активна до ${until}. Сообщения снова начнут приходить тренеру после неё.`,
   paymentSucceeded: (until: string) =>

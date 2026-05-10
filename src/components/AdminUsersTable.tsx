@@ -2,6 +2,7 @@
 import { useState, useMemo } from "react";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Avatar } from "./Avatar";
+import { SubscriptionDialog, type SubscriptionInfo } from "./SubscriptionDialog";
 
 export type AdminUser = {
   id: number;
@@ -16,6 +17,7 @@ export type AdminUser = {
   status: "active" | "suspended";
   created_at: string;
   role_changed_at: string | null;
+  subscription: SubscriptionInfo | null;
 };
 
 const ROLE_LABEL: Record<AdminUser["role"], string> = {
@@ -61,6 +63,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
   const [pending, setPending] = useState<PendingChange | null>(null);
   const [filter, setFilter] = useState("");
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [subscriptionUser, setSubscriptionUser] = useState<AdminUser | null>(null);
 
   async function patchRole(id: number, body: { role?: AdminUser["role"]; is_admin?: boolean }) {
     await fetch(`/api/admin/users/${id}/role`, {
@@ -198,6 +201,12 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                     </span>
                   </>
                 )}
+                {u.role === "student" && u.subscription && (
+                  <>
+                    <span aria-hidden>·</span>
+                    <SubscriptionBadge sub={u.subscription} />
+                  </>
+                )}
               </div>
             </div>
             {(() => {
@@ -259,6 +268,18 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                   onClick={(e) => e.stopPropagation()}
                   className="absolute right-0 top-9 z-10 w-44 rounded-xl bg-tg-bg-section border border-tg-text-hint/15 shadow-xl py-1 text-sm"
                 >
+                  {u.role === "student" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenMenuId(null);
+                        setSubscriptionUser(u);
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-tg-bg-secondary transition-colors"
+                    >
+                      Подписка
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -296,6 +317,16 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
         ))}
       </ul>
 
+      <SubscriptionDialog
+        open={!!subscriptionUser}
+        jwt={jwt}
+        userId={subscriptionUser?.id ?? 0}
+        userName={subscriptionUser?.name ?? ""}
+        subscription={subscriptionUser?.subscription ?? null}
+        onClose={() => setSubscriptionUser(null)}
+        onChanged={refetch}
+      />
+
       <ConfirmDialog
         open={!!pending}
         title={
@@ -326,5 +357,52 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
         }}
       />
     </section>
+  );
+}
+
+/* -------------------------------------------------------------------------
+ * Per-row subscription state at a glance. Keeps the row tight: one chip
+ * with a status-coded color + the most relevant date. Tap "Подписка" in
+ * the kebab menu to mutate; this badge is read-only.
+ * ----------------------------------------------------------------------- */
+function SubscriptionBadge({ sub }: { sub: SubscriptionInfo }) {
+  const tone = (() => {
+    switch (sub.status) {
+      case "active":
+        return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400";
+      case "trial":
+        return "bg-sky-500/15 text-sky-700 dark:text-sky-400";
+      case "frozen":
+        return "bg-tg-bg-secondary text-tg-text-hint";
+      case "trial_expired":
+      case "lapsed":
+      case "payment_failed":
+        return "bg-tg-text-destructive/10 text-tg-text-destructive";
+    }
+  })();
+  const label = (() => {
+    const fmt = (iso: string) =>
+      new Date(iso).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
+    switch (sub.status) {
+      case "trial":
+        return `trial → ${fmt(sub.trial_ends_at)}`;
+      case "active":
+        return sub.current_period_ends_at ? `до ${fmt(sub.current_period_ends_at)}` : "активна";
+      case "frozen":
+        return sub.frozen_until ? `🧊 ${fmt(sub.frozen_until)}` : "🧊";
+      case "trial_expired":
+        return "trial ✕";
+      case "lapsed":
+        return "закрыта";
+      case "payment_failed":
+        return "оплата ✕";
+    }
+  })();
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-medium tabular-nums ${tone}`}
+    >
+      {label}
+    </span>
   );
 }

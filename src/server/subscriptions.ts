@@ -2,6 +2,8 @@ import { addDays } from "date-fns";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import type { Database, SubscriptionStatus } from "@/types/database";
 import { recordAudit } from "@/server/audit";
+import { getBot } from "@/lib/tg";
+import { ru } from "@/lib/i18n";
 
 const REFERRER_BONUS_CAP_DAYS = 90;
 const REFERRAL_BONUS_PER_SIDE_DAYS = 30;
@@ -372,6 +374,181 @@ export function pickPaymentAnchor(
     return new Date(row.trial_ends_at);
   }
   return now;
+}
+
+/* -------------------------------------------------------------------------
+ * Admin manual-grant helpers — used by /api/admin/users/[id]/subscription.
+ *
+ * Each helper writes the row, audits, and DMs the affected student so
+ * they immediately know about the change. None of them apply referral
+ * credits — admin gifts are NOT conversions; only paid periods (handled
+ * in applySuccessfulPayment) trigger referral payouts. This is the
+ * locked-in design choice.
+ * ----------------------------------------------------------------------- */
+
+const TRIAL_RESET_DAYS = 3;
+const MAX_GRANT_DAYS = 3650; // 10 years — clamps obvious typos
+
+/**
+ * Extends current_period_ends_at by `days`, anchored on the existing end
+ * if in the future, or now() if already lapsed/expired. Sets status='active'.
+ * Skips referral logic. Returns the new period end so the caller can
+ * surface it in the response and the admin sees confirmation.
+ */
+export async function grantSubscriptionDays(input: {
+  userId: number;
+  days: number;
+  byAdminId: number;
+}): Promise<{ newPeriodEnd: Date } | null> {
+  const days = Math.min(MAX_GRANT_DAYS, Math.max(1, Math.floor(input.days)));
+  const sb = getServiceRoleClient();
+  const { data: row } = await sb
+    .from("subscriptions")
+    .select("*")
+    .eq("user_id", input.userId)
+    .maybeSingle();
+  if (!row) return null;
+
+  const now = new Date();
+  const newEnd = addDays(pickPaymentAnchor(row, now), days);
+
+  await sb
+    .from("subscriptions")
+    .update({
+      status: "active",
+      current_period_starts_at: row.current_period_starts_at ?? now.toISOString(),
+      current_period_ends_at: newEnd.toISOString(),
+      next_renewal_at: newEnd.toISOString(),
+      // Manual grant clears the in-chat lockout cooldown so the user can
+      // immediately reach support if anything's off, and clears the renewal
+      // reminder dedupe so the cron will re-evaluate.
+      last_lockout_replied_at: null,
+      last_renewal_reminder_sent_at: null,
+      updated_at: now.toISOString(),
+    })
+    .eq("user_id", input.userId);
+
+  await recordAudit({
+    action: "admin.subscription_grant",
+    actorId: input.byAdminId,
+    subjectType: "user",
+    subjectId: input.userId,
+    meta: {
+      days,
+      anchor: row.status,
+      new_period_ends_at: newEnd.toISOString(),
+    },
+  });
+
+  await dmStudent(input.userId, ru.subscriptionGrantedDM(days, formatRu(newEnd)));
+  return { newPeriodEnd: newEnd };
+}
+
+/**
+ * Resets the user back to a fresh 3-day trial. Useful when an admin wants
+ * to give someone a "second chance" without paying days. Leaves
+ * current_period_starts_at intact (so referral logic still treats a future
+ * paid period as the user's "first paid").
+ */
+export async function resetTrialForUser(input: {
+  userId: number;
+  byAdminId: number;
+}): Promise<{ trialEnd: Date } | null> {
+  const sb = getServiceRoleClient();
+  const { data: row } = await sb
+    .from("subscriptions")
+    .select("user_id")
+    .eq("user_id", input.userId)
+    .maybeSingle();
+  if (!row) return null;
+
+  const now = new Date();
+  const trialEnd = addDays(now, TRIAL_RESET_DAYS);
+  await sb
+    .from("subscriptions")
+    .update({
+      status: "trial",
+      trial_started_at: now.toISOString(),
+      trial_ends_at: trialEnd.toISOString(),
+      last_lockout_replied_at: null,
+      last_renewal_reminder_sent_at: null,
+      updated_at: now.toISOString(),
+    })
+    .eq("user_id", input.userId);
+
+  await recordAudit({
+    action: "admin.subscription_reset_trial",
+    actorId: input.byAdminId,
+    subjectType: "user",
+    subjectId: input.userId,
+    meta: { trial_ends_at: trialEnd.toISOString(), days: TRIAL_RESET_DAYS },
+  });
+
+  await dmStudent(input.userId, ru.subscriptionResetDM);
+  return { trialEnd };
+}
+
+/**
+ * Closes the subscription immediately. Sets status='lapsed' and pulls
+ * current_period_ends_at back to now so the access gate stops accepting
+ * media on the next inbound. Doesn't refund anything — this is admin
+ * authority, used when a user is being moved off the platform.
+ */
+export async function lapseSubscription(input: {
+  userId: number;
+  byAdminId: number;
+}): Promise<boolean> {
+  const sb = getServiceRoleClient();
+  const { data: row } = await sb
+    .from("subscriptions")
+    .select("user_id")
+    .eq("user_id", input.userId)
+    .maybeSingle();
+  if (!row) return false;
+
+  const now = new Date();
+  await sb
+    .from("subscriptions")
+    .update({
+      status: "lapsed",
+      current_period_ends_at: now.toISOString(),
+      // Don't clear last_lockout_replied_at — the next inbound triggers a
+      // fresh locked-template reply (24h window), which is the desired UX.
+      updated_at: now.toISOString(),
+    })
+    .eq("user_id", input.userId);
+
+  await recordAudit({
+    action: "admin.subscription_lapse",
+    actorId: input.byAdminId,
+    subjectType: "user",
+    subjectId: input.userId,
+  });
+
+  await dmStudent(input.userId, ru.subscriptionLapsedDM);
+  return true;
+}
+
+async function dmStudent(userId: number, text: string): Promise<void> {
+  const sb = getServiceRoleClient();
+  const { data: u } = await sb
+    .from("users")
+    .select("tg_chat_id")
+    .eq("id", userId)
+    .maybeSingle();
+  if (!u?.tg_chat_id) return;
+  try {
+    await getBot().api.sendMessage(u.tg_chat_id, text);
+  } catch (e) {
+    console.warn("admin subscription DM failed", {
+      user_id: userId,
+      reason: (e as Error).message,
+    });
+  }
+}
+
+function formatRu(d: Date): string {
+  return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
 }
 
 async function maybeWriteBackTransitions(
