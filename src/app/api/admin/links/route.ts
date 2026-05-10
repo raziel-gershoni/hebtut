@@ -33,7 +33,10 @@ export async function GET(req: NextRequest) {
     .from("student_teachers")
     .select(
       "student_id, teacher_id, created_at, student:student_id(name), teacher:teacher_id(name)",
-    );
+    )
+    // Recency-first so the new bulk-pairing UI's existing-links view shows
+    // the just-created links at the top after a "Связать" tap.
+    .order("created_at", { ascending: false });
   if (error) {
     return new Response(error.message, { status: 500, headers: noStoreHeaders });
   }

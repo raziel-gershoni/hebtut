@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { Avatar } from "./Avatar";
 import { type AdminUser } from "./AdminUsersTable";
+import { SearchableUserChecklist } from "./SearchableUserChecklist";
 import { Spinner } from "./Spinner";
 
 export interface Connection {
@@ -22,11 +23,10 @@ interface AdminConnectionsPanelProps {
 type Mode = "student" | "teacher";
 
 /**
- * Combined view + add panel for the student↔teacher connection pool.
- * Top: compact add row (with already-linked detection).
- * Middle: filter input + по-ученикам / по-тренерам segmented toggle.
- * Bottom: groups, one card per primary entity, rows are the secondary
- * side with a per-row unlink ✕.
+ * Bulk pairing UI: pick N students × M teachers, see what will be created,
+ * confirm all in one tap. Below: existing-links view for inspection +
+ * per-row unlink. Replaces the previous single-pair-at-a-time picker; the
+ * underlying single-link DELETE endpoint is still used by the per-row ✕.
  */
 export function AdminConnectionsPanel({
   jwt,
@@ -34,13 +34,17 @@ export function AdminConnectionsPanel({
   links,
   refetch,
 }: AdminConnectionsPanelProps) {
-  const [studentId, setStudentId] = useState<number | null>(null);
-  const [teacherId, setTeacherId] = useState<number | null>(null);
-  const [addBusy, setAddBusy] = useState(false);
+  const [selectedStudents, setSelectedStudents] = useState<Set<number>>(new Set());
+  const [selectedTeachers, setSelectedTeachers] = useState<Set<number>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [recentResult, setRecentResult] = useState<{
+    created: number;
+    skipped: number;
+    failed: number;
+  } | null>(null);
+
   const [mode, setMode] = useState<Mode>("student");
   const [filter, setFilter] = useState("");
-  // Set of "studentId:teacherId" pair keys currently being unlinked,
-  // so each unlink button shows its own spinner without freezing siblings.
   const [unlinking, setUnlinking] = useState<Set<string>>(new Set());
 
   const students = users.filter((u) => u.role === "student");
@@ -50,6 +54,8 @@ export function AdminConnectionsPanel({
     () => new Set(links.map((l) => `${l.student_id}:${l.teacher_id}`)),
     [links],
   );
+
+  const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
 
   const hasAvatarById = useMemo(
     () => new Map(users.map((u) => [u.id, u.has_avatar])),
@@ -62,28 +68,73 @@ export function AdminConnectionsPanel({
       : undefined;
   }
 
-  const alreadyLinked =
-    studentId !== null &&
-    teacherId !== null &&
-    linkedSet.has(`${studentId}:${teacherId}`);
+  // Cross-product preview. We split into "to create" (new pairs) and
+  // "already exist" (skipped). The button label tracks the to-create count.
+  const preview = useMemo(() => {
+    const toCreate: { studentId: number; teacherId: number }[] = [];
+    const alreadyExist: { studentId: number; teacherId: number }[] = [];
+    for (const sId of selectedStudents) {
+      for (const tId of selectedTeachers) {
+        if (linkedSet.has(`${sId}:${tId}`)) {
+          alreadyExist.push({ studentId: sId, teacherId: tId });
+        } else {
+          toCreate.push({ studentId: sId, teacherId: tId });
+        }
+      }
+    }
+    return { toCreate, alreadyExist };
+  }, [selectedStudents, selectedTeachers, linkedSet]);
 
-  async function handleAdd() {
-    if (!studentId || !teacherId || alreadyLinked || addBusy) return;
-    setAddBusy(true);
+  function toggleStudent(id: number) {
+    setSelectedStudents((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setRecentResult(null);
+  }
+  function toggleTeacher(id: number) {
+    setSelectedTeachers((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setRecentResult(null);
+  }
+
+  async function handleBulkPair() {
+    if (busy) return;
+    if (preview.toCreate.length === 0) return;
+    setBusy(true);
     try {
-      const r = await fetch("/api/admin/links", {
+      const r = await fetch("/api/admin/links/bulk", {
         method: "POST",
         cache: "no-store",
-        headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId, teacherId }),
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          studentIds: Array.from(selectedStudents),
+          teacherIds: Array.from(selectedTeachers),
+        }),
       });
       if (!r.ok) return;
+      const result = (await r.json()) as {
+        created: number;
+        skipped: number;
+        failed: number;
+      };
+      setRecentResult(result);
+      setSelectedStudents(new Set());
+      setSelectedTeachers(new Set());
       await refetch();
-      // Keep studentId so the admin can keep adding more teachers to the
-      // same student without re-picking them.
-      setTeacherId(null);
+      // Auto-hide the result toast after a moment so it doesn't linger.
+      window.setTimeout(() => setRecentResult(null), 4000);
     } finally {
-      setAddBusy(false);
+      setBusy(false);
     }
   }
 
@@ -150,46 +201,105 @@ export function AdminConnectionsPanel({
 
   const secondaryNoun = mode === "student" ? "преп." : "уч.";
 
+  const buttonDisabled = busy || preview.toCreate.length === 0;
+  const buttonLabel = (() => {
+    if (busy) return null;
+    if (selectedStudents.size === 0 || selectedTeachers.size === 0) {
+      return "Выбери учеников и тренеров";
+    }
+    if (preview.toCreate.length === 0 && preview.alreadyExist.length > 0) {
+      return "Все выбранные пары уже связаны";
+    }
+    return `Связать (${preview.toCreate.length} ${pluralLink(preview.toCreate.length)})`;
+  })();
+
   return (
     <section className="mt-8">
       <header className="flex items-baseline justify-between gap-3 mb-3">
         <h2 className="text-lg font-semibold tracking-tight">Связи</h2>
-        <span className="text-xs text-tg-text-hint tabular-nums">
-          {links.length}
-        </span>
+        <span className="text-xs text-tg-text-hint tabular-nums">{links.length}</span>
       </header>
 
-      {/* Add controls */}
-      <div className="rounded-2xl bg-tg-bg-section p-4 space-y-3 mb-3">
-        <PickerRow
-          label="Ученик"
-          options={students}
-          value={studentId}
-          onChange={setStudentId}
-        />
-        <PickerRow
-          label="Тренер"
-          options={teachers}
-          value={teacherId}
-          onChange={setTeacherId}
-        />
-        <div className="flex items-center gap-3 pt-1">
-          <button
-            type="button"
-            disabled={!studentId || !teacherId || alreadyLinked || addBusy}
-            onClick={() => void handleAdd()}
-            aria-busy={addBusy}
-            className="flex-1 min-h-10 h-10 rounded-full bg-tg-button text-tg-button-text text-sm font-medium tracking-tight transition-transform active:scale-95 disabled:opacity-50 inline-flex items-center justify-center"
-          >
-            {addBusy ? <Spinner /> : "Привязать"}
-          </button>
-          {alreadyLinked && (
-            <span className="text-xs text-tg-text-hint">уже связаны</span>
-          )}
+      {/* Bulk pairing UI */}
+      <div className="space-y-3 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <SearchableUserChecklist
+            jwt={jwt}
+            users={students}
+            selected={selectedStudents}
+            onToggle={toggleStudent}
+            label="Ученики"
+            emptyText="Учеников нет"
+          />
+          <SearchableUserChecklist
+            jwt={jwt}
+            users={teachers}
+            selected={selectedTeachers}
+            onToggle={toggleTeacher}
+            label="Тренеры"
+            emptyText="Тренеров нет"
+          />
         </div>
+
+        {/* Selected chips strip — clear visual confirmation of what's about to happen */}
+        {(selectedStudents.size > 0 || selectedTeachers.size > 0) && (
+          <div className="rounded-2xl bg-tg-bg-secondary/40 p-3 space-y-2 text-xs">
+            {selectedStudents.size > 0 && (
+              <ChipRow
+                label="Ученики"
+                ids={Array.from(selectedStudents)}
+                usersById={usersById}
+                onRemove={toggleStudent}
+              />
+            )}
+            {selectedTeachers.size > 0 && (
+              <ChipRow
+                label="Тренеры"
+                ids={Array.from(selectedTeachers)}
+                usersById={usersById}
+                onRemove={toggleTeacher}
+              />
+            )}
+            {(selectedStudents.size > 0 && selectedTeachers.size > 0) && (
+              <p className="text-[11px] text-tg-text-hint pt-1">
+                Будет создано:{" "}
+                <span className="font-medium text-tg-text tabular-nums">
+                  {preview.toCreate.length}
+                </span>{" "}
+                {pluralLink(preview.toCreate.length)}
+                {preview.alreadyExist.length > 0 && (
+                  <span className="text-tg-text-hint">
+                    {" "}
+                    ({preview.alreadyExist.length}{" "}
+                    {pluralLink(preview.alreadyExist.length)} уже{" "}
+                    {preview.alreadyExist.length === 1 ? "существует" : "существуют"})
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => void handleBulkPair()}
+          disabled={buttonDisabled}
+          aria-busy={busy}
+          className="w-full min-h-10 h-10 rounded-full bg-tg-button text-tg-button-text text-sm font-medium tracking-tight transition-transform active:scale-95 disabled:opacity-50 inline-flex items-center justify-center"
+        >
+          {busy ? <Spinner /> : buttonLabel}
+        </button>
+
+        {recentResult && (
+          <div className="rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 p-2 text-xs text-center font-medium">
+            Создано: {recentResult.created}
+            {recentResult.skipped > 0 && ` · пропущено: ${recentResult.skipped}`}
+            {recentResult.failed > 0 && ` · ошибок: ${recentResult.failed}`}
+          </div>
+        )}
       </div>
 
-      {/* Toggle + filter */}
+      {/* Existing-links view — toggle + filter + groups */}
       <div className="flex items-center gap-2 mb-3">
         <div className="inline-flex rounded-full bg-tg-bg-secondary p-0.5 text-xs font-medium">
           <ToggleButton active={mode === "student"} onClick={() => setMode("student")}>
@@ -209,7 +319,6 @@ export function AdminConnectionsPanel({
         className="w-full mb-3 h-10 px-3 rounded-xl bg-tg-bg-secondary text-tg-text placeholder:text-tg-text-hint outline-none focus:ring-2 focus:ring-tg-button/40"
       />
 
-      {/* Groups */}
       {groups.length === 0 ? (
         <div className="rounded-2xl bg-tg-bg-section p-6 text-center text-sm text-tg-text-hint">
           {links.length === 0 ? "Пока нет связей." : "Никого не нашлось."}
@@ -237,9 +346,7 @@ export function AdminConnectionsPanel({
                       key={row.pairKey}
                       className="flex items-center gap-3 py-1 text-sm"
                     >
-                      <span className="text-tg-text-hint" aria-hidden>
-                        ↳
-                      </span>
+                      <span className="text-tg-text-hint" aria-hidden>↳</span>
                       <span className="flex-1 truncate">{row.secondaryName}</span>
                       <button
                         type="button"
@@ -263,6 +370,41 @@ export function AdminConnectionsPanel({
   );
 }
 
+function ChipRow({
+  label,
+  ids,
+  usersById,
+  onRemove,
+}: {
+  label: string;
+  ids: number[];
+  usersById: Map<number, AdminUser>;
+  onRemove: (id: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-tg-text-hint text-[11px] uppercase tracking-wider mr-1">
+        {label}:
+      </span>
+      {ids.map((id) => {
+        const u = usersById.get(id);
+        const name = u?.name ?? `ID ${id}`;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onRemove(id)}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-tg-bg-section text-tg-text text-[11px] hover:bg-tg-text-destructive/10 hover:text-tg-text-destructive transition-colors"
+          >
+            <span className="truncate max-w-[8rem]">{name}</span>
+            <span aria-hidden>✕</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ToggleButton({
   active,
   onClick,
@@ -277,9 +419,7 @@ function ToggleButton({
       type="button"
       onClick={onClick}
       className={`px-3 h-8 rounded-full transition-colors ${
-        active
-          ? "bg-tg-bg-section text-tg-text shadow-sm"
-          : "text-tg-text-hint"
+        active ? "bg-tg-bg-section text-tg-text shadow-sm" : "text-tg-text-hint"
       }`}
     >
       {children}
@@ -287,34 +427,12 @@ function ToggleButton({
   );
 }
 
-function PickerRow({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: AdminUser[];
-  value: number | null;
-  onChange: (id: number | null) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="block text-xs uppercase tracking-wider text-tg-text-hint mb-1">
-        {label}
-      </span>
-      <select
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
-        className="w-full h-10 px-3 rounded-xl bg-tg-bg-secondary text-tg-text outline-none focus:ring-2 focus:ring-tg-button/40"
-      >
-        <option value="">— не выбрано —</option>
-        {options.map((u) => (
-          <option key={u.id} value={u.id}>
-            {u.name ?? `ID ${u.id}`}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
+function pluralLink(n: number): string {
+  // Russian: 1 связь / 2-4 связи / 5+ связей. n%100 in [11..14] → связей.
+  const n100 = n % 100;
+  const n10 = n % 10;
+  if (n100 >= 11 && n100 <= 14) return "связей";
+  if (n10 === 1) return "связь";
+  if (n10 >= 2 && n10 <= 4) return "связи";
+  return "связей";
 }
