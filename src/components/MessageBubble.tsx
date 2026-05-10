@@ -5,6 +5,7 @@ import { Spinner } from "./Spinner";
 import { Avatar } from "./Avatar";
 import type { SpeakerColorClasses } from "@/lib/speaker-color";
 import { usePlaybackSpeed, formatSpeed } from "@/hooks/usePlaybackSpeed";
+import { usePlayback } from "./PlaybackProvider";
 
 export type ThreadMsg = {
   id: number;
@@ -150,9 +151,9 @@ export function MessageBubble({
         )}
 
         {msg.kind === "voice" ? (
-          <VoicePlayer src={src} totalSeconds={msg.duration} />
+          <VoicePlayer src={src} totalSeconds={msg.duration} messageId={msg.id} />
         ) : (
-          <VideoNote src={src} totalSeconds={msg.duration} />
+          <VideoNote src={src} totalSeconds={msg.duration} messageId={msg.id} />
         )}
 
         {isIn && onReply && (
@@ -182,11 +183,20 @@ export function MessageBubble({
 }
 
 /** TG-style voice player: round play/pause + thin progress bar + duration. */
-function VoicePlayer({ src, totalSeconds }: { src: string; totalSeconds: number }) {
+function VoicePlayer({
+  src,
+  totalSeconds,
+  messageId,
+}: {
+  src: string;
+  totalSeconds: number;
+  messageId: number;
+}) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const { speed, cycle } = usePlaybackSpeed();
+  const { isMyTurn, startPlay, endPlay, userPaused } = usePlayback(messageId);
 
   // Mirror the cycle-button choice onto the live element. Browsers honour
   // playbackRate mutation on a playing element, so cycling mid-play takes
@@ -195,6 +205,22 @@ function VoicePlayer({ src, totalSeconds }: { src: string; totalSeconds: number 
     const a = audioRef.current;
     if (a) a.playbackRate = speed;
   }, [speed]);
+
+  // Cross-bubble coordination. When the provider says "you're up" — either
+  // because this bubble was tapped or because the previous voice in the
+  // queue ended — call .play(). When isMyTurn flips back to false (someone
+  // else picked up, or user paused), pause if we're still running.
+  useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (isMyTurn && a.paused) {
+      void a.play().catch(() => {
+        /* autoplay blocked by browser without a prior user gesture — fine */
+      });
+    } else if (!isMyTurn && !a.paused) {
+      a.pause();
+    }
+  }, [isMyTurn]);
 
   function toggle() {
     const a = audioRef.current;
@@ -247,11 +273,20 @@ function VoicePlayer({ src, totalSeconds }: { src: string; totalSeconds: number 
         ref={audioRef}
         src={src}
         preload="metadata"
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
+        onPlay={() => {
+          setPlaying(true);
+          startPlay();
+        }}
+        onPause={() => {
+          setPlaying(false);
+          // userPaused is a no-op when this bubble isn't the current id —
+          // keeps a forced-pause from a sibling-handoff from clearing the queue.
+          userPaused();
+        }}
         onEnded={() => {
           setPlaying(false);
           setCurrent(0);
+          endPlay();
         }}
         onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
       />
@@ -264,11 +299,20 @@ function VoicePlayer({ src, totalSeconds }: { src: string; totalSeconds: number 
  * around it as playback progresses. Tap-to-toggle, native controls hidden.
  * Duration label sits below the circle (TG-style understated meta).
  */
-function VideoNote({ src, totalSeconds }: { src: string; totalSeconds: number }) {
+function VideoNote({
+  src,
+  totalSeconds,
+  messageId,
+}: {
+  src: string;
+  totalSeconds: number;
+  messageId: number;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const { speed, cycle } = usePlaybackSpeed();
+  const { isMyTurn, startPlay, endPlay, userPaused } = usePlayback(messageId);
 
   // Mirror onto the live element. Same `<video>` is used both inline and
   // when lifted to the fullscreen overlay, so the rate persists across modes.
@@ -276,6 +320,16 @@ function VideoNote({ src, totalSeconds }: { src: string; totalSeconds: number })
     const v = videoRef.current;
     if (v) v.playbackRate = speed;
   }, [speed]);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (isMyTurn && v.paused) {
+      void v.play().catch(() => {});
+    } else if (!isMyTurn && !v.paused) {
+      v.pause();
+    }
+  }, [isMyTurn]);
 
   function toggle() {
     const v = videoRef.current;
@@ -324,11 +378,18 @@ function VideoNote({ src, totalSeconds }: { src: string; totalSeconds: number })
             src={src}
             preload="metadata"
             playsInline
-            onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
+            onPlay={() => {
+              setPlaying(true);
+              startPlay();
+            }}
+            onPause={() => {
+              setPlaying(false);
+              userPaused();
+            }}
             onEnded={() => {
               setPlaying(false);
               setCurrent(0);
+              endPlay();
             }}
             onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
             className="absolute inset-0 w-full h-full object-cover"

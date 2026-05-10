@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { MessageBubble, type ThreadMsg, type Speaker } from "./MessageBubble";
 import { Avatar } from "./Avatar";
+import { PlaybackProvider } from "./PlaybackProvider";
 import { speakerColor, type SpeakerColorClasses } from "@/lib/speaker-color";
 import { bgFromHandle } from "@/lib/handle";
 
@@ -217,6 +218,7 @@ export function ThreadView({
   }
 
   return (
+    <PlaybackProvider messages={messages}>
     <div className="flex flex-col gap-1">
       <header className="flex items-center gap-3 mb-3 pb-3 border-b border-tg-text-hint/15">
         <Avatar size={48} name={studentDisplay} emoji={studentEmoji} bgClass={studentBg} />
@@ -267,5 +269,6 @@ export function ThreadView({
         })
       )}
     </div>
+    </PlaybackProvider>
   );
 }
