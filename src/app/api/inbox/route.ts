@@ -69,12 +69,28 @@ export async function GET(req: NextRequest) {
   }
   const sb = getServiceRoleClient();
 
-  // 1) My linked students.
-  const { data: links } = await sb
-    .from("student_teachers")
-    .select("student_id")
-    .eq("teacher_id", user.id);
-  const studentIds = (links ?? []).map((l) => l.student_id);
+  // 1) Which students does this viewer see?
+  // - Admin (with or without teacher role): every student in the system
+  //   (read-only oversight). Bypasses the student_teachers join entirely.
+  // - Teacher: only their linked students.
+  // unread_count is keyed on (teacher_id, student_id) in inbox_reads, so an
+  // admin who isn't linked to a given student will see unread_count=0 for
+  // that thread — matches the desired UX (oversight view, no personal
+  // read-state to maintain).
+  let studentIds: number[];
+  if (user.isAdmin) {
+    const { data: students } = await sb
+      .from("users")
+      .select("id")
+      .eq("role", "student");
+    studentIds = (students ?? []).map((u) => u.id);
+  } else {
+    const { data: links } = await sb
+      .from("student_teachers")
+      .select("student_id")
+      .eq("teacher_id", user.id);
+    studentIds = (links ?? []).map((l) => l.student_id);
+  }
   if (studentIds.length === 0) {
     return Response.json({ chats: [] }, { headers: noStoreHeaders });
   }
