@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { formatDuration } from "@/lib/i18n";
 
 type ApiStatus =
@@ -24,6 +25,7 @@ interface Summary {
   streak_days: number;
   motivation: { key: string; text: string };
   progress_metric: null | string;
+  billing: { stars_enabled: boolean };
 }
 
 export function SubscriberSummary({ jwt }: { jwt: string }) {
@@ -74,7 +76,7 @@ export function SubscriberSummary({ jwt }: { jwt: string }) {
           )}
         </div>
       )}
-      <PayCTA status={data.status} jwt={jwt} />
+      <PayCTA status={data.status} jwt={jwt} starsEnabled={data.billing.stars_enabled} />
     </section>
   );
 }
@@ -252,7 +254,15 @@ function StreakChip({ days }: { days: number }) {
  * conversion is the next obvious step. Wave 1: button is decorative, points
  * at `/pay` placeholder. Wave 2 wires `openInvoice` via the BillingProvider.
  * ----------------------------------------------------------------------- */
-function PayCTA({ status, jwt }: { status: ApiStatus; jwt: string }) {
+function PayCTA({
+  status,
+  jwt,
+  starsEnabled,
+}: {
+  status: ApiStatus;
+  jwt: string;
+  starsEnabled: boolean;
+}) {
   const [busy, setBusy] = useState(false);
   const visible =
     status.kind === "trial_ending" ||
@@ -260,6 +270,20 @@ function PayCTA({ status, jwt }: { status: ApiStatus; jwt: string }) {
     status.kind === "lapsed" ||
     status.kind === "payment_failed";
   if (!visible) return null;
+
+  // Manual-billing variant: hide the Stars CTA entirely, route to /feedback
+  // so the student can DM the admin to arrange payment out-of-band. No call
+  // to /api/billing/invoice (the route also returns 503 in this state).
+  if (!starsEnabled) {
+    return (
+      <Link
+        href="/feedback"
+        className="w-full inline-flex items-center justify-center h-10 rounded-2xl bg-tg-button text-tg-button-text text-sm font-semibold tracking-tight transition-transform active:scale-[0.99]"
+      >
+        Связаться с админом
+      </Link>
+    );
+  }
 
   const label =
     status.kind === "payment_failed" ? "Обновить оплату" : "Оплатить — 30 дней";

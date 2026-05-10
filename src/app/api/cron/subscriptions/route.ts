@@ -5,6 +5,7 @@ import { getBot } from "@/lib/tg";
 import { ru } from "@/lib/i18n";
 import { recordAudit } from "@/server/audit";
 import { tgStarsProvider } from "@/server/billing/tg-stars";
+import { getBillingStarsEnabled } from "@/server/settings";
 import type { Database } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -124,20 +125,34 @@ async function handler(req: NextRequest): Promise<Response> {
       .maybeSingle();
     if (!user?.tg_chat_id) continue;
 
-    // Build the invoice on demand. Failure here shouldn't block the others.
-    let invoiceUrl: string | null = null;
-    try {
-      const link = await tgStarsProvider.createPeriodInvoice({
-        userId: row.user_id,
-        plan: "monthly",
-      });
-      invoiceUrl = link.url;
-    } catch (e) {
-      console.warn("renewal invoice creation failed", {
-        user_id: row.user_id,
-        reason: (e as Error).message,
-      });
-      continue;
+    // Build the inline-keyboard CTA. Two modes:
+    //   - Stars on: fresh invoice link via tgStarsProvider, button "Оплатить".
+    //     Failure to create the invoice means we skip THIS user (don't fall
+    //     through to manual; consistency wins over a confusing UX).
+    //   - Stars off: NO call to createPeriodInvoice (defense — the cron is
+    //     the most likely place for a forgotten "create invoice" call to
+    //     leak through). Button reads "Связаться с админом" → /feedback.
+    const starsOn = await getBillingStarsEnabled();
+    let button: { text: string; url: string };
+    if (starsOn) {
+      try {
+        const link = await tgStarsProvider.createPeriodInvoice({
+          userId: row.user_id,
+          plan: "monthly",
+        });
+        button = { text: ru.lockedTemplateButton, url: link.url };
+      } catch (e) {
+        console.warn("renewal invoice creation failed", {
+          user_id: row.user_id,
+          reason: (e as Error).message,
+        });
+        continue;
+      }
+    } else {
+      button = {
+        text: ru.manualBillingButton,
+        url: `https://t.me/${serverEnv.TELEGRAM_BOT_USERNAME}?startapp=feedback`,
+      };
     }
 
     const text = dayOf
@@ -150,9 +165,7 @@ async function handler(req: NextRequest): Promise<Response> {
 
     try {
       await getBot().api.sendMessage(user.tg_chat_id, text, {
-        reply_markup: {
-          inline_keyboard: [[{ text: ru.lockedTemplateButton, url: invoiceUrl }]],
-        },
+        reply_markup: { inline_keyboard: [[button]] },
       });
       remindersSent++;
       await sb

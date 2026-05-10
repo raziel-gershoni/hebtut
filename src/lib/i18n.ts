@@ -30,6 +30,7 @@ export const ru = {
     "Доступ к практике закончился, поэтому новые сообщения не передаются.\n\n" +
     "Чтобы продолжить разговор, нужно получить доступ.",
   lockedTemplateButton: "Оплатить",
+  manualBillingButton: "Связаться с админом",
   frozenNotice: (until: string) =>
     `Заморозка активна до ${until}. Сообщения снова начнут приходить тренеру после неё.`,
   paymentSucceeded: (until: string) =>

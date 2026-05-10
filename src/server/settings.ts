@@ -1,31 +1,51 @@
 import { getServiceRoleClient } from "@/lib/supabase-server";
 
-const KEY = "quota_chat_notifications_enabled";
 const TTL_MS = 30_000;
 
-let cache: { value: boolean; at: number } | null = null;
+// Single shared Map cache keyed by app_settings.key. 30s TTL so the bot
+// doesn't hit Supabase on every inbound media event; the admin PATCH route
+// invalidates the whole cache after writing, so a flip takes effect
+// immediately within the writing process. Other Node workers see it on
+// their next cache miss (≤ 30s lag).
+const cache = new Map<string, { value: boolean; at: number }>();
 
-/**
- * Reads the global "send quota-related chat replies" toggle. Cached in
- * process for 30s so the bot doesn't hit Supabase on every inbound media
- * event. The admin PATCH route invalidates this cache after writing, so
- * a flip takes effect immediately within the writing process. Other Node
- * workers see it on their next cache miss (≤ 30s lag).
- */
-export async function getQuotaChatNotificationsEnabled(): Promise<boolean> {
+async function getBoolSetting(key: string): Promise<boolean> {
   const now = Date.now();
-  if (cache && now - cache.at < TTL_MS) return cache.value;
+  const hit = cache.get(key);
+  if (hit && now - hit.at < TTL_MS) return hit.value;
   const sb = getServiceRoleClient();
   const { data } = await sb
     .from("app_settings")
     .select("value")
-    .eq("key", KEY)
+    .eq("key", key)
     .maybeSingle();
   const value = data?.value === true;
-  cache = { value, at: now };
+  cache.set(key, { value, at: now });
   return value;
 }
 
+/**
+ * "Send quota-related chat replies" toggle (over-quota rejection,
+ * post-send remainder confirmation, /start greeting). Default false.
+ */
+export function getQuotaChatNotificationsEnabled(): Promise<boolean> {
+  return getBoolSetting("quota_chat_notifications_enabled");
+}
+
+/**
+ * "Telegram Stars billing surfaces visible to users" toggle. Default false.
+ * When false: PayCTA flips to "Связаться с админом", cron renewal DMs link
+ * to /feedback (no invoice generated), `/api/billing/invoice` returns 503,
+ * the access-gate locked-template inline button label + URL adapt.
+ *
+ * The Stars adapter, webhook handlers (pre_checkout_query +
+ * successful_payment), and applySuccessfulPayment all stay live so any
+ * in-flight payment is still honored.
+ */
+export function getBillingStarsEnabled(): Promise<boolean> {
+  return getBoolSetting("billing_stars_enabled");
+}
+
 export function invalidateSettingsCache(): void {
-  cache = null;
+  cache.clear();
 }

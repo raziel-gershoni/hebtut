@@ -10,6 +10,7 @@ import { serverEnv } from "@/lib/env";
 import { getStatus, type DerivedStatus } from "@/server/subscriptions";
 import { computeStreak } from "@/server/streak";
 import { pickMotivationForUser } from "@/server/motivation";
+import { getBillingStarsEnabled } from "@/server/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,6 +86,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     derived: sub.derived,
     usedSeconds: used,
   });
+  const starsEnabled = await getBillingStarsEnabled();
 
   return Response.json(
     {
@@ -102,6 +104,10 @@ export async function GET(req: NextRequest): Promise<Response> {
       // "+12% speed" / "fewer errors" / "48 words" once an analysis pipeline
       // exists. null hides the row in the card.
       progress_metric: null,
+      // PayCTA branches on this. When false, the card routes the upgrade
+      // affordance to /feedback (manual billing); when true, to the
+      // Telegram Stars invoice via openInvoice.
+      billing: { stars_enabled: starsEnabled },
     },
     { headers: noStoreHeaders },
   );

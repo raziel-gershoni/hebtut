@@ -7,7 +7,7 @@ import { fanOutToTeachers } from "@/server/notifications";
 import { isTgUserBanned } from "@/server/invites";
 import { userHandle } from "@/lib/handle";
 import { recordAudit } from "@/server/audit";
-import { getQuotaChatNotificationsEnabled } from "@/server/settings";
+import { getQuotaChatNotificationsEnabled, getBillingStarsEnabled } from "@/server/settings";
 import { getStatus, canSendMedia, shouldReplyToLockedUser } from "@/server/subscriptions";
 
 export async function handleStudentMedia(ctx: Context): Promise<boolean> {
@@ -91,17 +91,23 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
         });
         await ctx.reply(ru.frozenNotice(until));
       } else {
+        // The button label + URL adapt to the billing mode. With Stars on,
+        // the deep-link opens the Mini App pay surface (`?startapp=pay`).
+        // With Stars off (manual billing), it routes to /feedback so the
+        // student can DM the admin. Either way, the bot replies to the
+        // locked media at most once per 24h.
+        const starsOn = await getBillingStarsEnabled();
+        const button = starsOn
+          ? {
+              text: ru.lockedTemplateButton,
+              url: `https://t.me/${serverEnv.TELEGRAM_BOT_USERNAME}?startapp=pay`,
+            }
+          : {
+              text: ru.manualBillingButton,
+              url: `https://t.me/${serverEnv.TELEGRAM_BOT_USERNAME}?startapp=feedback`,
+            };
         await ctx.reply(ru.lockedTemplateText, {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: ru.lockedTemplateButton,
-                  url: `https://t.me/${serverEnv.TELEGRAM_BOT_USERNAME}?startapp=pay`,
-                },
-              ],
-            ],
-          },
+          reply_markup: { inline_keyboard: [[button]] },
         });
       }
       await sb

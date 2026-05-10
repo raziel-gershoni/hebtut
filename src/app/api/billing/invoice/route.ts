@@ -4,6 +4,7 @@ import { noStoreHeaders } from "@/lib/no-cache";
 import { tgStarsProvider } from "@/server/billing/tg-stars";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { recordAudit } from "@/server/audit";
+import { getBillingStarsEnabled } from "@/server/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,17 @@ export async function POST(req: NextRequest): Promise<Response> {
   const user = await authFromRequest(req);
   if (!hasRole(user, ["student"])) {
     return new Response("forbidden", { status: 403, headers: noStoreHeaders });
+  }
+  // Server-side gate. Defense-in-depth: even if a stale Mini App tab still
+  // has the old PayCTA wired up, no Stars invoice URL can be created while
+  // the admin flag is off. The Stars adapter, webhook handlers, and
+  // applySuccessfulPayment stay live so any IN-FLIGHT payment still
+  // settles correctly — we only block NEW invoice creation here.
+  if (!(await getBillingStarsEnabled())) {
+    return new Response("billing_stars_disabled", {
+      status: 503,
+      headers: noStoreHeaders,
+    });
   }
   // No bonus-days source defined yet (referrals are applied at payment-time
   // in applySuccessfulPayment, not pre-purchase), so always 0 here. Stripe /

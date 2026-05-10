@@ -16,6 +16,7 @@ export const revalidate = 0;
 // key can't pollute app_settings.
 const KEYS = {
   quota_chat_notifications_enabled: z.boolean(),
+  billing_stars_enabled: z.boolean(),
 } as const;
 type SettingKey = keyof typeof KEYS;
 
@@ -25,6 +26,7 @@ function isKnownKey(k: string): k is SettingKey {
 
 interface SettingsResponse {
   quota_chat_notifications_enabled: boolean;
+  billing_stars_enabled: boolean;
 }
 
 export async function GET(req: NextRequest): Promise<Response> {
@@ -37,10 +39,15 @@ export async function GET(req: NextRequest): Promise<Response> {
     .from("app_settings")
     .select("key, value")
     .in("key", Object.keys(KEYS));
-  const out: SettingsResponse = { quota_chat_notifications_enabled: false };
+  const out: SettingsResponse = {
+    quota_chat_notifications_enabled: false,
+    billing_stars_enabled: false,
+  };
   for (const row of data ?? []) {
     if (row.key === "quota_chat_notifications_enabled") {
       out.quota_chat_notifications_enabled = row.value === true;
+    } else if (row.key === "billing_stars_enabled") {
+      out.billing_stars_enabled = row.value === true;
     }
   }
   return Response.json({ settings: out }, { headers: noStoreHeaders });
