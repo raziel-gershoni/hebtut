@@ -9,6 +9,8 @@ import { userHandle } from "@/lib/handle";
 import { recordAudit } from "@/server/audit";
 import { nextWindowOpen } from "@/server/response-window";
 import { formatInTimeZone } from "date-fns-tz";
+import { addMinutes } from "date-fns";
+import { advanceOnboarding, scheduleTimer } from "@/server/onboarding";
 
 export interface ReplyContext {
   replyToMessageId: number;
@@ -254,6 +256,34 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
       reply_to_id: original?.id ?? null,
     },
   });
+
+  // Onboarding Step 8: 5 minutes after the FIRST teacher reply lands, the
+  // bot DMs a brief meta-explainer ("вот так это и работает…"). Detect by
+  // checking whether the student has any earlier outbound row — if not,
+  // this one is the first.
+  const { data: subRow } = await sb
+    .from("subscriptions")
+    .select("onboarding_state, onboarding_first_reply_at")
+    .eq("user_id", prompt.student_id)
+    .maybeSingle();
+  if (
+    subRow &&
+    subRow.onboarding_first_reply_at == null &&
+    (subRow.onboarding_state === "awaiting_first_reply" ||
+      subRow.onboarding_state === "cta_record")
+  ) {
+    const nowIso = new Date().toISOString();
+    await sb
+      .from("subscriptions")
+      .update({ onboarding_first_reply_at: nowIso, updated_at: nowIso })
+      .eq("user_id", prompt.student_id);
+    await advanceOnboarding(prompt.student_id, "meta_explainer_pending");
+    await scheduleTimer(
+      prompt.student_id,
+      "meta_explainer",
+      addMinutes(new Date(), 5),
+    );
+  }
 
   // "First answer" + notification edits only apply when there's an original
   // student message in flight. Initiation has nothing to mark answered.

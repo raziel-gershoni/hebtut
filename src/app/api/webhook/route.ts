@@ -8,6 +8,7 @@ import { handleStudentMedia } from "@/server/handlers/student-message";
 import { handleTeacherReply } from "@/server/handlers/teacher-reply";
 import { handleUnknown } from "@/server/handlers/unknown";
 import { handlePreCheckoutQuery, handleSuccessfulPayment } from "@/server/handlers/billing-events";
+import { handleOnboardingCallback } from "@/server/handlers/onboarding-callbacks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +18,9 @@ function installHandlers(): void {
   if (installed) return;
   const bot = getBot();
   bot.command("start", handleStart);
+  // Onboarding inline-keyboard buttons. callbackQuery filter scopes to
+  // `data` matches; the handler stale-checks state itself.
+  bot.callbackQuery(/^onb:/, handleOnboardingCallback);
   // Billing events come BEFORE the generic message handler so successful_payment
   // service messages don't fall through to handleUnknown.
   bot.on("pre_checkout_query", handlePreCheckoutQuery);

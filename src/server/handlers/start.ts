@@ -14,6 +14,7 @@ import {
 } from "@/server/invites";
 import { recordAudit } from "@/server/audit";
 import { getQuotaChatNotificationsEnabled } from "@/server/settings";
+import { sendStep1Welcome, resendCurrentOnboardingStep } from "@/server/onboarding";
 
 export async function handleStart(ctx: Context): Promise<void> {
   const from = ctx.from;
@@ -146,13 +147,19 @@ export async function handleStart(ctx: Context): Promise<void> {
       meta: { tg_user_id: from.id, ref_token_present: !!refToken },
     });
   }
-  await welcomeNewStudent(ctx);
+  await welcomeNewStudent(ctx, student?.id ?? null);
 }
 
-async function welcomeNewStudent(ctx: Context): Promise<void> {
-  // TODO(onboarding): send the student welcome video guide here. This is the
-  // student-only seam — the teacher path must not run this code.
-  await ctx.reply(ru.greetingStudentNew);
+async function welcomeNewStudent(ctx: Context, studentId: number | null): Promise<void> {
+  // Onboarding tree starts here. Default subscription state is `welcome`, so
+  // we just send Step 1 — clicking "Начать" advances through video1, video2,
+  // and the first-voice CTA. createStudent() may have been silently raced;
+  // if no row, fall back to the legacy greeting so the user isn't stranded.
+  if (studentId == null) {
+    await ctx.reply(ru.greetingStudentNew);
+    return;
+  }
+  await sendStep1Welcome(studentId);
 }
 
 async function welcomeNewTeacher(ctx: Context): Promise<void> {
@@ -172,6 +179,19 @@ async function welcomeExistingUser(
     return;
   }
   if (user.role === "student") {
+    // Mid-onboarding student re-opening the bot: re-send their current step
+    // so they can pick up where they left off. Active-practice / done /
+    // skipped states fall through to the legacy greeting below.
+    const sb = getServiceRoleClient();
+    const { data: sub } = await sb
+      .from("subscriptions")
+      .select("onboarding_state")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (sub?.onboarding_state) {
+      const resumed = await resendCurrentOnboardingStep(user.id, sub.onboarding_state);
+      if (resumed) return;
+    }
     if (await getQuotaChatNotificationsEnabled()) {
       const remaining = await getRemainingForToday(user.id, user.tz);
       await ctx.reply(ru.greetingStudent(formatDuration(remaining)));

@@ -9,6 +9,7 @@ import { userHandle } from "@/lib/handle";
 import { recordAudit } from "@/server/audit";
 import { getQuotaChatNotificationsEnabled, getBillingStarsEnabled } from "@/server/settings";
 import { getStatus, canSendMedia, shouldReplyToLockedUser } from "@/server/subscriptions";
+import { advanceOnboarding, cancelTimer } from "@/server/onboarding";
 
 export async function handleStudentMedia(ctx: Context): Promise<boolean> {
   const msg = ctx.message;
@@ -119,6 +120,39 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
         .eq("user_id", user.id);
     }
     return true;
+  }
+
+  // Onboarding bypass: a student who records voice instead of tapping
+  // through Steps 1–4 still moves the funnel forward. Cancel the 2h/24h
+  // nudges that are armed in `cta_record`, advance to awaiting_first_reply,
+  // stamp first_msg_at. For students already past these states, only the
+  // last_active_at timestamp updates (used for Day-2+ pause detection).
+  const onbState = sub?.raw.onboarding_state ?? null;
+  const nowIso = new Date().toISOString();
+  if (
+    onbState === "welcome" ||
+    onbState === "video1" ||
+    onbState === "video2" ||
+    onbState === "cta_record"
+  ) {
+    await advanceOnboarding(user.id, "awaiting_first_reply");
+    await cancelTimer(user.id, "nudge_2h");
+    await cancelTimer(user.id, "nudge_24h");
+    await sb
+      .from("subscriptions")
+      .update({
+        onboarding_first_msg_at: nowIso,
+        onboarding_last_active_at: nowIso,
+        updated_at: nowIso,
+      })
+      .eq("user_id", user.id);
+  } else if (onbState && onbState !== "done_skipped" && onbState !== "done_paid" && onbState !== "done_churned") {
+    // Active student in any non-terminal onboarding state — bump last-active
+    // for the day-2+ pause sweep.
+    await sb
+      .from("subscriptions")
+      .update({ onboarding_last_active_at: nowIso, updated_at: nowIso })
+      .eq("user_id", user.id);
   }
 
   // Duration is read straight from the webhook payload — never download to measure.
