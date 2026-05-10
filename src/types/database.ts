@@ -15,6 +15,31 @@ export type SubscriptionStatus =
   | "lapsed"
   | "payment_failed"
   | "frozen";
+export type OnboardingState =
+  | "welcome"
+  | "video1"
+  | "video2"
+  | "cta_record"
+  | "awaiting_first_reply"
+  | "meta_explainer_pending"
+  | "day1_active"
+  | "day2_active"
+  | "day2_conversion_pending"
+  | "awaiting_survey"
+  | "survey_yes"
+  | "survey_later"
+  | "survey_no"
+  | "churn_followup_pending"
+  | "done_paid"
+  | "done_churned"
+  | "done_skipped";
+export type OnboardingTimerKind =
+  | "nudge_2h"
+  | "nudge_24h"
+  | "meta_explainer"
+  | "day2_conversion"
+  | "survey"
+  | "churn_followup";
 
 export interface Database {
   public: {
@@ -298,6 +323,13 @@ export interface Database {
           last_motivation_shown_on: string | null;
           last_lockout_replied_at: string | null;
           last_renewal_reminder_sent_at: string | null;
+          onboarding_state: OnboardingState;
+          onboarding_state_entered_at: string;
+          onboarding_first_msg_at: string | null;
+          onboarding_first_reply_at: string | null;
+          onboarding_last_active_at: string | null;
+          onboarding_day1_limit_msg_sent_at: string | null;
+          onboarding_last_pause_nudge_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -323,10 +355,37 @@ export interface Database {
           last_motivation_shown_on?: string | null;
           last_lockout_replied_at?: string | null;
           last_renewal_reminder_sent_at?: string | null;
+          onboarding_state?: OnboardingState;
+          onboarding_state_entered_at?: string;
+          onboarding_first_msg_at?: string | null;
+          onboarding_first_reply_at?: string | null;
+          onboarding_last_active_at?: string | null;
+          onboarding_day1_limit_msg_sent_at?: string | null;
+          onboarding_last_pause_nudge_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["subscriptions"]["Insert"]>;
+        Relationships: [];
+      };
+      onboarding_timers: {
+        Row: {
+          student_id: number;
+          kind: OnboardingTimerKind;
+          due_at: string;
+          fired_at: string | null;
+          cancelled_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          student_id: number;
+          kind: OnboardingTimerKind;
+          due_at: string;
+          fired_at?: string | null;
+          cancelled_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["onboarding_timers"]["Insert"]>;
         Relationships: [];
       };
       scheduled_outbound: {
