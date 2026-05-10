@@ -4,6 +4,7 @@ import type { Database, SubscriptionStatus } from "@/types/database";
 import { recordAudit } from "@/server/audit";
 import { getBot } from "@/lib/tg";
 import { ru } from "@/lib/i18n";
+import { markOnboardingDone } from "@/server/onboarding";
 
 const REFERRER_BONUS_CAP_DAYS = 90;
 const REFERRAL_BONUS_PER_SIDE_DAYS = 30;
@@ -342,6 +343,11 @@ export async function applySuccessfulPayment(input: {
     }
   }
 
+  // Mark the onboarding tree finished — done_paid + cancel any survey /
+  // churn-followup timers. No-op for users whose onboarding is already
+  // done_skipped / done_paid / done_churned.
+  await markOnboardingDone(input.userId, "paid");
+
   return { wasFirstPaid, refereeNewEndsAt: refereeFinalEnd, referrerCreditedDays };
 }
 
@@ -441,6 +447,9 @@ export async function grantSubscriptionDays(input: {
   });
 
   await dmStudent(input.userId, ru.subscriptionGrantedDM(days, formatRu(newEnd)));
+  // Admin grants count as "user has access" so onboarding is closed —
+  // cancels any pending survey/churn timers + flips state to done_paid.
+  await markOnboardingDone(input.userId, "admin_grant");
   return { newPeriodEnd: newEnd };
 }
 

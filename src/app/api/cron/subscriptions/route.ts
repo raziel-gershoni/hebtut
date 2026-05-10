@@ -6,6 +6,8 @@ import { ru } from "@/lib/i18n";
 import { recordAudit } from "@/server/audit";
 import { tgStarsProvider } from "@/server/billing/tg-stars";
 import { getBillingStarsEnabled } from "@/server/settings";
+import { advanceOnboarding, scheduleTimer } from "@/server/onboarding";
+import { addDays } from "date-fns";
 import type { Database } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -37,13 +39,15 @@ async function handler(req: NextRequest): Promise<Response> {
   const now = new Date();
   const nowIso = now.toISOString();
 
-  // Transition 1: trial → trial_expired.
+  // Transition 1: trial → trial_expired. Capture onboarding_state in the
+  // same UPDATE so we can decide whether to schedule the +1d survey nudge
+  // (Step 12) without a follow-up SELECT.
   const { data: trialExpired } = await sb
     .from("subscriptions")
     .update({ status: "trial_expired", updated_at: nowIso })
     .eq("status", "trial")
     .lt("trial_ends_at", nowIso)
-    .select("user_id");
+    .select("user_id, onboarding_state");
   for (const row of trialExpired ?? []) {
     await recordAudit({
       action: "subscription.trial_expired",
@@ -51,6 +55,21 @@ async function handler(req: NextRequest): Promise<Response> {
       subjectType: "user",
       subjectId: row.user_id,
     });
+    // Step 12: schedule a survey 1 day later, but only for students who
+    // were ACTIVELY engaging with the trial — recorded a voice, got a
+    // teacher reply, hit a daily limit. Students who only saw welcome/
+    // video screens skip the survey (they didn't try the product).
+    const ACTIVE_TRIAL_STATES: readonly string[] = [
+      "awaiting_first_reply",
+      "meta_explainer_pending",
+      "day1_active",
+      "day2_active",
+      "day2_conversion_pending",
+    ];
+    if (ACTIVE_TRIAL_STATES.includes(row.onboarding_state)) {
+      await advanceOnboarding(row.user_id, "awaiting_survey");
+      await scheduleTimer(row.user_id, "survey", addDays(now, 1));
+    }
   }
 
   // Transition 2: active → lapsed.

@@ -29,6 +29,11 @@ const SCHEDULES = [
   // were held while the student's response window was closed. Once a
   // minute keeps the apparent latency low when the window opens.
   { path: "/api/cron/deliver-scheduled", cron: "*/1 * * * *" },
+  // Onboarding tree: drains due nudges / explainer / conversion CTA /
+  // survey / churn-followup timers, plus the day-2+ inactivity sweep.
+  // Once-a-minute matches the bot's reactive cadence — within ~60s a
+  // student who paused 6h ago gets the gentle nudge.
+  { path: "/api/cron/onboarding", cron: "*/1 * * * *" },
 ];
 
 const QSTASH = `${(QSTASH_URL ?? "https://qstash.upstash.io").replace(/\/$/, "")}/v2/schedules`;

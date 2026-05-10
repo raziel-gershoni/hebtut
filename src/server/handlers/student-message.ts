@@ -9,7 +9,14 @@ import { userHandle } from "@/lib/handle";
 import { recordAudit } from "@/server/audit";
 import { getQuotaChatNotificationsEnabled, getBillingStarsEnabled } from "@/server/settings";
 import { getStatus, canSendMedia, shouldReplyToLockedUser } from "@/server/subscriptions";
-import { advanceOnboarding, cancelTimer } from "@/server/onboarding";
+import {
+  advanceOnboarding,
+  cancelTimer,
+  computeOnboardingDay,
+  scheduleTimer,
+  sendStep9Day1LimitDone,
+} from "@/server/onboarding";
+import { addMinutes } from "date-fns";
 
 export async function handleStudentMedia(ctx: Context): Promise<boolean> {
   const msg = ctx.message;
@@ -234,5 +241,41 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
   }
   await ctx.reply(reply);
   await fanOutToTeachers(inserted.id);
+
+  // Onboarding limit-hit hooks. Run after the success reply so any failure
+  // here doesn't break the student's normal flow.
+  if (decision.newRemainingToday === 0 && sub) {
+    const day = computeOnboardingDay(sub.raw.trial_started_at, new Date(), user.tz);
+    if (day === 1 && sub.raw.onboarding_day1_limit_msg_sent_at == null) {
+      // Step 9: soft "you're done for today" — fires at most once per trial.
+      await sendStep9Day1LimitDone(user.id);
+      const stamp = new Date().toISOString();
+      await sb
+        .from("subscriptions")
+        .update({
+          onboarding_day1_limit_msg_sent_at: stamp,
+          updated_at: stamp,
+        })
+        .eq("user_id", user.id);
+    } else if (
+      day >= 2 &&
+      sub.raw.onboarding_state !== "day2_conversion_pending" &&
+      sub.raw.onboarding_state !== "done_paid" &&
+      sub.raw.onboarding_state !== "done_churned" &&
+      sub.raw.onboarding_state !== "done_skipped" &&
+      sub.raw.onboarding_state !== "awaiting_survey" &&
+      sub.raw.onboarding_state !== "survey_yes" &&
+      sub.raw.onboarding_state !== "survey_later" &&
+      sub.raw.onboarding_state !== "survey_no" &&
+      sub.raw.onboarding_state !== "churn_followup_pending"
+    ) {
+      // Step 11: end-of-trial conversion CTA, fires 5 minutes after the
+      // limit hit so the "✅ Отправлено." reply has its breath. The cron
+      // sends the actual message + payment button.
+      await advanceOnboarding(user.id, "day2_conversion_pending");
+      await scheduleTimer(user.id, "day2_conversion", addMinutes(new Date(), 5));
+    }
+  }
+
   return true;
 }
