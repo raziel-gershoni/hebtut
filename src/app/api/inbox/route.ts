@@ -12,11 +12,12 @@ interface MessageRow {
   id: number;
   student_id: number;
   direction: "in" | "out";
-  kind: "voice" | "video_note";
+  kind: "voice" | "video_note" | "text";
   duration: number;
   status: "pending" | "answered" | "expired" | "orphaned";
   teacher_id: number | null;
   created_at: string;
+  text_content: string | null;
 }
 
 interface InboxChat {
@@ -27,11 +28,12 @@ interface InboxChat {
     | {
         id: number;
         direction: "in" | "out";
-        kind: "voice" | "video_note";
+        kind: "voice" | "video_note" | "text";
         duration: number;
         status: "pending" | "answered" | "expired" | "orphaned";
         teacher_id: number | null;
         created_at: string;
+        text_content: string | null;
       }
     | null;
   unread_count: number;
@@ -98,7 +100,9 @@ export async function GET(req: NextRequest) {
   // 2) Recent message slice across all my linked students.
   const { data: msgsRaw } = await sb
     .from("messages")
-    .select("id, student_id, direction, kind, duration, status, teacher_id, created_at")
+    .select(
+      "id, student_id, direction, kind, duration, status, teacher_id, created_at, text_content",
+    )
     .in("student_id", studentIds)
     .in("status", ["pending", "answered", "expired"])
     .order("created_at", { ascending: false })
@@ -191,6 +195,7 @@ export async function GET(req: NextRequest) {
               status: last.status,
               teacher_id: last.teacher_id,
               created_at: last.created_at,
+              text_content: last.text_content,
             }
           : null,
         unread_count: unreadByStudent.get(sid) ?? 0,

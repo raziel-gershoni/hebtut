@@ -6,7 +6,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type UserRole = "pending" | "student" | "teacher";
 export type UserStatus = "active" | "suspended";
 export type MessageDirection = "in" | "out";
-export type MessageKind = "voice" | "video_note";
+export type MessageKind = "voice" | "video_note" | "text";
 export type MessageStatus = "pending" | "answered" | "expired" | "orphaned";
 export type SubscriptionStatus =
   | "trial"
@@ -107,8 +107,9 @@ export interface Database {
           direction: MessageDirection;
           teacher_id: number | null;
           kind: MessageKind;
-          file_id: string;
+          file_id: string | null;
           file_unique_id: string | null;
+          text_content: string | null;
           duration: number;
           status: MessageStatus;
           claimed_by_teacher_id: number | null;
@@ -124,8 +125,9 @@ export interface Database {
           direction: MessageDirection;
           teacher_id?: number | null;
           kind: MessageKind;
-          file_id: string;
+          file_id?: string | null;
           file_unique_id?: string | null;
+          text_content?: string | null;
           duration: number;
           status: MessageStatus;
           claimed_by_teacher_id?: number | null;

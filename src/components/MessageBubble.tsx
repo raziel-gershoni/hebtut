@@ -10,11 +10,12 @@ import { usePlayback } from "./PlaybackProvider";
 export type ThreadMsg = {
   id: number;
   direction: "in" | "out";
-  kind: "voice" | "video_note";
+  kind: "voice" | "video_note" | "text";
   duration: number;
   status?: string;
   reply_to_id?: number | null;
   created_at: string;
+  text_content?: string | null;
 };
 
 export interface Speaker {
@@ -152,8 +153,10 @@ export function MessageBubble({
 
         {msg.kind === "voice" ? (
           <VoicePlayer src={src} totalSeconds={msg.duration} messageId={msg.id} />
-        ) : (
+        ) : msg.kind === "video_note" ? (
           <VideoNote src={src} totalSeconds={msg.duration} messageId={msg.id} />
+        ) : (
+          <TextContent text={msg.text_content ?? ""} />
         )}
 
         {isIn && onReply && (
@@ -179,6 +182,21 @@ export function MessageBubble({
       </div>
       {!isIn && <div className="shrink-0 mt-1.5">{speakerAvatar}</div>}
     </div>
+  );
+}
+
+/**
+ * Text bubble content: just the text with whitespace + line-breaks preserved.
+ * No player, no playback-speed pill, no reply-quote rendering at this level —
+ * the wrapping bubble (with speaker name, reply quote, reply button) is
+ * unchanged. Read-only by design: the Mini App thread view stays a viewer
+ * surface, not a composer (teachers send text via TG swipe-reply).
+ */
+function TextContent({ text }: { text: string }) {
+  return (
+    <p className="whitespace-pre-wrap break-words text-tg-text leading-relaxed">
+      {text}
+    </p>
   );
 }
 

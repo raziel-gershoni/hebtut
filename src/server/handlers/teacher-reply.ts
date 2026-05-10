@@ -329,3 +329,213 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
   await ctx.reply(ru.teacherReplyDelivered);
   return true;
 }
+
+/**
+ * Teacher swipe-replies a prompt with TEXT instead of a voice/video. Same
+ * resolution + access-check shape as `handleTeacherReply` (intentional code
+ * twin — the divergence is small and mostly mechanical: sendMessage instead
+ * of sendVoice, kind='text' with text_content instead of file_id, no
+ * response-window queueing).
+ *
+ * Returns false when the input doesn't meet teacher-reply criteria (not a
+ * text message, no swipe-reply, sender isn't a teacher, etc.) — the caller
+ * in /api/webhook falls through to handleUnknown so a plain student typing
+ * a question still gets the legacy "I only understand voice" reply.
+ *
+ * Returns true when handled (delivered, errored gracefully, or rejected
+ * with explicit user-facing copy) — caller stops there.
+ */
+export async function handleTeacherReplyText(ctx: Context): Promise<boolean> {
+  const msg = ctx.message;
+  if (!msg || !ctx.from || !msg.text) return false;
+  // Slash commands are handled separately. Ignore them here so /start &c.
+  // don't try to swipe-reply-resolve.
+  if (msg.text.startsWith("/")) return false;
+  const replyTo = msg.reply_to_message;
+  if (!replyTo) return false;
+
+  if (await isTgUserBanned(ctx.from.id)) return true;
+
+  const sb = getServiceRoleClient();
+  const { data: teacher } = await sb
+    .from("users")
+    .select("id, role, tg_user_id, display_handle, status")
+    .eq("tg_user_id", ctx.from.id)
+    .maybeSingle();
+  if (!teacher || teacher.role !== "teacher") return false;
+  if (teacher.status === "suspended") {
+    await ctx.reply(ru.suspendedNotice);
+    return true;
+  }
+
+  const { data: prompt } = await sb
+    .from("prompts")
+    .select("id, student_id, student_message_id, teacher_id, tg_prompt_message_id")
+    .eq("teacher_id", teacher.id)
+    .eq("tg_prompt_message_id", replyTo.message_id)
+    .maybeSingle();
+  if (!prompt) {
+    // Replied to a message that isn't a known prompt for this teacher.
+    // Could be an old/expired prompt, or a totally unrelated message.
+    // Return false so handleUnknown takes over with the generic copy.
+    return false;
+  }
+
+  // Resolve original (when this is a reply-prompt, not an initiation).
+  let original: {
+    id: number;
+    student_id: number;
+    status: string;
+    direction: string;
+    tg_message_id_in_student_chat: number | null;
+  } | null = null;
+  if (prompt.student_message_id != null) {
+    const { data: orig } = await sb
+      .from("messages")
+      .select("id, student_id, status, direction, tg_message_id_in_student_chat")
+      .eq("id", prompt.student_message_id)
+      .single();
+    if (!orig || orig.direction !== "in" || orig.status === "orphaned") {
+      await ctx.reply(ru.teacherReplyFailed);
+      return true;
+    }
+    original = orig;
+  }
+
+  // (S, T) link still active.
+  const { data: link } = await sb
+    .from("student_teachers")
+    .select("teacher_id")
+    .eq("student_id", prompt.student_id)
+    .eq("teacher_id", teacher.id)
+    .maybeSingle();
+  if (!link) {
+    await ctx.reply(ru.teacherReplyFailed);
+    return true;
+  }
+
+  // For pending/expired student messages we require an active claim by this
+  // teacher. Already-answered originals (followup) and pure initiations skip.
+  if (original && original.status !== "answered") {
+    const { data: claim } = await sb
+      .from("claims")
+      .select("teacher_id, expires_at")
+      .eq("student_id", prompt.student_id)
+      .maybeSingle();
+    const claimActive =
+      !!claim && new Date(claim.expires_at).getTime() > Date.now() && claim.teacher_id === teacher.id;
+    if (!claimActive) {
+      await ctx.reply(ru.teacherReplyFailed);
+      return true;
+    }
+  }
+
+  const { data: student } = await sb
+    .from("users")
+    .select("tg_chat_id, tg_user_id, display_handle")
+    .eq("id", prompt.student_id)
+    .single();
+  if (!student) {
+    await ctx.reply(ru.teacherReplyFailed);
+    return true;
+  }
+
+  // Send the text. TG-reply to the student's original when one exists; else
+  // freestanding (initiation). allow_sending_without_reply mirrors the
+  // voice path so a deleted original still delivers un-threaded.
+  const replyParams =
+    original?.tg_message_id_in_student_chat != null
+      ? {
+          reply_parameters: {
+            message_id: original.tg_message_id_in_student_chat,
+            allow_sending_without_reply: true,
+          },
+        }
+      : {};
+
+  const bot = getBot();
+  let sentMessageId: number;
+  try {
+    const sent = await bot.api.sendMessage(student.tg_chat_id, msg.text, replyParams);
+    sentMessageId = sent.message_id;
+  } catch (e) {
+    console.error("relay text to student failed", e);
+    await ctx.reply(ru.teacherReplyFailed);
+    return true;
+  }
+
+  // Insert messages row. file_id is null for text; text_content holds the
+  // payload. duration is 0 — meaningless for text, but the column is
+  // NOT NULL with a CHECK ≥ 0, so 0 is the right placeholder.
+  const { data: outRow } = await sb
+    .from("messages")
+    .insert({
+      student_id: prompt.student_id,
+      direction: "out",
+      teacher_id: teacher.id,
+      kind: "text",
+      file_id: null,
+      file_unique_id: null,
+      text_content: msg.text,
+      duration: 0,
+      status: "answered",
+      reply_to_id: original?.id ?? null,
+      tg_message_id_in_student_chat: sentMessageId,
+    })
+    .select("id")
+    .single();
+
+  await recordAudit({
+    action: "message.out",
+    actorId: teacher.id,
+    subjectType: "message",
+    subjectId: outRow?.id ?? null,
+    meta: {
+      kind: "text",
+      duration: 0,
+      student_id: prompt.student_id,
+      reply_to_id: original?.id ?? null,
+    },
+  });
+
+  // First answer + notification edits (only when there's an original in flight).
+  if (original && original.status !== "answered") {
+    await sb
+      .from("messages")
+      .update({
+        status: "answered",
+        answered_at: new Date().toISOString(),
+        claimed_by_teacher_id: teacher.id,
+      })
+      .eq("id", original.id);
+    const teacherHandle = teacher.display_handle ?? userHandle(teacher.tg_user_id).handle;
+    const studentHandle = student.display_handle ?? userHandle(student.tg_user_id).handle;
+    await editAllNotificationsForMessage(
+      original.id,
+      ru.teacherNotificationTaken(teacherHandle, studentHandle),
+    );
+  }
+
+  // Refresh the (S, T) session.
+  const ttlMs = serverEnv.CLAIM_TTL_MINUTES * 60_000;
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+  await sb.from("claims").upsert(
+    {
+      student_id: prompt.student_id,
+      teacher_id: teacher.id,
+      claimed_at: new Date().toISOString(),
+      expires_at: expiresAt,
+    },
+    { onConflict: "student_id" },
+  );
+  await recordAudit({
+    action: "claim.refresh",
+    actorId: teacher.id,
+    subjectType: "claim",
+    subjectId: prompt.student_id,
+    meta: { kind: "text-reply-tail", expires_at: expiresAt },
+  });
+
+  await ctx.reply(ru.teacherReplyDelivered);
+  return true;
+}

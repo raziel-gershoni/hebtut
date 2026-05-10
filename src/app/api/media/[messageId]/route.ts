@@ -21,10 +21,15 @@ export async function GET(req: NextRequest, { params }: { params: { messageId: s
   const sb = getServiceRoleClient();
   const { data: msg } = await sb
     .from("messages")
-    .select("id, student_id, file_id")
+    .select("id, student_id, kind, file_id")
     .eq("id", messageId)
     .single();
   if (!msg) return new Response("not found", { status: 404 });
+
+  // Text messages have no media to redirect to.
+  if (msg.kind === "text" || !msg.file_id) {
+    return new Response("not media", { status: 400 });
+  }
 
   if (!user.isAdmin) {
     const { data: link } = await sb

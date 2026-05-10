@@ -43,7 +43,7 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
   const { data: rawMessages, error } = await sb
     .from("messages")
     .select(
-      "id, direction, kind, duration, status, reply_to_id, created_at, teacher_id",
+      "id, direction, kind, duration, status, reply_to_id, created_at, teacher_id, text_content",
     )
     .eq("student_id", studentId)
     .in("status", ["pending", "answered", "expired"])
@@ -80,6 +80,7 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
     created_at: m.created_at,
     teacher_id: m.teacher_id,
     teacher: m.teacher_id != null ? teachersById.get(m.teacher_id) ?? null : null,
+    text_content: m.text_content ?? null,
   }));
 
   const { data: studentRow } = await sb

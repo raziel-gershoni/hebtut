@@ -10,11 +10,12 @@ import { bgFromHandle } from "@/lib/handle";
 type LastMessage = {
   id: number;
   direction: "in" | "out";
-  kind: "voice" | "video_note";
+  kind: "voice" | "video_note" | "text";
   duration: number;
   status: "pending" | "answered" | "expired" | "orphaned";
   teacher_id: number | null;
   created_at: string;
+  text_content?: string | null;
 };
 
 interface Chat {
@@ -166,13 +167,25 @@ function ChatRow({
 function Preview({ chat, myUserId }: { chat: Chat; myUserId: number }) {
   const m = chat.last_message;
   if (!m) return <span>Пока пусто</span>;
-  const icon = m.kind === "voice" ? "🎙️" : "🟢";
-  const dur = formatDuration(m.duration);
   // "Ты:" only when the LAST out-message was sent by the viewer. With
   // multi-teacher threads, a peer's reply must not be misattributed.
   const prefix =
     m.direction === "out" && m.teacher_id === myUserId ? "Ты: " : "";
   const tail = chat.has_unanswered ? " · ждёт ответа" : "";
+  if (m.kind === "text") {
+    // Text-message preview: show a short snippet, truncated. The CSS truncate
+    // on the parent already clips visually; we trim here too for safety.
+    const snippet = (m.text_content ?? "").slice(0, 80);
+    return (
+      <span>
+        {prefix}
+        {snippet}
+        {tail}
+      </span>
+    );
+  }
+  const icon = m.kind === "voice" ? "🎙️" : "🟢";
+  const dur = formatDuration(m.duration);
   return (
     <span>
       {prefix}

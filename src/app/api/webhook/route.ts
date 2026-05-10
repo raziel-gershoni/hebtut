@@ -5,7 +5,7 @@ import { serverEnv } from "@/lib/env";
 import { ensureBootstrapAdmin } from "@/server/bootstrap";
 import { handleStart } from "@/server/handlers/start";
 import { handleStudentMedia } from "@/server/handlers/student-message";
-import { handleTeacherReply } from "@/server/handlers/teacher-reply";
+import { handleTeacherReply, handleTeacherReplyText } from "@/server/handlers/teacher-reply";
 import { handleUnknown } from "@/server/handlers/unknown";
 import { handlePreCheckoutQuery, handleSuccessfulPayment } from "@/server/handlers/billing-events";
 import { handleOnboardingCallback } from "@/server/handlers/onboarding-callbacks";
@@ -31,6 +31,17 @@ function installHandlers(): void {
     if (handledAsTeacher) return;
     // Otherwise route as inbound student media.
     await handleStudentMedia(ctx);
+  });
+  // Teacher swipe-reply with TEXT instead of voice. Strictly gated: handler
+  // returns false unless sender is a teacher AND replied to a known prompt
+  // AND it isn't a slash command. Anything that doesn't match falls through
+  // to handleUnknown via next() — student typing in chat still gets the
+  // generic 'I only understand voice' fallback. No kind='text' row is ever
+  // created with direction='in'; the messages_text_only_outbound CHECK
+  // constraint is the second line of defence.
+  bot.on("message:text", async (ctx, next) => {
+    const handled = await handleTeacherReplyText(ctx);
+    if (!handled) await next();
   });
   bot.on("message", handleUnknown);
   installed = true;
