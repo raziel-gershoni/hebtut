@@ -64,6 +64,7 @@ export interface Database {
           avatar_file_unique_id: string | null;
           avatar_fetched_at: string | null;
           referral_token: string | null;
+          preferred_name: string | null;
         };
         Insert: {
           id?: number;
@@ -83,6 +84,7 @@ export interface Database {
           avatar_file_unique_id?: string | null;
           avatar_fetched_at?: string | null;
           referral_token?: string | null;
+          preferred_name?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["users"]["Insert"]>;
         Relationships: [];

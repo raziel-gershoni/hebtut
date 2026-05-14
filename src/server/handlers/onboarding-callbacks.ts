@@ -198,7 +198,10 @@ export async function handleOnboardingNameInput(ctx: Context): Promise<boolean> 
   // bubbles and the admin panel.
   const name = rawName.replace(/\s+/g, " ");
 
-  await sb.from("users").update({ name }).eq("id", user.id);
+  // Write to preferred_name (decoupled from the TG-synced `name` column).
+  // /start re-syncs `name` on every interaction; preferred_name persists
+  // independently and is what peer-facing surfaces actually render.
+  await sb.from("users").update({ preferred_name: name }).eq("id", user.id);
   await advanceOnboarding(user.id, "cta_record");
 
   // Schedule the 2h soft + 24h hard nudges from THIS moment (entering
