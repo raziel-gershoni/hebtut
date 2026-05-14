@@ -12,6 +12,7 @@ function handleFromDisplay(
     | {
         tg_user_id: number;
         name?: string | null;
+        preferred_name?: string | null;
         display_handle: string | null;
         display_emoji?: string | null;
         avatar_file_id?: string | null;
@@ -24,6 +25,7 @@ function handleFromDisplay(
     {
       tg_user_id: row?.tg_user_id ?? null,
       name: row?.name ?? null,
+      preferred_name: row?.preferred_name ?? null,
       display_handle: row?.display_handle ?? null,
       display_emoji: row?.display_emoji ?? null,
       avatar_file_id: row?.avatar_file_id ?? null,
@@ -53,7 +55,7 @@ export async function fanOutToTeachers(messageId: number): Promise<void> {
 
   const { data: student } = await sb
     .from("users")
-    .select("tg_user_id, name, display_handle, display_emoji, avatar_file_id")
+    .select("tg_user_id, name, preferred_name, display_handle, display_emoji, avatar_file_id")
     .eq("id", msg.student_id)
     .single();
   const studentHandle = handleFromDisplay(student, anonMode);
@@ -79,7 +81,7 @@ export async function fanOutToTeachers(messageId: number): Promise<void> {
         (
           await sb
             .from("users")
-            .select("tg_user_id, name, display_handle, display_emoji, avatar_file_id")
+            .select("tg_user_id, name, preferred_name, display_handle, display_emoji, avatar_file_id")
             .eq("id", handlerId)
             .single()
         ).data,

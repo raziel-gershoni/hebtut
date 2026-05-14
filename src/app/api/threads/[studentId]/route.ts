@@ -59,7 +59,7 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
   if (teacherIds.length > 0) {
     const { data: teacherRows } = await sb
       .from("users")
-      .select("id, tg_user_id, display_handle, display_emoji, name, avatar_file_id")
+      .select("id, tg_user_id, display_handle, display_emoji, name, preferred_name, avatar_file_id")
       .in("id", teacherIds);
     for (const t of teacherRows ?? []) {
       const d = resolveDisplay(t, anonMode);
@@ -86,7 +86,7 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
 
   const { data: studentRow } = await sb
     .from("users")
-    .select("id, tg_user_id, display_handle, display_emoji, name, avatar_file_id")
+    .select("id, tg_user_id, display_handle, display_emoji, name, preferred_name, avatar_file_id")
     .eq("id", studentId)
     .single();
   const studentDisplay = resolveDisplay(studentRow, anonMode);
@@ -120,7 +120,7 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
   if (claimRow) {
     const { data: t } = await sb
       .from("users")
-      .select("tg_user_id, display_handle, display_emoji, name, avatar_file_id")
+      .select("tg_user_id, display_handle, display_emoji, name, preferred_name, avatar_file_id")
       .eq("id", claimRow.teacher_id)
       .single();
     const d = resolveDisplay(t, anonMode);

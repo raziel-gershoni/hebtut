@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
   // 3) Linked-student rows (handles + emoji for the anonymous chat surface).
   const { data: studentRows } = await sb
     .from("users")
-    .select("id, tg_user_id, display_handle, display_emoji, name, avatar_file_id")
+    .select("id, tg_user_id, display_handle, display_emoji, name, preferred_name, avatar_file_id")
     .in("id", studentIds);
 
   // Mode picks names-vs-handles for every peer-facing field below.
@@ -145,7 +145,7 @@ export async function GET(req: NextRequest) {
     const claimTeacherIds = Array.from(new Set(claimRows.map((c) => c.teacher_id)));
     const { data: teacherRows } = await sb
       .from("users")
-      .select("id, tg_user_id, display_handle, display_emoji, name, avatar_file_id")
+      .select("id, tg_user_id, display_handle, display_emoji, name, preferred_name, avatar_file_id")
       .in("id", claimTeacherIds);
     const teacherById = new Map(
       (teacherRows ?? []).map((t) => [t.id, t]),

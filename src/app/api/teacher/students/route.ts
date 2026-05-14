@@ -19,6 +19,7 @@ interface LinkRow {
         display_handle: string | null;
         display_emoji: string | null;
         avatar_file_id: string | null;
+        preferred_name: string | null;
       }
     | null;
 }
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
   const { data: links, error } = await sb
     .from("student_teachers")
     .select(
-      "student_id, users!student_teachers_student_id_fkey(id, tg_user_id, name, display_handle, display_emoji, avatar_file_id)",
+      "student_id, users!student_teachers_student_id_fkey(id, tg_user_id, name, preferred_name, display_handle, display_emoji, avatar_file_id)",
     )
     .eq("teacher_id", user.id);
   if (error) return new Response(error.message, { status: 500, headers: noStoreHeaders });
