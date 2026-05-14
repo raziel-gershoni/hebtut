@@ -7,7 +7,8 @@ import { bgFromHandle } from "@/lib/handle";
 interface Student {
   id: number;
   handle: string;
-  emoji: string;
+  emoji: string | null;
+  has_avatar: boolean;
 }
 
 interface StudentPickerProps {
@@ -122,8 +123,13 @@ export function StudentPicker({ jwt, onClose }: StudentPickerProps) {
                     <Avatar
                       size={36}
                       name={s.handle}
-                      emoji={s.emoji}
-                      bgClass={bgFromHandle(s.handle)}
+                      imageUrl={
+                        s.emoji == null && s.has_avatar
+                          ? `/api/avatar/${s.id}?token=${encodeURIComponent(jwt)}`
+                          : undefined
+                      }
+                      emoji={s.emoji ?? undefined}
+                      bgClass={s.emoji ? bgFromHandle(s.handle) : undefined}
                     />
                     <span className="flex-1 min-w-0 truncate text-left">
                       {s.handle}

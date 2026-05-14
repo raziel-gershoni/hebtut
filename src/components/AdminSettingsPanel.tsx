@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 interface Settings {
   quota_chat_notifications_enabled: boolean;
   billing_stars_enabled: boolean;
+  display_anonymous_handles_enabled: boolean;
 }
 
 type ToggleKey = keyof Settings;
@@ -28,6 +29,14 @@ const TOGGLES: readonly ToggleSpec[] = [
     // The "off" copy is the new safe default — manual billing only.
     on: "Кнопка «Оплатить» открывает Telegram Stars. Перед включением убедись, что готов принимать оплату через Stars.",
     off: "Оплата только вручную через админа. Кнопки «Оплатить» закрыты, инвойсы Stars не создаются.",
+  },
+  {
+    key: "display_anonymous_handles_enabled",
+    title: "Анонимные имена (псевдонимы)",
+    // OFF (default) = real names; ON = animal handles. So "on" describes
+    // the unusual choice and "off" describes the default behaviour.
+    on: "Везде показываем псевдонимы вида «Гордый Орёл» 🦅 и эмодзи-аватары вместо имён и фото.",
+    off: "В чатах и инбоксе показываем настоящее имя (как ученик указал в онбординге) и фото из Telegram.",
   },
 ];
 

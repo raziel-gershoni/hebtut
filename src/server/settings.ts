@@ -46,6 +46,20 @@ export function getBillingStarsEnabled(): Promise<boolean> {
   return getBoolSetting("billing_stars_enabled");
 }
 
+/**
+ * "Show anonymous adjective+animal handles instead of first names" toggle.
+ * Default false → peer-facing surfaces show students' real names (collected
+ * during onboarding's awaiting_name step) and their TG avatars when
+ * available.
+ *
+ * When ON: legacy behaviour — display_handle (e.g. "Гордый Орёл") + emoji
+ * on a colored circle. Used as an opt-in fallback for cohorts that prefer
+ * anonymity; affects every peer-facing surface globally.
+ */
+export function getDisplayAnonymousHandlesEnabled(): Promise<boolean> {
+  return getBoolSetting("display_anonymous_handles_enabled");
+}
+
 export function invalidateSettingsCache(): void {
   cache.clear();
 }

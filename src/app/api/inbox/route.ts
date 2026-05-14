@@ -2,7 +2,8 @@ import type { NextRequest } from "next/server";
 import { authFromRequest, canTeachOrReadAsAdmin } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
-import { userHandle } from "@/lib/handle";
+import { resolveDisplay } from "@/server/display";
+import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +24,8 @@ interface MessageRow {
 interface InboxChat {
   student_id: number;
   student_handle: string;
-  student_emoji: string;
+  student_emoji: string | null;
+  student_has_avatar: boolean;
   last_message:
     | {
         id: number;
@@ -46,23 +48,18 @@ interface InboxChat {
    */
   has_unanswered: boolean;
   claim:
-    | { teacher_id: number; teacher_handle: string; teacher_emoji: string; is_self: boolean }
+    | {
+        teacher_id: number;
+        teacher_handle: string;
+        teacher_emoji: string | null;
+        teacher_has_avatar: boolean;
+        is_self: boolean;
+      }
     | null;
 }
 
-function resolveHandle(
-  row: { tg_user_id: number; display_handle: string | null; display_emoji: string | null } | undefined,
-): { handle: string; emoji: string } {
-  if (row?.display_handle && row.display_emoji) {
-    return { handle: row.display_handle, emoji: row.display_emoji };
-  }
-  // Legacy NULL fallback — derive from tg_user_id. Same algorithm the bot
-  // and the admin route use, so the value matches once the lazy backfill
-  // commits in /api/admin/users.
-  const fallbackTgId = row?.tg_user_id ?? 0;
-  const h = userHandle(fallbackTgId);
-  return { handle: h.handle, emoji: h.emoji };
-}
+// (Display resolution now lives in src/server/display.ts and is mode-aware:
+// names vs anonymous handles per the global app_settings flag.)
 
 export async function GET(req: NextRequest) {
   const user = await authFromRequest(req);
@@ -112,8 +109,11 @@ export async function GET(req: NextRequest) {
   // 3) Linked-student rows (handles + emoji for the anonymous chat surface).
   const { data: studentRows } = await sb
     .from("users")
-    .select("id, tg_user_id, display_handle, display_emoji")
+    .select("id, tg_user_id, display_handle, display_emoji, name, avatar_file_id")
     .in("id", studentIds);
+
+  // Mode picks names-vs-handles for every peer-facing field below.
+  const anonMode = await getDisplayAnonymousHandlesEnabled();
 
   // 4) Inbox-read marks for me.
   const { data: readRows } = await sb
@@ -134,23 +134,29 @@ export async function GET(req: NextRequest) {
     .gt("expires_at", nowIso);
   const claimByStudent = new Map<
     number,
-    { teacher_id: number; teacher_handle: string; teacher_emoji: string }
+    {
+      teacher_id: number;
+      teacher_handle: string;
+      teacher_emoji: string | null;
+      teacher_has_avatar: boolean;
+    }
   >();
   if (claimRows && claimRows.length > 0) {
     const claimTeacherIds = Array.from(new Set(claimRows.map((c) => c.teacher_id)));
     const { data: teacherRows } = await sb
       .from("users")
-      .select("id, tg_user_id, display_handle, display_emoji")
+      .select("id, tg_user_id, display_handle, display_emoji, name, avatar_file_id")
       .in("id", claimTeacherIds);
     const teacherById = new Map(
       (teacherRows ?? []).map((t) => [t.id, t]),
     );
     for (const c of claimRows) {
-      const h = resolveHandle(teacherById.get(c.teacher_id));
+      const d = resolveDisplay(teacherById.get(c.teacher_id), anonMode);
       claimByStudent.set(c.student_id, {
         teacher_id: c.teacher_id,
-        teacher_handle: h.handle,
-        teacher_emoji: h.emoji,
+        teacher_handle: d.handle,
+        teacher_emoji: d.emoji,
+        teacher_has_avatar: d.has_avatar,
       });
     }
   }
@@ -181,11 +187,12 @@ export async function GET(req: NextRequest) {
       const s = studentById.get(sid);
       const last = lastByStudent.get(sid) ?? null;
       const claim = claimByStudent.get(sid) ?? null;
-      const studentHandle = resolveHandle(s);
+      const studentDisplay = resolveDisplay(s, anonMode);
       return {
         student_id: sid,
-        student_handle: studentHandle.handle,
-        student_emoji: studentHandle.emoji,
+        student_handle: studentDisplay.handle,
+        student_emoji: studentDisplay.emoji,
+        student_has_avatar: studentDisplay.has_avatar,
         last_message: last
           ? {
               id: last.id,
@@ -206,6 +213,7 @@ export async function GET(req: NextRequest) {
               teacher_id: claim.teacher_id,
               teacher_handle: claim.teacher_handle,
               teacher_emoji: claim.teacher_emoji,
+              teacher_has_avatar: claim.teacher_has_avatar,
               is_self: claim.teacher_id === user.id,
             }
           : null,

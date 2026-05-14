@@ -1,16 +1,35 @@
 import { getBot } from "@/lib/tg";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { ru, formatDuration } from "@/lib/i18n";
-import { userHandle } from "@/lib/handle";
+import { resolveDisplay } from "@/server/display";
+import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
 
-function handleFromRow(
+// Used by the fan-out copy below — picks the user's display label per the
+// global names-vs-handles toggle. Resolved at the start of the fan-out so a
+// single notification batch uses one consistent mode.
+function handleFromDisplay(
   row:
-    | { tg_user_id: number; display_handle: string | null }
+    | {
+        tg_user_id: number;
+        name?: string | null;
+        display_handle: string | null;
+        display_emoji?: string | null;
+        avatar_file_id?: string | null;
+      }
     | null
     | undefined,
+  anonMode: boolean,
 ): string {
-  if (row?.display_handle) return row.display_handle;
-  return userHandle(row?.tg_user_id ?? 0).handle;
+  return resolveDisplay(
+    {
+      tg_user_id: row?.tg_user_id ?? null,
+      name: row?.name ?? null,
+      display_handle: row?.display_handle ?? null,
+      display_emoji: row?.display_emoji ?? null,
+      avatar_file_id: row?.avatar_file_id ?? null,
+    },
+    anonMode,
+  ).handle;
 }
 
 /**
@@ -28,12 +47,16 @@ export async function fanOutToTeachers(messageId: number): Promise<void> {
     .single();
   if (!msg) return;
 
+  // Resolve once for the whole fan-out so a flip mid-batch doesn't yield
+  // inconsistent copy across the messages we send.
+  const anonMode = await getDisplayAnonymousHandlesEnabled();
+
   const { data: student } = await sb
     .from("users")
-    .select("tg_user_id, display_handle")
+    .select("tg_user_id, name, display_handle, display_emoji, avatar_file_id")
     .eq("id", msg.student_id)
     .single();
-  const studentHandle = handleFromRow(student);
+  const studentHandle = handleFromDisplay(student, anonMode);
 
   const { data: links } = await sb
     .from("student_teachers")
@@ -52,14 +75,15 @@ export async function fanOutToTeachers(messageId: number): Promise<void> {
     claim && new Date(claim.expires_at).getTime() > Date.now() ? claim.teacher_id : null;
 
   const handlerHandle = handlerId
-    ? handleFromRow(
+    ? handleFromDisplay(
         (
           await sb
             .from("users")
-            .select("tg_user_id, display_handle")
+            .select("tg_user_id, name, display_handle, display_emoji, avatar_file_id")
             .eq("id", handlerId)
             .single()
         ).data,
+        anonMode,
       )
     : null;
 

@@ -16,13 +16,17 @@ interface ClaimInfo {
 interface StudentMeta {
   id: number;
   handle: string;
-  emoji: string;
+  // Names mode → emoji is null and `has_avatar` indicates whether to fetch
+  // `/api/avatar/<id>`. Anon mode → emoji is set, has_avatar=false.
+  emoji: string | null;
+  has_avatar: boolean;
 }
 
 interface TeacherMeta {
   id: number;
   handle: string;
-  emoji: string;
+  emoji: string | null;
+  has_avatar: boolean;
 }
 
 interface ApiMessage extends ThreadMsg {
@@ -169,16 +173,28 @@ export function ThreadView({
   );
 
   const studentDisplay = student?.handle ?? "Ученик";
-  const studentEmoji = student?.emoji;
-  const studentBg = student ? bgFromHandle(student.handle) : undefined;
+  // In names mode the server returns emoji=null and has_avatar tells us
+  // whether to fetch the real TG photo. In anon mode emoji is set and we
+  // render an emoji-on-color circle.
+  const studentEmoji = student?.emoji ?? undefined;
+  const studentBg = student?.emoji ? bgFromHandle(student.handle) : undefined;
+  const studentAvatarUrl =
+    student && student.emoji == null && student.has_avatar
+      ? `/api/avatar/${student.id}?token=${encodeURIComponent(jwt)}`
+      : undefined;
 
-  // For each message, resolve who's speaking. Inbound = the student (anonymous
-  // handle + animal-emoji avatar). Outbound = either the current viewer (real
-  // own avatar, label "Ты" — matches TG's "You" convention) or another teacher
-  // (anonymous handle + emoji).
+  // For each message, resolve who's speaking. Inbound = the student
+  // (handle/name + avatar). Outbound = either the current viewer (label "Ты"
+  // — matches TG's "You" convention) or another teacher (handle/name +
+  // avatar). The Avatar component prefers imageUrl over emoji over initials.
   function speakerFor(msg: ApiMessage): Speaker {
     if (msg.direction === "in") {
-      return { name: studentDisplay, emoji: studentEmoji, bgClass: studentBg };
+      return {
+        name: studentDisplay,
+        avatarUrl: studentAvatarUrl,
+        emoji: studentEmoji,
+        bgClass: studentBg,
+      };
     }
     if (msg.teacher_id === myUserId) {
       return {
@@ -189,10 +205,15 @@ export function ThreadView({
       };
     }
     const t = msg.teacher;
+    const teacherAvatarUrl =
+      t && t.emoji == null && t.has_avatar
+        ? `/api/avatar/${t.id}?token=${encodeURIComponent(jwt)}`
+        : undefined;
     return {
       name: t?.handle ?? "Тренер",
-      emoji: t?.emoji,
-      bgClass: t ? bgFromHandle(t.handle) : undefined,
+      avatarUrl: teacherAvatarUrl,
+      emoji: t?.emoji ?? undefined,
+      bgClass: t && t.emoji ? bgFromHandle(t.handle) : undefined,
     };
   }
 
@@ -221,7 +242,7 @@ export function ThreadView({
     <PlaybackProvider messages={messages}>
     <div className="flex flex-col gap-1">
       <header className="flex items-center gap-3 mb-3 pb-3 border-b border-tg-text-hint/15">
-        <Avatar size={48} name={studentDisplay} emoji={studentEmoji} bgClass={studentBg} />
+        <Avatar size={48} name={studentDisplay} imageUrl={studentAvatarUrl} emoji={studentEmoji} bgClass={studentBg} />
         <div className="min-w-0 flex-1 leading-tight">
           <div className="font-semibold tracking-tight truncate">{studentDisplay}</div>
           <div className="text-xs text-tg-text-hint">ученик</div>

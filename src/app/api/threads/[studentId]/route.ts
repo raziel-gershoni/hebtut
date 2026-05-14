@@ -2,22 +2,12 @@ import type { NextRequest } from "next/server";
 import { authFromRequest, canTeachOrReadAsAdmin } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
-import { userHandle } from "@/lib/handle";
+import { resolveDisplay } from "@/server/display";
+import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-function resolveHandle(
-  row: { tg_user_id: number; display_handle: string | null; display_emoji: string | null } | undefined | null,
-): { handle: string; emoji: string } {
-  if (row?.display_handle && row.display_emoji) {
-    return { handle: row.display_handle, emoji: row.display_emoji };
-  }
-  const fallbackTgId = row?.tg_user_id ?? 0;
-  const h = userHandle(fallbackTgId);
-  return { handle: h.handle, emoji: h.emoji };
-}
 
 export async function GET(req: NextRequest, { params }: { params: { studentId: string } }) {
   const user = await authFromRequest(req);
@@ -40,6 +30,9 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
     if (!link) return new Response("forbidden", { status: 403, headers: noStoreHeaders });
   }
 
+  // Mode picks names-vs-handles for every display field below.
+  const anonMode = await getDisplayAnonymousHandlesEnabled();
+
   const { data: rawMessages, error } = await sb
     .from("messages")
     .select(
@@ -51,7 +44,7 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
   if (error) return new Response(error.message, { status: 500, headers: noStoreHeaders });
 
   // Resolve every distinct teacher referenced by an outbound row in one shot,
-  // so the client can render per-bubble anonymous avatars without N round-trips.
+  // so the client can render per-bubble avatars/handles without N round-trips.
   const teacherIds = Array.from(
     new Set(
       (rawMessages ?? [])
@@ -59,15 +52,23 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
         .filter((id): id is number => id != null),
     ),
   );
-  const teachersById = new Map<number, { id: number; handle: string; emoji: string }>();
+  const teachersById = new Map<
+    number,
+    { id: number; handle: string; emoji: string | null; has_avatar: boolean }
+  >();
   if (teacherIds.length > 0) {
     const { data: teacherRows } = await sb
       .from("users")
-      .select("id, tg_user_id, display_handle, display_emoji")
+      .select("id, tg_user_id, display_handle, display_emoji, name, avatar_file_id")
       .in("id", teacherIds);
     for (const t of teacherRows ?? []) {
-      const h = resolveHandle(t);
-      teachersById.set(t.id, { id: t.id, handle: h.handle, emoji: h.emoji });
+      const d = resolveDisplay(t, anonMode);
+      teachersById.set(t.id, {
+        id: t.id,
+        handle: d.handle,
+        emoji: d.emoji,
+        has_avatar: d.has_avatar,
+      });
     }
   }
   const messages = (rawMessages ?? []).map((m) => ({
@@ -85,19 +86,20 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
 
   const { data: studentRow } = await sb
     .from("users")
-    .select("id, tg_user_id, display_handle, display_emoji")
+    .select("id, tg_user_id, display_handle, display_emoji, name, avatar_file_id")
     .eq("id", studentId)
     .single();
-  const studentHandle = resolveHandle(studentRow);
+  const studentDisplay = resolveDisplay(studentRow, anonMode);
   const student = studentRow
     ? {
         id: studentRow.id,
-        handle: studentHandle.handle,
-        emoji: studentHandle.emoji,
+        handle: studentDisplay.handle,
+        emoji: studentDisplay.emoji,
+        has_avatar: studentDisplay.has_avatar,
       }
     : null;
 
-  // Surface the active claim (if any) so the thread UI can show "X handling".
+  // Active-claim surface so the thread UI can show "X handling".
   const nowIso = new Date().toISOString();
   const { data: claimRow } = await sb
     .from("claims")
@@ -107,19 +109,26 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
     .maybeSingle();
 
   let claim:
-    | { teacher_id: number; teacher_handle: string; teacher_emoji: string; expires_at: string }
+    | {
+        teacher_id: number;
+        teacher_handle: string;
+        teacher_emoji: string | null;
+        teacher_has_avatar: boolean;
+        expires_at: string;
+      }
     | null = null;
   if (claimRow) {
     const { data: t } = await sb
       .from("users")
-      .select("tg_user_id, display_handle, display_emoji")
+      .select("tg_user_id, display_handle, display_emoji, name, avatar_file_id")
       .eq("id", claimRow.teacher_id)
       .single();
-    const h = resolveHandle(t);
+    const d = resolveDisplay(t, anonMode);
     claim = {
       teacher_id: claimRow.teacher_id,
-      teacher_handle: h.handle,
-      teacher_emoji: h.emoji,
+      teacher_handle: d.handle,
+      teacher_emoji: d.emoji,
+      teacher_has_avatar: d.has_avatar,
       expires_at: claimRow.expires_at,
     };
   }

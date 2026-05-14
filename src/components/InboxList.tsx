@@ -21,14 +21,18 @@ type LastMessage = {
 interface Chat {
   student_id: number;
   student_handle: string;
-  student_emoji: string;
+  // Anonymous mode populates emoji; names mode leaves it null (use avatar
+  // when has_avatar=true, else fall back to initials).
+  student_emoji: string | null;
+  student_has_avatar: boolean;
   last_message: LastMessage | null;
   unread_count: number;
   has_unanswered: boolean;
   claim: {
     teacher_id: number;
     teacher_handle: string;
-    teacher_emoji: string;
+    teacher_emoji: string | null;
+    teacher_has_avatar: boolean;
     is_self: boolean;
   } | null;
 }
@@ -114,11 +118,18 @@ function ChatRow({
   jwt: string;
   myUserId: number;
 }) {
-  void jwt;
   const name = chat.student_handle;
   const time = chat.last_message ? formatChatTimestamp(chat.last_message.created_at) : "";
   const unanswered = chat.has_unanswered;
   const heldByOther = chat.claim && !chat.claim.is_self;
+  // Names mode: server returns emoji=null; if student_has_avatar, construct
+  // the TG photo URL. Anon mode: emoji is set, no avatar. Avatar component
+  // prefers imageUrl over emoji; the bgClass only matters as the emoji-circle
+  // background, so passing it unconditionally is fine.
+  const imageUrl =
+    chat.student_emoji == null && chat.student_has_avatar
+      ? `/api/avatar/${chat.student_id}?token=${encodeURIComponent(jwt)}`
+      : undefined;
 
   return (
     <li>
@@ -130,8 +141,9 @@ function ChatRow({
       >
         <Avatar
           name={name}
-          emoji={chat.student_emoji}
-          bgClass={bgFromHandle(chat.student_handle)}
+          imageUrl={imageUrl}
+          emoji={chat.student_emoji ?? undefined}
+          bgClass={chat.student_emoji ? bgFromHandle(chat.student_handle) : undefined}
           size={48}
         />
         <div className="min-w-0 flex-1 leading-tight">
