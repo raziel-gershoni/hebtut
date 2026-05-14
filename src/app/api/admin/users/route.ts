@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await sb
     .from("users")
     .select(
-      "id, tg_user_id, tg_username, name, display_handle, display_emoji, role, is_admin, status, created_at, role_changed_at, avatar_file_id",
+      "id, tg_user_id, tg_username, name, preferred_name, display_handle, display_emoji, role, is_admin, status, created_at, role_changed_at, avatar_file_id",
     )
     .order("created_at", { ascending: false });
   if (error) return new Response(error.message, { status: 500 });

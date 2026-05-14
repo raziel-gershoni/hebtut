@@ -3,12 +3,14 @@ import { useState, useMemo } from "react";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Avatar } from "./Avatar";
 import { SubscriptionDialog, type SubscriptionInfo } from "./SubscriptionDialog";
+import { EditPreferredNameDialog } from "./EditPreferredNameDialog";
 
 export type AdminUser = {
   id: number;
   tg_user_id: number;
   tg_username: string | null;
   name: string | null;
+  preferred_name: string | null;
   display_handle: string | null;
   display_emoji: string | null;
   role: "pending" | "student" | "teacher";
@@ -64,6 +66,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
   const [filter, setFilter] = useState("");
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [subscriptionUser, setSubscriptionUser] = useState<AdminUser | null>(null);
+  const [editingNameUser, setEditingNameUser] = useState<AdminUser | null>(null);
 
   async function patchRole(id: number, body: { role?: AdminUser["role"]; is_admin?: boolean }) {
     await fetch(`/api/admin/users/${id}/role`, {
@@ -100,6 +103,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
     if (!q) return users;
     return users.filter(
       (u) =>
+        (u.preferred_name ?? "").toLowerCase().includes(q) ||
         (u.name ?? "").toLowerCase().includes(q) ||
         (u.tg_username ?? "").toLowerCase().includes(q) ||
         (u.display_handle ?? "").toLowerCase().includes(q) ||
@@ -177,7 +181,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
             />
             <div className="min-w-0 flex-1 leading-tight">
               <div className="font-medium tracking-tight truncate flex items-center gap-2">
-                <span className="truncate">{u.name ?? "—"}</span>
+                <span className="truncate">{u.preferred_name ?? u.name ?? "—"}</span>
                 {u.status === "suspended" && (
                   <span className="shrink-0 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold">
                     На паузе
@@ -185,6 +189,14 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                 )}
               </div>
               <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-tg-text-hint min-w-0 flex-wrap">
+                {u.preferred_name && u.name && (
+                  <>
+                    <span className="truncate" title="Имя в Telegram">
+                      TG: {u.name}
+                    </span>
+                    <span aria-hidden>·</span>
+                  </>
+                )}
                 {u.tg_username && (
                   <>
                     <span className="truncate">@{u.tg_username}</span>
@@ -268,6 +280,16 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                   onClick={(e) => e.stopPropagation()}
                   className="absolute right-0 top-9 z-10 w-44 rounded-xl bg-tg-bg-section border border-tg-text-hint/15 shadow-xl py-1 text-sm"
                 >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      setEditingNameUser(u);
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-tg-bg-secondary transition-colors"
+                  >
+                    Изменить имя
+                  </button>
                   {u.role === "student" && (
                     <button
                       type="button"
@@ -325,6 +347,16 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
         subscription={subscriptionUser?.subscription ?? null}
         onClose={() => setSubscriptionUser(null)}
         onChanged={refetch}
+      />
+
+      <EditPreferredNameDialog
+        open={!!editingNameUser}
+        jwt={jwt}
+        userId={editingNameUser?.id ?? 0}
+        tgName={editingNameUser?.name ?? null}
+        preferredName={editingNameUser?.preferred_name ?? null}
+        onClose={() => setEditingNameUser(null)}
+        onSaved={refetch}
       />
 
       <ConfirmDialog
