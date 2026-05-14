@@ -140,6 +140,7 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
     onbState === "welcome" ||
     onbState === "video1" ||
     onbState === "video2" ||
+    onbState === "awaiting_name" ||
     onbState === "cta_record"
   ) {
     await advanceOnboarding(user.id, "awaiting_first_reply");

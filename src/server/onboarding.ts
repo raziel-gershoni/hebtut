@@ -205,6 +205,18 @@ export async function sendStep4CtaRecord(studentId: number): Promise<void> {
   });
 }
 
+/**
+ * Step 3.5 — collect first name. No button: student replies with text,
+ * captured by `handleOnboardingNameInput` which writes users.name and
+ * advances state to cta_record (then sends Step 4).
+ */
+export async function sendStepNameAsk(studentId: number): Promise<void> {
+  await sendOnboardingMessage(studentId, {
+    text: ru.onbNameAsk,
+    step: "step3_5_name_ask",
+  });
+}
+
 export async function sendStep5Nudge2h(studentId: number): Promise<void> {
   await sendOnboardingMessage(studentId, {
     text: ru.onbStep5Nudge2h,
@@ -309,6 +321,9 @@ export async function resendCurrentOnboardingStep(
       return true;
     case "video2":
       await sendStep3Video2(studentId);
+      return true;
+    case "awaiting_name":
+      await sendStepNameAsk(studentId);
       return true;
     case "cta_record":
       await sendStep4CtaRecord(studentId);

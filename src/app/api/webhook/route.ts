@@ -8,7 +8,7 @@ import { handleStudentMedia } from "@/server/handlers/student-message";
 import { handleTeacherReply, handleTeacherReplyText } from "@/server/handlers/teacher-reply";
 import { handleUnknown } from "@/server/handlers/unknown";
 import { handlePreCheckoutQuery, handleSuccessfulPayment } from "@/server/handlers/billing-events";
-import { handleOnboardingCallback } from "@/server/handlers/onboarding-callbacks";
+import { handleOnboardingCallback, handleOnboardingNameInput } from "@/server/handlers/onboarding-callbacks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +31,15 @@ function installHandlers(): void {
     if (handledAsTeacher) return;
     // Otherwise route as inbound student media.
     await handleStudentMedia(ctx);
+  });
+  // Text from a student in onboarding state 'awaiting_name' is their reply
+  // to "Как тебя зовут?" — captured into users.name, then onboarding advances
+  // to cta_record. Returns true when consumed; otherwise falls through.
+  // Must come BEFORE the teacher-reply text handler so a student's name
+  // input never gets mis-routed.
+  bot.on("message:text", async (ctx, next) => {
+    const handled = await handleOnboardingNameInput(ctx);
+    if (!handled) await next();
   });
   // Teacher swipe-reply with TEXT instead of voice. Strictly gated: handler
   // returns false unless sender is a teacher AND replied to a known prompt

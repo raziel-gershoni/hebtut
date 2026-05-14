@@ -68,6 +68,14 @@ export const ru = {
     "выпасть. Цель — постепенно переводить тебя в уверенную речь.",
   onbStep3Button: "Дальше",
 
+  // Step 3.5: name capture (between video2 and the record-CTA). No button —
+  // student types their first name in chat, the bot stores it as users.name.
+  onbNameAsk:
+    "Как мне к тебе обращаться?\nНапиши имя — короткое, как хочешь.",
+  onbNameTooLong: "Слишком длинно. Попробуй короче (до 50 символов).",
+  onbNameTooShort: "Не понял. Напиши имя одним словом или фразой.",
+  onbNameThanks: (name: string) => `Приятно познакомиться, ${name}!`,
+
   // Step 4: pure CTA, no button. Student is expected to record voice.
   onbStep4CtaRecord:
     "Запиши голосовое или видео-кружок на иврите.\n" +

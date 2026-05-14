@@ -11,6 +11,7 @@ import {
   sendStep2Video1,
   sendStep3Video2,
   sendStep4CtaRecord,
+  sendStepNameAsk,
   sendStep12_1OpenAccess,
   sendStep12_2LaterAck,
   sendStep12_3Video3,
@@ -87,24 +88,14 @@ export async function handleOnboardingCallback(ctx: Context): Promise<void> {
     }
     case "onb:next": {
       if (state !== "video2") return stale();
-      await advanceOnboarding(user.id, "cta_record");
+      // Dale → ask for the name FIRST (state=awaiting_name). Timers for
+      // 2h/24h nudges are NOT scheduled here — they'd fire while the
+      // student is stuck at name-ask and waste the slot (the cron checks
+      // state==='cta_record'). Schedule them in the name-input handler
+      // when the student actually moves into cta_record.
+      await advanceOnboarding(user.id, "awaiting_name");
       await ack();
-      await sendStep4CtaRecord(user.id);
-      // Schedule the 2h soft + 24h hard nudges. The 24h nudge respects quiet
-      // hours via the user's response_window (or 08–22 fallback).
-      const now = new Date();
-      const tz = sub?.response_window_tz ?? "Asia/Jerusalem";
-      await scheduleTimer(user.id, "nudge_2h", addHours(now, 2));
-      await scheduleTimer(
-        user.id,
-        "nudge_24h",
-        nextSafeFireTime(
-          addHours(now, 24),
-          sub?.response_window_start ?? null,
-          sub?.response_window_end ?? null,
-          tz,
-        ),
-      );
+      await sendStepNameAsk(user.id);
       return;
     }
     case "onb:survey:yes": {
@@ -153,4 +144,83 @@ export async function handleOnboardingCallback(ctx: Context): Promise<void> {
       return;
     }
   }
+}
+
+const MAX_NAME_LENGTH = 50;
+
+/**
+ * Captures the student's typed name during the awaiting_name onboarding
+ * state. Validates length, stores into users.name, advances to cta_record,
+ * sends the record-CTA, and schedules the 2h/24h nudges from this point
+ * (which is when the student is actually ready to record — scheduling at
+ * the earlier onb:next would burn the timer slot while the student is
+ * still typing their name).
+ *
+ * Returns true if THIS handler consumed the message (so the webhook
+ * doesn't fall through to handleTeacherReplyText or handleUnknown).
+ * Returns false otherwise (sender isn't a student in awaiting_name,
+ * message is a slash command, etc.).
+ */
+export async function handleOnboardingNameInput(ctx: Context): Promise<boolean> {
+  const msg = ctx.message;
+  if (!msg || !ctx.from || !msg.text) return false;
+  // Slash commands are routed via bot.command() — never treat as a name.
+  if (msg.text.startsWith("/")) return false;
+
+  const sb = getServiceRoleClient();
+  const { data: user } = await sb
+    .from("users")
+    .select("id, role, tz")
+    .eq("tg_user_id", ctx.from.id)
+    .maybeSingle();
+  if (!user || user.role !== "student") return false;
+
+  const { data: subRow } = await sb
+    .from("subscriptions")
+    .select("onboarding_state, response_window_start, response_window_end, response_window_tz")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!subRow || subRow.onboarding_state !== "awaiting_name") return false;
+
+  // We're definitely in awaiting_name from here on — consume the message
+  // regardless of validation outcome. Bot replies guide them to a valid name.
+  const rawName = msg.text.trim();
+  if (rawName.length === 0) {
+    await ctx.reply(ru.onbNameTooShort);
+    return true;
+  }
+  if (rawName.length > MAX_NAME_LENGTH) {
+    await ctx.reply(ru.onbNameTooLong);
+    return true;
+  }
+  // Single-line: TG text inputs usually don't include newlines, but a paste
+  // could. Collapse to single line so the name renders cleanly in chat
+  // bubbles and the admin panel.
+  const name = rawName.replace(/\s+/g, " ");
+
+  await sb.from("users").update({ name }).eq("id", user.id);
+  await advanceOnboarding(user.id, "cta_record");
+
+  // Schedule the 2h soft + 24h hard nudges from THIS moment (entering
+  // cta_record). The 24h nudge respects quiet hours via response_window or
+  // the 08–22 fallback.
+  const now = new Date();
+  const tz = subRow.response_window_tz ?? "Asia/Jerusalem";
+  await scheduleTimer(user.id, "nudge_2h", addHours(now, 2));
+  await scheduleTimer(
+    user.id,
+    "nudge_24h",
+    nextSafeFireTime(
+      addHours(now, 24),
+      subRow.response_window_start ?? null,
+      subRow.response_window_end ?? null,
+      tz,
+    ),
+  );
+
+  // Brief acknowledgment + the record-CTA in two messages so the personal
+  // greeting doesn't compete with the action.
+  await ctx.reply(ru.onbNameThanks(name));
+  await sendStep4CtaRecord(user.id);
+  return true;
 }
