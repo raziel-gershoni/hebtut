@@ -19,6 +19,7 @@ export type OnboardingState =
   | "welcome"
   | "video1"
   | "video2"
+  | "awaiting_name"
   | "cta_record"
   | "awaiting_first_reply"
   | "meta_explainer_pending"
