@@ -5,6 +5,7 @@ interface Settings {
   quota_chat_notifications_enabled: boolean;
   billing_stars_enabled: boolean;
   display_anonymous_handles_enabled: boolean;
+  media_uploads_teachers_enabled: boolean;
 }
 
 type ToggleKey = keyof Settings;
@@ -37,6 +38,12 @@ const TOGGLES: readonly ToggleSpec[] = [
     // the unusual choice and "off" describes the default behaviour.
     on: "Везде показываем псевдонимы вида «Гордый Орёл» 🦅 и эмодзи-аватары вместо имён и фото.",
     off: "В чатах и инбоксе показываем настоящее имя (как ученик указал в онбординге) и фото из Telegram.",
+  },
+  {
+    key: "media_uploads_teachers_enabled",
+    title: "Загрузка медиа учителями",
+    on: "Учителя могут загружать файлы в общую медиа-библиотеку. Удалить или изменить файл может только загрузивший или админ.",
+    off: "Загружать в библиотеку могут только админы. Учителя всё равно отправляют учащимся файлы из библиотеки.",
   },
 ];
 

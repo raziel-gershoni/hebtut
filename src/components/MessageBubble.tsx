@@ -10,12 +10,20 @@ import { usePlayback } from "./PlaybackProvider";
 export type ThreadMsg = {
   id: number;
   direction: "in" | "out";
-  kind: "voice" | "video_note" | "text";
+  kind: "voice" | "video_note" | "text" | "photo" | "video" | "audio";
   duration: number;
   status?: string;
   reply_to_id?: number | null;
   created_at: string;
   text_content?: string | null;
+  media_library_id?: number | null;
+  media_library?: {
+    title: string | null;
+    description: string | null;
+    original_filename: string;
+    bytes: number;
+    kind: "photo" | "video" | "audio";
+  } | null;
 };
 
 export interface Speaker {
@@ -155,8 +163,20 @@ export function MessageBubble({
           <VoicePlayer src={src} totalSeconds={msg.duration} messageId={msg.id} />
         ) : msg.kind === "video_note" ? (
           <VideoNote src={src} totalSeconds={msg.duration} messageId={msg.id} />
-        ) : (
+        ) : msg.kind === "text" ? (
           <TextContent text={msg.text_content ?? ""} />
+        ) : msg.media_library_id != null ? (
+          <LibraryMediaBlock
+            kind={msg.kind}
+            jwt={jwt}
+            libraryId={msg.media_library_id}
+            lib={msg.media_library ?? null}
+          />
+        ) : (
+          // Defensive: a media-kind row with no library link. Shouldn't
+          // happen because every send writes media_library_id, but if it
+          // does we don't want a black hole — fall through to a stub.
+          <p className="text-xs text-tg-text-hint italic">медиа недоступно</p>
         )}
 
         {isIn && onReply && (
@@ -469,6 +489,102 @@ function VideoNote({
       </div>
     </>
   );
+}
+
+/**
+ * Read-only render of a library-sent photo / video / audio item. Falls back
+ * to `original_filename` when no title is set so the tutor can always
+ * recognize what was sent. Click-to-zoom for photos opens a full-bleed
+ * overlay; videos use native controls; audio uses native controls (the
+ * cross-bubble PlaybackProvider intentionally does NOT consume these —
+ * library audio doesn't autoplay-chain).
+ */
+function LibraryMediaBlock({
+  kind,
+  jwt,
+  libraryId,
+  lib,
+}: {
+  kind: "photo" | "video" | "audio";
+  jwt: string;
+  libraryId: number;
+  lib: ThreadMsg["media_library"];
+}) {
+  const previewUrl = `/api/admin/media/${libraryId}/preview?token=${encodeURIComponent(jwt)}`;
+  const [lightbox, setLightbox] = useState(false);
+  const title = lib?.title?.trim() || lib?.original_filename || "Файл";
+  const description = lib?.description?.trim() ?? null;
+  const filename = lib?.original_filename ?? null;
+  const sizeLabel = lib ? formatBytesShort(lib.bytes) : null;
+
+  return (
+    <div className="space-y-2">
+      {kind === "photo" && (
+        <>
+          <button
+            type="button"
+            onClick={() => setLightbox(true)}
+            className="block w-full rounded-xl overflow-hidden bg-black/5 dark:bg-white/5 active:opacity-90 transition-opacity"
+            aria-label="Открыть изображение"
+          >
+            <img
+              src={previewUrl}
+              alt={title}
+              className="block w-full max-h-72 object-contain"
+              loading="lazy"
+            />
+          </button>
+          {lightbox && (
+            <button
+              type="button"
+              onClick={() => setLightbox(false)}
+              className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center animate-fade-in p-4 cursor-zoom-out"
+              aria-label="Закрыть"
+            >
+              <img
+                src={previewUrl}
+                alt={title}
+                className="max-w-full max-h-full object-contain"
+              />
+            </button>
+          )}
+        </>
+      )}
+
+      {kind === "video" && (
+        <video
+          src={previewUrl}
+          controls
+          preload="metadata"
+          className="block w-full max-h-72 rounded-xl bg-black"
+        />
+      )}
+
+      {kind === "audio" && (
+        <audio src={previewUrl} controls preload="metadata" className="block w-full" />
+      )}
+
+      <div className="text-xs leading-snug">
+        <div className="font-semibold text-tg-text">{title}</div>
+        {description && (
+          <div className="text-tg-text-hint mt-0.5 whitespace-pre-wrap break-words">
+            {description}
+          </div>
+        )}
+        {filename && sizeLabel && (
+          <div className="text-tg-text-hint mt-0.5 truncate" title={filename}>
+            {filename} · {sizeLabel}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function formatBytesShort(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function PlayIcon({ size = 14, className }: { size?: number; className?: string }) {

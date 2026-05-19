@@ -18,6 +18,7 @@ const KEYS = {
   quota_chat_notifications_enabled: z.boolean(),
   billing_stars_enabled: z.boolean(),
   display_anonymous_handles_enabled: z.boolean(),
+  media_uploads_teachers_enabled: z.boolean(),
 } as const;
 type SettingKey = keyof typeof KEYS;
 
@@ -29,6 +30,7 @@ interface SettingsResponse {
   quota_chat_notifications_enabled: boolean;
   billing_stars_enabled: boolean;
   display_anonymous_handles_enabled: boolean;
+  media_uploads_teachers_enabled: boolean;
 }
 
 export async function GET(req: NextRequest): Promise<Response> {
@@ -45,6 +47,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     quota_chat_notifications_enabled: false,
     billing_stars_enabled: false,
     display_anonymous_handles_enabled: false,
+    media_uploads_teachers_enabled: false,
   };
   for (const row of data ?? []) {
     if (row.key === "quota_chat_notifications_enabled") {
@@ -53,6 +56,8 @@ export async function GET(req: NextRequest): Promise<Response> {
       out.billing_stars_enabled = row.value === true;
     } else if (row.key === "display_anonymous_handles_enabled") {
       out.display_anonymous_handles_enabled = row.value === true;
+    } else if (row.key === "media_uploads_teachers_enabled") {
+      out.media_uploads_teachers_enabled = row.value === true;
     }
   }
   return Response.json({ settings: out }, { headers: noStoreHeaders });

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { MessageBubble, type ThreadMsg, type Speaker } from "./MessageBubble";
 import { Avatar } from "./Avatar";
 import { PlaybackProvider } from "./PlaybackProvider";
+import { MediaPicker } from "./MediaPicker";
 import { speakerColor, type SpeakerColorClasses } from "@/lib/speaker-color";
 import { bgFromHandle } from "@/lib/handle";
 
@@ -53,6 +54,7 @@ export function ThreadView({
   const [loaded, setLoaded] = useState(false);
   const [initiateBusy, setInitiateBusy] = useState(false);
   const [initiateError, setInitiateError] = useState<string | null>(null);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const initialScrollDoneRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -251,6 +253,18 @@ export function ThreadView({
           <button
             type="button"
             disabled={initiateBusy}
+            onClick={() => setMediaPickerOpen(true)}
+            aria-label="Прикрепить медиа из библиотеки"
+            title="Медиа-библиотека"
+            className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full bg-tg-bg-secondary text-tg-text transition-transform active:scale-95 disabled:opacity-50"
+          >
+            <PaperclipIcon />
+          </button>
+        )}
+        {canInitiate && (
+          <button
+            type="button"
+            disabled={initiateBusy}
             onClick={() => void startInitiate()}
             className="shrink-0 inline-flex items-center gap-1.5 px-3 h-9 rounded-full bg-tg-button text-tg-button-text text-xs font-semibold transition-transform active:scale-95 disabled:opacity-50"
           >
@@ -290,6 +304,34 @@ export function ThreadView({
         })
       )}
     </div>
+    <MediaPicker
+      open={mediaPickerOpen}
+      jwt={jwt}
+      studentId={studentId}
+      onClose={() => setMediaPickerOpen(false)}
+      onSent={async () => {
+        setMediaPickerOpen(false);
+        await load();
+      }}
+    />
     </PlaybackProvider>
+  );
+}
+
+function PaperclipIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+    </svg>
   );
 }

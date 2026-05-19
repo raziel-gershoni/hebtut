@@ -6,7 +6,8 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type UserRole = "pending" | "student" | "teacher";
 export type UserStatus = "active" | "suspended";
 export type MessageDirection = "in" | "out";
-export type MessageKind = "voice" | "video_note" | "text";
+export type MessageKind = "voice" | "video_note" | "text" | "photo" | "video" | "audio";
+export type MediaKind = "photo" | "video" | "audio";
 export type MessageStatus = "pending" | "answered" | "expired" | "orphaned";
 export type SubscriptionStatus =
   | "trial"
@@ -120,6 +121,7 @@ export interface Database {
           answered_at: string | null;
           reply_to_id: number | null;
           tg_message_id_in_student_chat: number | null;
+          media_library_id: number | null;
           created_at: string;
         };
         Insert: {
@@ -138,6 +140,7 @@ export interface Database {
           answered_at?: string | null;
           reply_to_id?: number | null;
           tg_message_id_in_student_chat?: number | null;
+          media_library_id?: number | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;
@@ -463,6 +466,74 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["feedback_messages"]["Insert"]>;
+        Relationships: [];
+      };
+      media_library: {
+        Row: {
+          id: number;
+          kind: MediaKind;
+          uploaded_by_user_id: number;
+          storage_path: string;
+          mime_type: string;
+          original_filename: string;
+          title: string | null;
+          description: string | null;
+          bytes: number;
+          duration_seconds: number | null;
+          tg_file_id: string | null;
+          tg_file_unique_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          kind: MediaKind;
+          uploaded_by_user_id: number;
+          storage_path: string;
+          mime_type: string;
+          original_filename: string;
+          title?: string | null;
+          description?: string | null;
+          bytes: number;
+          duration_seconds?: number | null;
+          tg_file_id?: string | null;
+          tg_file_unique_id?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["media_library"]["Insert"]>;
+        Relationships: [];
+      };
+      media_tags: {
+        Row: {
+          id: number;
+          name: string;
+          slug: string;
+          created_by_user_id: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          name: string;
+          slug: string;
+          created_by_user_id: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["media_tags"]["Insert"]>;
+        Relationships: [];
+      };
+      media_library_tag_links: {
+        Row: {
+          media_library_id: number;
+          tag_id: number;
+          created_by_user_id: number;
+          created_at: string;
+        };
+        Insert: {
+          media_library_id: number;
+          tag_id: number;
+          created_by_user_id: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["media_library_tag_links"]["Insert"]>;
         Relationships: [];
       };
     };

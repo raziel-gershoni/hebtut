@@ -7,7 +7,9 @@ export type AuditSubjectType =
   | "claim"
   | "invite"
   | "link"
-  | "banlist";
+  | "banlist"
+  | "media_library"
+  | "media_tag";
 
 export interface AuditEventInput {
   /** Event code in `<area>.<verb>` form. Free text — see CONVENTIONS in audit_events migration. */

@@ -36,12 +36,56 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
   const { data: rawMessages, error } = await sb
     .from("messages")
     .select(
-      "id, direction, kind, duration, status, reply_to_id, created_at, teacher_id, text_content",
+      "id, direction, kind, duration, status, reply_to_id, created_at, teacher_id, text_content, media_library_id",
     )
     .eq("student_id", studentId)
     .in("status", ["pending", "answered", "expired"])
     .order("created_at", { ascending: true });
   if (error) return new Response(error.message, { status: 500, headers: noStoreHeaders });
+
+  // Pull library metadata for any outbound media bubbles in one round-trip,
+  // keyed back to the message by media_library_id. Done as a separate query
+  // rather than a foreign-table embed because Supabase's TS client cannot
+  // infer that relationship without generated types.
+  const mediaLibIds = Array.from(
+    new Set(
+      (rawMessages ?? [])
+        .map((m) => m.media_library_id)
+        .filter((v): v is number => v != null),
+    ),
+  );
+  const { data: libRows } = mediaLibIds.length
+    ? await sb
+        .from("media_library")
+        .select("id, title, description, original_filename, bytes, kind")
+        .in("id", mediaLibIds)
+    : { data: [] as {
+        id: number;
+        title: string | null;
+        description: string | null;
+        original_filename: string;
+        bytes: number;
+        kind: "photo" | "video" | "audio";
+      }[] };
+  const libById = new Map<
+    number,
+    {
+      title: string | null;
+      description: string | null;
+      original_filename: string;
+      bytes: number;
+      kind: "photo" | "video" | "audio";
+    }
+  >();
+  for (const l of libRows ?? []) {
+    libById.set(l.id, {
+      title: l.title,
+      description: l.description,
+      original_filename: l.original_filename,
+      bytes: l.bytes,
+      kind: l.kind as "photo" | "video" | "audio",
+    });
+  }
 
   // Resolve every distinct teacher referenced by an outbound row in one shot,
   // so the client can render per-bubble avatars/handles without N round-trips.
@@ -82,6 +126,8 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
     teacher_id: m.teacher_id,
     teacher: m.teacher_id != null ? teachersById.get(m.teacher_id) ?? null : null,
     text_content: m.text_content ?? null,
+    media_library_id: m.media_library_id ?? null,
+    media_library: m.media_library_id != null ? libById.get(m.media_library_id) ?? null : null,
   }));
 
   const { data: studentRow } = await sb

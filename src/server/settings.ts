@@ -60,6 +60,15 @@ export function getDisplayAnonymousHandlesEnabled(): Promise<boolean> {
   return getBoolSetting("display_anonymous_handles_enabled");
 }
 
+/**
+ * "Teachers can upload to the shared media library" toggle. Default false →
+ * only admins can upload. When ON, teachers can also upload. Send / edit /
+ * delete of existing items are unaffected.
+ */
+export function getMediaUploadsTeachersEnabled(): Promise<boolean> {
+  return getBoolSetting("media_uploads_teachers_enabled");
+}
+
 export function invalidateSettingsCache(): void {
   cache.clear();
 }
