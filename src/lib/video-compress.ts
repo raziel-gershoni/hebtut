@@ -61,15 +61,87 @@ export interface PrepareOpts {
   signal?: AbortSignal;
 }
 
-// 720p → 480p → 360p. Each preset also caps the audio bitrate; the video
-// bitrate is computed from the video's duration so the OUTPUT lands close
-// to the target without needing a true two-pass. Conservative — we'd
-// rather slightly undershoot than overshoot.
-const LADDER = [
-  { label: "720p", maxHeight: 720, audioBitrateKbps: 96, minVideoBitrateKbps: 400 },
-  { label: "480p", maxHeight: 480, audioBitrateKbps: 80, minVideoBitrateKbps: 250 },
-  { label: "360p", maxHeight: 360, audioBitrateKbps: 64, minVideoBitrateKbps: 150 },
-] as const;
+// We pick resolution from the computed bitrate budget rather than running
+// a fixed ladder — long videos need radically lower resolutions to hit
+// the size cap, and minimum-bitrate floors would force overshoots.
+interface EncodePlan {
+  label: string;
+  maxHeight: number;
+  videoKbps: number;
+  audioKbps: number;
+}
+
+const SAFETY = 0.85; // aim for 85% of cap; libx264 routinely overshoots by 5–15%.
+
+function planEncoding(durationSec: number, targetBytes: number): EncodePlan {
+  const totalKbps = Math.max(
+    1,
+    Math.floor((targetBytes * 8 * SAFETY) / durationSec / 1000),
+  );
+  // Audio allocation walks down to garbled-but-intelligible for tight budgets.
+  let audioKbps: number;
+  if (totalKbps > 600) audioKbps = 96;
+  else if (totalKbps > 200) audioKbps = 64;
+  else if (totalKbps > 80) audioKbps = 48;
+  else audioKbps = 32;
+  const videoKbps = Math.max(15, totalKbps - audioKbps);
+  // Pick a resolution where this bitrate produces a reasonable image.
+  let label: string;
+  let maxHeight: number;
+  if (videoKbps >= 1500) {
+    label = "720p";
+    maxHeight = 720;
+  } else if (videoKbps >= 800) {
+    label = "540p";
+    maxHeight = 540;
+  } else if (videoKbps >= 400) {
+    label = "480p";
+    maxHeight = 480;
+  } else if (videoKbps >= 200) {
+    label = "360p";
+    maxHeight = 360;
+  } else if (videoKbps >= 80) {
+    label = "240p";
+    maxHeight = 240;
+  } else {
+    label = "144p";
+    maxHeight = 144;
+  }
+  return { label, maxHeight, videoKbps, audioKbps };
+}
+
+function encodeArgs(plan: EncodePlan, hardCapBytes: number | null): string[] {
+  const args = [
+    "-i",
+    "input",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-b:v",
+    `${plan.videoKbps}k`,
+    "-maxrate",
+    `${Math.floor(plan.videoKbps * 1.15)}k`,
+    "-bufsize",
+    `${Math.floor(plan.videoKbps * 2)}k`,
+    "-vf",
+    `scale='min(iw,trunc(oh*iw/ih/2)*2)':'min(ih,${plan.maxHeight})':force_original_aspect_ratio=decrease`,
+    "-c:a",
+    "aac",
+    "-b:a",
+    `${plan.audioKbps}k`,
+    "-movflags",
+    "+faststart",
+  ];
+  if (hardCapBytes != null) {
+    // -fs hard-caps the output file size. ffmpeg stops muxing once the
+    // limit is hit (the video gets truncated). Use only as a last resort
+    // when the bitrate path can't fit on its own.
+    args.push("-fs", String(hardCapBytes));
+  }
+  args.push("-y", "output.mp4");
+  return args;
+}
 
 /**
  * Returns the video's duration in seconds via a hidden `<video>` element.
@@ -137,66 +209,45 @@ export async function prepareVideoForUpload(
   inputData.set(fetched);
   await ffmpeg.writeFile("input", inputData);
 
-  let lastSize = file.size;
-  for (let i = 0; i < LADDER.length; i += 1) {
-    const preset = LADDER[i];
-    if (!preset) break;
-    // Compute video bitrate to hit the target. Account for audio overhead.
-    const targetBits = maxBytes * 8;
-    const audioBits = preset.audioBitrateKbps * 1000 * duration;
-    let videoKbps = Math.max(
-      preset.minVideoBitrateKbps,
-      Math.floor((targetBits - audioBits) / 1000 / duration),
-    );
-    // Sanity cap so we don't ask for absurd bitrates on tiny clips.
-    videoKbps = Math.min(videoKbps, 6000);
+  const stem = file.name.replace(/\.[^.]+$/, "");
+  // Each retry tightens the target so the bitrate calculation moves down
+  // the resolution ladder. The final pass adds ffmpeg's -fs hard cap so
+  // the output is ALWAYS ≤ maxBytes — even for multi-hour input the file
+  // will fit (the encoder truncates the tail to stay under the cap).
+  const STAGES: Array<{ targetBytes: number; hardCap: number | null }> = [
+    { targetBytes: maxBytes, hardCap: null },
+    { targetBytes: Math.floor(maxBytes * 0.7), hardCap: null },
+    { targetBytes: Math.floor(maxBytes * 0.5), hardCap: null },
+    { targetBytes: Math.floor(maxBytes * 0.5), hardCap: maxBytes },
+  ];
 
-    const label = preset.label;
+  for (let i = 0; i < STAGES.length; i += 1) {
+    const stage = STAGES[i];
+    if (!stage) break;
+    const plan = planEncoding(duration, stage.targetBytes);
+    const label = plan.label;
+
     const progressHandler = (ev: { progress: number }) => {
       const localRatio = Math.max(0, Math.min(1, ev.progress));
-      // Each preset gets 1/3 of the bar. So preset 0 maps 0..0.33, etc.
-      const ratio = (i + localRatio) / LADDER.length;
+      const ratio = (i + localRatio) / STAGES.length;
       opts.onProgress?.({ ratio, preset: label });
     };
     ffmpeg.on("progress", progressHandler);
 
     try {
       if (opts.signal?.aborted) throw new Error("aborted");
-      await ffmpeg.exec([
-        "-i",
-        "input",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-b:v",
-        `${videoKbps}k`,
-        "-maxrate",
-        `${Math.floor(videoKbps * 1.2)}k`,
-        "-bufsize",
-        `${Math.floor(videoKbps * 2)}k`,
-        "-vf",
-        `scale='min(iw,trunc(oh*iw/ih/2)*2)':'min(ih,${preset.maxHeight})':force_original_aspect_ratio=decrease`,
-        "-c:a",
-        "aac",
-        "-b:a",
-        `${preset.audioBitrateKbps}k`,
-        "-movflags",
-        "+faststart",
-        "-y",
-        "output.mp4",
-      ]);
+      await ffmpeg.exec(encodeArgs(plan, stage.hardCap));
     } finally {
       ffmpeg.off("progress", progressHandler);
     }
 
     const out = await ffmpeg.readFile("output.mp4");
-    if (!(out instanceof Uint8Array)) {
-      throw new Error("ffmpeg produced unexpected output");
+    if (!(out instanceof Uint8Array) || out.byteLength === 0) {
+      // Try next stage; if even the final hard-cap pass fails to produce
+      // anything, we'll fall through and throw below.
+      continue;
     }
-    lastSize = out.byteLength;
     if (out.byteLength <= maxBytes) {
-      const stem = file.name.replace(/\.[^.]+$/, "");
       // Copy into a fresh ArrayBuffer so the File constructor doesn't
       // see a SharedArrayBuffer-backed view (TS lib types reject that).
       const copy = new Uint8Array(out.byteLength);
@@ -205,12 +256,12 @@ export async function prepareVideoForUpload(
       opts.onProgress?.({ ratio: 1, preset: label });
       return outFile;
     }
-    // else: fall through to the next preset
+    // Output still over cap → try next stage (tighter target / hard cap).
   }
 
-  throw new Error(
-    `still too large after maximum compression (${(lastSize / 1024 / 1024).toFixed(1)} MB > ${(maxBytes / 1024 / 1024).toFixed(0)} MB)`,
-  );
+  // We only reach here if even the -fs hard-cap pass produced nothing
+  // usable — typically a corrupt input or an OOM in the worker.
+  throw new Error("сжатие не удалось — попробуй другой файл");
 }
 
 /** True for the MIME types the compression pipeline knows how to ingest. */
