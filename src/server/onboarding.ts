@@ -8,6 +8,7 @@ import { recordAudit } from "@/server/audit";
 import { serverEnv } from "@/lib/env";
 import type { OnboardingState, OnboardingTimerKind } from "@/types/database";
 import type { InlineKeyboardButton } from "grammy/types";
+import { sendOnboardingVideoOrFallback } from "@/server/onboarding-videos";
 
 /* -------------------------------------------------------------------------
  * Pure helpers — easy to unit-test, no side effects.
@@ -182,18 +183,18 @@ export async function sendStep1Welcome(studentId: number): Promise<void> {
 }
 
 export async function sendStep2Video1(studentId: number): Promise<void> {
-  await sendOnboardingMessage(studentId, {
+  await sendOnboardingVideoOrFallback(studentId, "video1", {
     text: ru.onbVideo1Placeholder,
     buttons: [[{ text: ru.onbStep2Button, callback_data: "onb:continue" }]],
-    step: "step2_video1",
+    auditStep: "step2_video1",
   });
 }
 
 export async function sendStep3Video2(studentId: number): Promise<void> {
-  await sendOnboardingMessage(studentId, {
+  await sendOnboardingVideoOrFallback(studentId, "video2", {
     text: ru.onbVideo2Placeholder,
     buttons: [[{ text: ru.onbStep3Button, callback_data: "onb:next" }]],
-    step: "step3_video2",
+    auditStep: "step3_video2",
   });
 }
 
@@ -294,10 +295,10 @@ export async function sendStep12_2LaterAck(studentId: number): Promise<void> {
 }
 
 export async function sendStep12_3Video3(studentId: number): Promise<void> {
-  await sendOnboardingMessage(studentId, {
+  await sendOnboardingVideoOrFallback(studentId, "video3", {
     text: ru.onbVideo3Placeholder,
     buttons: [[{ text: ru.onbVideo3Button, url: feedbackUrl() }]],
-    step: "step12_3_video3",
+    auditStep: "step12_3_video3",
   });
 }
 

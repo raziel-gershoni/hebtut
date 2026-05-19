@@ -11,6 +11,7 @@ import { TeacherInvites } from "@/components/TeacherInvites";
 import { BannedUsersPanel } from "@/components/BannedUsersPanel";
 import { AdminSettingsPanel } from "@/components/AdminSettingsPanel";
 import { AdminTagsManager } from "@/components/AdminTagsManager";
+import { AdminOnboardingVideos } from "@/components/AdminOnboardingVideos";
 
 export default function AdminPage() {
   return (
@@ -90,6 +91,7 @@ function AdminBody({ jwt }: { jwt: string }) {
         </Link>
       </div>
       <AdminSettingsPanel jwt={jwt} />
+      <AdminOnboardingVideos jwt={jwt} />
       <AdminTagsManager jwt={jwt} />
       <TeacherInvites jwt={jwt} />
       <AdminUsersTable jwt={jwt} users={users} loaded={loaded} refetch={refetch} />

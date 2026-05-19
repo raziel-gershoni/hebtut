@@ -8,6 +8,7 @@ export type UserStatus = "active" | "suspended";
 export type MessageDirection = "in" | "out";
 export type MessageKind = "voice" | "video_note" | "text" | "photo" | "video" | "audio";
 export type MediaKind = "photo" | "video" | "audio";
+export type OnboardingVideoStep = "video1" | "video2" | "video3";
 export type MessageStatus = "pending" | "answered" | "expired" | "orphaned";
 export type SubscriptionStatus =
   | "trial"
@@ -534,6 +535,34 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["media_library_tag_links"]["Insert"]>;
+        Relationships: [];
+      };
+      onboarding_videos: {
+        Row: {
+          step: OnboardingVideoStep;
+          storage_path: string;
+          mime_type: string;
+          original_filename: string;
+          bytes: number;
+          duration_seconds: number | null;
+          tg_file_id: string | null;
+          tg_file_unique_id: string | null;
+          uploaded_by_user_id: number;
+          uploaded_at: string;
+        };
+        Insert: {
+          step: OnboardingVideoStep;
+          storage_path: string;
+          mime_type: string;
+          original_filename: string;
+          bytes: number;
+          duration_seconds?: number | null;
+          tg_file_id?: string | null;
+          tg_file_unique_id?: string | null;
+          uploaded_by_user_id: number;
+          uploaded_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["onboarding_videos"]["Insert"]>;
         Relationships: [];
       };
     };
