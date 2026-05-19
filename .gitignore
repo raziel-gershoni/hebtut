@@ -36,3 +36,6 @@ yarn-error.log*
 
 # vitest
 /coverage
+
+# ffmpeg.wasm core, copied from node_modules at build time
+/public/ffmpeg

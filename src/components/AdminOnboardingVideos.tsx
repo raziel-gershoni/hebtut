@@ -4,6 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Spinner } from "./Spinner";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { MAX_BYTES, formatBytes } from "@/lib/media";
+import {
+  COMPRESS_TARGET_BYTES,
+  prepareVideoForUpload,
+  type CompressProgress,
+} from "@/lib/video-compress";
 import type { OnboardingVideoStep } from "@/types/database";
 
 type Slot =
@@ -49,6 +54,7 @@ interface Props {
 export function AdminOnboardingVideos({ jwt }: Props) {
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [busyStep, setBusyStep] = useState<OnboardingVideoStep | null>(null);
+  const [compressing, setCompressing] = useState<CompressProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<OnboardingVideoStep | null>(null);
 
@@ -72,8 +78,23 @@ export function AdminOnboardingVideos({ jwt }: Props) {
   async function upload(step: OnboardingVideoStep, file: File) {
     setBusyStep(step);
     setError(null);
+    let fileToSend: File = file;
+    if (file.size > COMPRESS_TARGET_BYTES) {
+      setCompressing({ ratio: 0, preset: "720p" });
+      try {
+        fileToSend = await prepareVideoForUpload(file, {
+          onProgress: (p) => setCompressing(p),
+        });
+      } catch (e) {
+        setBusyStep(null);
+        setCompressing(null);
+        setError(`не удалось сжать видео: ${(e as Error).message}`);
+        return;
+      }
+      setCompressing(null);
+    }
     const fd = new FormData();
-    fd.append("file", file);
+    fd.append("file", fileToSend);
     const r = await fetch(`/api/admin/onboarding-videos/${step}`, {
       method: "POST",
       cache: "no-store",
@@ -84,7 +105,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
     if (!r.ok) {
       setError(
         r.status === 413
-          ? `файл больше ${formatBytes(MAX_BYTES)}`
+          ? `файл больше ${formatBytes(MAX_BYTES)} даже после сжатия`
           : r.status === 415
             ? "только mp4 / mov / webm"
             : "не удалось загрузить",
@@ -132,6 +153,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
                 jwt={jwt}
                 slot={slot}
                 busy={busyStep === step}
+                compressing={busyStep === step ? compressing : null}
                 disabledByOther={busyStep !== null && busyStep !== step}
                 onUpload={(file) => void upload(step, file)}
                 onDeleteRequest={() => setPendingDelete(step)}
@@ -155,6 +177,7 @@ function SlotCard({
   jwt,
   slot,
   busy,
+  compressing,
   disabledByOther,
   onUpload,
   onDeleteRequest,
@@ -162,6 +185,7 @@ function SlotCard({
   jwt: string;
   slot: Slot;
   busy: boolean;
+  compressing: CompressProgress | null;
   disabledByOther: boolean;
   onUpload: (file: File) => void;
   onDeleteRequest: () => void;
@@ -184,12 +208,21 @@ function SlotCard({
       setLocalError("только mp4 / mov / webm");
       return;
     }
-    if (f.size <= 0 || f.size > MAX_BYTES) {
-      setLocalError(`файл больше ${formatBytes(MAX_BYTES)}`);
+    if (f.size <= 0) {
+      setLocalError("пустой файл");
+      return;
+    }
+    // Big files go through the in-browser compressor. We still reject if
+    // they're WAY beyond what we can plausibly compress (~4 GB) — pure
+    // safety so we don't hand ffmpeg.wasm an unworkable input.
+    if (f.size > 4 * 1024 * 1024 * 1024) {
+      setLocalError(`файл больше ${formatBytes(4 * 1024 * 1024 * 1024)}`);
       return;
     }
     onUpload(f);
   }
+
+  const pct = compressing ? Math.round(compressing.ratio * 100) : 0;
 
   return (
     <div className="rounded-xl bg-tg-bg-secondary p-3 space-y-2">
@@ -216,6 +249,21 @@ function SlotCard({
       ) : (
         <div className="text-xs text-tg-text-hint italic">
           Не загружено — пока используется текст-заглушка.
+        </div>
+      )}
+
+      {compressing && (
+        <div className="space-y-1 pt-1">
+          <div className="flex items-center justify-between text-xs text-tg-text">
+            <span>Сжимаем видео ({compressing.preset})…</span>
+            <span className="tabular-nums">{pct}%</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+            <div
+              className="h-full bg-tg-text-accent transition-[width] duration-150 ease-linear"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
         </div>
       )}
 

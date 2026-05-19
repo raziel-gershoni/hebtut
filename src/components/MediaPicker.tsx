@@ -6,7 +6,13 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { MediaPreview, type MediaLibraryListItem } from "./MediaPreview";
 import { TagPicker, type TagOption } from "./TagPicker";
 import { EditMediaItemDialog } from "./EditMediaItemDialog";
-import { ALLOWED_MIME_TYPES, MAX_BYTES, formatBytes } from "@/lib/media";
+import { ALLOWED_MIME_TYPES, MAX_BYTES, MIME_TO_KIND, formatBytes } from "@/lib/media";
+import {
+  COMPRESS_TARGET_BYTES,
+  isCompressibleVideo,
+  prepareVideoForUpload,
+  type CompressProgress,
+} from "@/lib/video-compress";
 
 interface Props {
   open: boolean;
@@ -44,6 +50,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
   const [uploadTagIds, setUploadTagIds] = useState<number[]>([]);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [compressing, setCompressing] = useState<CompressProgress | null>(null);
 
   const [editing, setEditing] = useState<MediaLibraryListItem | null>(null);
   const [pendingDelete, setPendingDelete] = useState<MediaLibraryListItem | null>(null);
@@ -127,7 +134,14 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
       setUploadError("Неподдерживаемый формат файла");
       return;
     }
-    if (f.size <= 0 || f.size > MAX_BYTES) {
+    if (f.size <= 0) {
+      setUploadError("Пустой файл");
+      return;
+    }
+    const kind = MIME_TO_KIND[f.type] ?? null;
+    // Videos over the limit get compressed at upload time. Photos and
+    // audio still hard-fail because there's no compression path for them.
+    if (f.size > MAX_BYTES && !isCompressibleVideo(f.type, kind)) {
       setUploadError(`Файл больше ${formatBytes(MAX_BYTES)}`);
       return;
     }
@@ -141,8 +155,29 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
     if (!uploadStaging) return;
     setUploadBusy(true);
     setUploadError(null);
+
+    let fileToSend: File = uploadStaging;
+    const kind = MIME_TO_KIND[uploadStaging.type] ?? null;
+    if (
+      uploadStaging.size > COMPRESS_TARGET_BYTES &&
+      isCompressibleVideo(uploadStaging.type, kind)
+    ) {
+      setCompressing({ ratio: 0, preset: "720p" });
+      try {
+        fileToSend = await prepareVideoForUpload(uploadStaging, {
+          onProgress: (p) => setCompressing(p),
+        });
+      } catch (e) {
+        setUploadBusy(false);
+        setCompressing(null);
+        setUploadError(`не удалось сжать видео: ${(e as Error).message}`);
+        return;
+      }
+      setCompressing(null);
+    }
+
     const fd = new FormData();
-    fd.append("file", uploadStaging);
+    fd.append("file", fileToSend);
     fd.append("title", uploadTitle.trim());
     fd.append("description", uploadDescription.trim());
     fd.append("tag_ids", JSON.stringify(uploadTagIds));
@@ -365,6 +400,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
           description={uploadDescription}
           tagIds={uploadTagIds}
           busy={uploadBusy}
+          compressing={compressing}
           error={uploadError}
           jwt={jwt}
           onTitleChange={setUploadTitle}
@@ -412,6 +448,7 @@ function UploadConfirmDialog({
   description,
   tagIds,
   busy,
+  compressing,
   error,
   jwt,
   onTitleChange,
@@ -425,6 +462,7 @@ function UploadConfirmDialog({
   description: string;
   tagIds: number[];
   busy: boolean;
+  compressing: CompressProgress | null;
   error: string | null;
   jwt: string;
   onTitleChange: (s: string) => void;
@@ -433,6 +471,8 @@ function UploadConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const willCompress = file.size > COMPRESS_TARGET_BYTES;
+  const pct = compressing ? Math.round(compressing.ratio * 100) : 0;
   return (
     <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-[60] animate-fade-in">
       <div className="bg-tg-bg-section text-tg-text w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 shadow-2xl animate-slide-up space-y-3 max-h-[92vh] overflow-y-auto">
@@ -440,6 +480,25 @@ function UploadConfirmDialog({
         <div className="rounded-xl bg-tg-bg-secondary p-3 text-xs leading-snug">
           <div className="text-tg-text truncate" title={file.name}>{file.name}</div>
           <div className="text-tg-text-hint mt-0.5">{file.type} · {formatBytes(file.size)}</div>
+          {willCompress && !compressing && (
+            <div className="text-tg-text-hint mt-1">
+              Файл больше {formatBytes(COMPRESS_TARGET_BYTES)} — перед загрузкой сожмём в браузере.
+            </div>
+          )}
+          {compressing && (
+            <div className="mt-2 space-y-1">
+              <div className="flex items-center justify-between text-tg-text">
+                <span>Сжимаем видео ({compressing.preset})…</span>
+                <span className="tabular-nums">{pct}%</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                <div
+                  className="h-full bg-tg-text-accent transition-[width] duration-150 ease-linear"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
         <label className="block">
           <span className="block text-xs uppercase tracking-wider text-tg-text-hint mb-1">
