@@ -93,13 +93,21 @@ export function AdminOnboardingVideos({ jwt }: Props) {
     setError(null);
     let fileToSend: File = file;
     // Probe the source first. If it's ALREADY a valid video_note (square
-    // dimensions, ≤60 s, ≤5 MB, browser can load it), skip ffmpeg.wasm
-    // entirely. Common cases this catches: re-uploading the same already-
-    // converted file, uploading a clip recorded as a video_note in TG
-    // then exported, uploading a square clip prepped externally. Most
-    // landscape phone footage still flows through compression below.
+    // dimensions, ≤60 s, ≤5 MB, browser can load it, mp4 container),
+    // skip ffmpeg.wasm entirely. Common cases this catches: re-uploading
+    // the same already-converted file, uploading a clip recorded as a
+    // video_note in TG then exported, uploading a square clip prepped
+    // externally. Most landscape phone footage still flows through
+    // compression below.
+    //
+    // We restrict the skip to `video/mp4` specifically (not quicktime or
+    // webm) because TG's sendVideoNote really only takes H.264 mp4 —
+    // browsers like Android Chrome may report VP9 webm as "playable" but
+    // TG would reject it. False positives are recoverable (server falls
+    // back to text), but we'd rather over-compress than break send.
     const meta = await probeVideoMetadata(file);
     const alreadyValidVideoNote =
+      file.type === "video/mp4" &&
       meta != null &&
       meta.width === meta.height &&
       meta.duration <= VIDEO_NOTE_MAX_DURATION_SEC &&
