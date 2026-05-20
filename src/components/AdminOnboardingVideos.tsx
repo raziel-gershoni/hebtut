@@ -5,8 +5,6 @@ import { Spinner } from "./Spinner";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { MAX_BYTES, formatBytes } from "@/lib/media";
 import {
-  COMPRESS_TRIGGER_BYTES,
-  isVideoPlayableByBrowser,
   prepareVideoForUpload,
   type CompressProgress,
 } from "@/lib/video-compress";
@@ -91,33 +89,29 @@ export function AdminOnboardingVideos({ jwt }: Props) {
     setBusyStep(step);
     setError(null);
     let fileToSend: File = file;
-    // Compress when EITHER the file is over the TG ceiling OR the browser
-    // can't decode it (DJI/HEVC/10-bit/etc. — Safari direct-navigation
-    // plays them but the <video> element rejects with SRC_NOT_SUPPORTED).
-    // The probe is just a metadata-load via a hidden <video>; on the
-    // same engine that'll render the preview, so the answer is reliable.
-    const tooBig = file.size > COMPRESS_TRIGGER_BYTES;
-    const playable = tooBig ? false : await isVideoPlayableByBrowser(file);
-    if (tooBig || !playable) {
-      setCompressing({ ratio: 0, preset: "720p" });
-      try {
-        fileToSend = await prepareVideoForUpload(file, {
-          onProgress: (p) => setCompressing(p),
-        });
-      } catch (e) {
-        setBusyStep(null);
-        setCompressing(null);
-        setError(`не удалось сжать видео: ${(e as Error).message}`);
-        return;
-      }
+    // Onboarding videos are sent as TG video_notes (round previews).
+    // ALWAYS re-encode through ffmpeg: video_notes must be square (we
+    // center-crop to 384×384) and ≤60 s (we hard-cap). No fast-path for
+    // small inputs — we still need the shape/duration transform.
+    setCompressing({ ratio: 0, preset: "video-note 384²" });
+    try {
+      fileToSend = await prepareVideoForUpload(file, {
+        videoNote: true,
+        onProgress: (p) => setCompressing(p),
+      });
+    } catch (e) {
+      setBusyStep(null);
       setCompressing(null);
-      if (fileToSend.size > MAX_BYTES) {
-        setBusyStep(null);
-        setError(
-          `после сжатия файл всё ещё ${formatBytes(fileToSend.size)} — попробуй обрезать клип`,
-        );
-        return;
-      }
+      setError(`не удалось подготовить видео: ${(e as Error).message}`);
+      return;
+    }
+    setCompressing(null);
+    if (fileToSend.size > MAX_BYTES) {
+      setBusyStep(null);
+      setError(
+        `после сжатия файл всё ещё ${formatBytes(fileToSend.size)} — попробуй обрезать клип`,
+      );
+      return;
     }
     // 1. Ask the server for a fresh storage path (admin gate + path
     //    generation). 2. TUS-upload the bytes through our proxy
@@ -218,8 +212,9 @@ export function AdminOnboardingVideos({ jwt }: Props) {
     <section className="mb-4 rounded-2xl bg-tg-bg-section p-4 space-y-3">
       <h2 className="text-lg font-semibold tracking-tight">Видео онбординга</h2>
       <p className="text-xs text-tg-text-hint">
-        Если слот пустой — бот шлёт текст-заглушку, как сейчас. Заменишь
-        видео — следующая отправка снова закэширует TG-file_id.
+        Бот отправляет ученику как круглое видео-сообщение (TG video_note).
+        Файл автоматически обрежется по центру в квадрат 384×384 и
+        обрежется до 60 секунд. Если слот пустой — бот шлёт текст-заглушку.
       </p>
       {error && <div className="text-xs text-tg-text-destructive">{error}</div>}
       {slots === null ? (

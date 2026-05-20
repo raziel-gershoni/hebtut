@@ -93,16 +93,25 @@ export async function sendOnboardingVideoOrFallback(
   }
 
   try {
-    const sent = await getBot().api.sendVideo(u.tg_chat_id, sendArg, { reply_markup });
+    // sendVideoNote — Telegram circular preview. Requires square source
+    // (the admin upload pipeline center-crops to 384×384) and ≤60 s
+    // (capped during compression). reply_markup still attaches below
+    // the circle so the "Дальше" inline button continues to drive the
+    // onboarding state machine.
+    const sent = await getBot().api.sendVideoNote(u.tg_chat_id, sendArg, {
+      reply_markup,
+    });
     // Cache the file_id on the first real send so subsequent sends to any
     // student are a single TG-internal reference. Re-uploaded slots (the
-    // POST endpoint clears tg_file_id) re-capture here.
-    if (!row.tg_file_id && sent.video?.file_id) {
+    // POST endpoint clears tg_file_id) re-capture here. Note: video_note
+    // file_ids are NOT interchangeable with regular video file_ids — if
+    // we ever switch send modes, the cached id must be invalidated.
+    if (!row.tg_file_id && sent.video_note?.file_id) {
       await sb
         .from("onboarding_videos")
         .update({
-          tg_file_id: sent.video.file_id,
-          tg_file_unique_id: sent.video.file_unique_id ?? null,
+          tg_file_id: sent.video_note.file_id,
+          tg_file_unique_id: sent.video_note.file_unique_id ?? null,
         })
         .eq("step", step);
     }
@@ -111,7 +120,7 @@ export async function sendOnboardingVideoOrFallback(
       actorId: null,
       subjectType: "user",
       subjectId: studentId,
-      meta: { source: "video", step },
+      meta: { source: "video_note", step },
     });
   } catch (e) {
     console.warn("onboarding video send failed", {

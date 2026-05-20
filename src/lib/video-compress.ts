@@ -70,7 +70,17 @@ export interface PrepareOpts {
   onProgress?: (p: CompressProgress) => void;
   /** Aborts the in-flight compression. Resolves to a rejection. */
   signal?: AbortSignal;
+  /**
+   * Produce a Telegram video-note (circular) format: square aspect ratio
+   * (center-cropped), 384×384, hard-capped at 60 seconds. Required for
+   * `bot.api.sendVideoNote` — TG rejects non-square video-notes outright.
+   */
+  videoNote?: boolean;
 }
+
+/** Square dimension and duration cap for TG video_note format. */
+const VIDEO_NOTE_DIM = 384;
+const VIDEO_NOTE_MAX_DURATION_SEC = 60;
 
 // We pick resolution from the computed bitrate budget rather than running
 // a fixed ladder — long videos need radically lower resolutions to hit
@@ -121,15 +131,15 @@ function planEncoding(durationSec: number, targetBytes: number): EncodePlan {
   return { label, maxHeight, videoKbps, audioKbps };
 }
 
-function encodeArgs(plan: EncodePlan, hardCapBytes: number | null): string[] {
+function encodeArgs(
+  plan: EncodePlan,
+  hardCapBytes: number | null,
+  videoNote: boolean,
+): string[] {
   // iOS Safari + Telegram Mini App webview is strict about H.264 streams:
   // it needs yuv420p chroma, a constrained-Main / Main profile at level
   // ≤ 4.1, AAC-LC audio (stereo), and `+faststart` moov. Without these the
   // player loads metadata but freezes on a play-button placeholder.
-  // The scale filter uses `-2:H` so the width is auto-computed to keep
-  // aspect ratio and rounded to an even number (H.264 requires even
-  // dimensions); `force_original_aspect_ratio=decrease` ensures we never
-  // upscale a short clip.
   const args = [
     "-i",
     "input",
@@ -150,7 +160,14 @@ function encodeArgs(plan: EncodePlan, hardCapBytes: number | null): string[] {
     "-bufsize",
     `${Math.floor(plan.videoKbps * 2)}k`,
     "-vf",
-    `scale=-2:${plan.maxHeight}:force_original_aspect_ratio=decrease`,
+    videoNote
+      ? // Video-note: center-crop to the shortest dimension, then scale to
+        // a fixed square. TG video-notes are circular previews of a square
+        // source; non-square inputs get an off-center crop without this.
+        `crop='min(iw\\,ih)':'min(iw\\,ih)',scale=${VIDEO_NOTE_DIM}:${VIDEO_NOTE_DIM}`
+      : // Regular video: scale to max height, auto-width rounded to even,
+        // never upscale.
+        `scale=-2:${plan.maxHeight}:force_original_aspect_ratio=decrease`,
     "-c:a",
     "aac",
     "-ar",
@@ -162,6 +179,11 @@ function encodeArgs(plan: EncodePlan, hardCapBytes: number | null): string[] {
     "-movflags",
     "+faststart",
   ];
+  if (videoNote) {
+    // Hard-cap the duration. TG video_notes are rejected past 60 s; cap
+    // the encode so we never produce a file the bot can't send.
+    args.push("-t", String(VIDEO_NOTE_MAX_DURATION_SEC));
+  }
   if (hardCapBytes != null) {
     // -fs hard-caps the output file size. ffmpeg stops muxing once the
     // limit is hit (the video gets truncated). Use only as a last resort
@@ -223,7 +245,10 @@ export async function prepareVideoForUpload(
   opts: PrepareOpts = {},
 ): Promise<File> {
   const maxBytes = opts.maxBytes ?? COMPRESS_TARGET_BYTES;
-  if (file.size <= maxBytes) return file;
+  // Video-note mode ALWAYS re-encodes (we need square crop + duration
+  // cap regardless of size). Normal mode skips the round-trip when the
+  // file's already small enough.
+  if (!opts.videoNote && file.size <= maxBytes) return file;
 
   const duration = await probeDuration(file);
   const ffmpeg = await getFfmpeg();
@@ -269,7 +294,7 @@ export async function prepareVideoForUpload(
 
     try {
       if (opts.signal?.aborted) throw new Error("aborted");
-      await ffmpeg.exec(encodeArgs(plan, stage.hardCap));
+      await ffmpeg.exec(encodeArgs(plan, stage.hardCap, opts.videoNote ?? false));
     } finally {
       ffmpeg.off("progress", progressHandler);
     }
