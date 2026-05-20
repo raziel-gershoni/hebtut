@@ -247,23 +247,40 @@ function SlotCard({
   // placeholder. Fetch the signed Supabase URL up-front and point
   // <video src> at it directly.
   const [signedSrc, setSignedSrc] = useState<string | null>(null);
+  const [signedSrcError, setSignedSrcError] = useState<string | null>(null);
   useEffect(() => {
     if (!slot.present) {
       setSignedSrc(null);
+      setSignedSrcError(null);
       return;
     }
     let cancelled = false;
     void (async () => {
-      const r = await fetch(
-        `/api/admin/onboarding-videos/${slot.step}/preview?as=json`,
-        {
-          cache: "no-store",
-          headers: { Authorization: `Bearer ${jwt}` },
-        },
-      );
-      if (!r.ok) return;
-      const d = (await r.json()) as { signedUrl?: string };
-      if (!cancelled && d.signedUrl) setSignedSrc(d.signedUrl);
+      try {
+        const r = await fetch(
+          `/api/admin/onboarding-videos/${slot.step}/preview?as=json`,
+          {
+            cache: "no-store",
+            headers: { Authorization: `Bearer ${jwt}` },
+          },
+        );
+        if (!r.ok) {
+          const body = await r.text().catch(() => "");
+          if (!cancelled) setSignedSrcError(`${r.status} ${body || r.statusText || ""}`);
+          return;
+        }
+        const d = (await r.json()) as { signedUrl?: string };
+        if (!cancelled) {
+          if (d.signedUrl) {
+            setSignedSrc(d.signedUrl);
+            setSignedSrcError(null);
+          } else {
+            setSignedSrcError("server returned no signedUrl");
+          }
+        }
+      } catch (e) {
+        if (!cancelled) setSignedSrcError((e as Error).message);
+      }
     })();
     return () => {
       cancelled = true;
@@ -308,9 +325,15 @@ function SlotCard({
 
       {slot.present ? (
         <>
-          {signedSrc ? (
+          {/* Show the player as soon as we have ANY URL. If the JSON fetch
+              for a signed URL hasn't returned yet, fall back to the 302
+              redirect endpoint so the player gets to try something. */}
+          {signedSrc || (signedSrcError != null) ? (
             <video
-              src={signedSrc}
+              src={
+                signedSrc ??
+                `/api/admin/onboarding-videos/${slot.step}/preview?token=${encodeURIComponent(jwt)}`
+              }
               controls
               playsInline
               preload="metadata"
@@ -334,6 +357,11 @@ function SlotCard({
               <Spinner />
             </div>
           )}
+          {signedSrcError && (
+            <div className="text-[11px] text-tg-text-destructive">
+              signed-url: {signedSrcError}
+            </div>
+          )}
           {videoError && (
             <div className="text-[11px] text-tg-text-destructive">
               видео не загружается: {videoError}
@@ -343,16 +371,17 @@ function SlotCard({
             <span className="truncate" title={slot.original_filename}>
               {slot.original_filename} · {formatBytes(slot.bytes)}
             </span>
-            {signedSrc && (
-              <a
-                href={signedSrc}
-                target="_blank"
-                rel="noreferrer"
-                className="text-tg-text-link shrink-0"
-              >
-                открыть в браузере
-              </a>
-            )}
+            <a
+              href={
+                signedSrc ??
+                `/api/admin/onboarding-videos/${slot.step}/preview?token=${encodeURIComponent(jwt)}`
+              }
+              target="_blank"
+              rel="noreferrer"
+              className="text-tg-text-link shrink-0"
+            >
+              открыть в браузере
+            </a>
           </div>
         </>
       ) : (
