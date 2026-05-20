@@ -6,7 +6,6 @@ import { noStoreHeaders } from "@/lib/no-cache";
 import { readJsonBody } from "@/lib/http";
 import { recordAudit } from "@/server/audit";
 import { MAX_BYTES } from "@/lib/media";
-import { signStorageUrlRaw } from "@/lib/storage-sign";
 import type { OnboardingVideoStep } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -65,17 +64,22 @@ export async function POST(
 
   const sb = getServiceRoleClient();
 
-  // Verify the object actually exists in storage. SDK first; if SDK
-  // returns "Object not found" for a row that's really there, the raw
-  // REST call may still succeed (the SDK has been seen to fail on rows
-  // created via signed-upload-URL). Only block registration if BOTH
-  // paths agree the object is missing.
-  const sdkVerify = await sb.storage.from(BUCKET).createSignedUrl(storage_path, 60);
-  if (sdkVerify.error) {
-    const rawVerify = await signStorageUrlRaw(BUCKET, storage_path, 60);
-    if (!rawVerify.signedUrl) {
+  // Verify the object actually exists in storage. We use `list()` (not
+  // `createSignedUrl`) because the latter has been seen to return "Object
+  // not found" for rows that are truly present in storage.objects — the
+  // dashboard reads via list() too and shows the file fine. Using sign()
+  // as the existence probe would block legitimate uploads.
+  {
+    const lastSlash = storage_path.lastIndexOf("/");
+    const folder = lastSlash > 0 ? storage_path.slice(0, lastSlash) : "";
+    const filename =
+      lastSlash >= 0 ? storage_path.slice(lastSlash + 1) : storage_path;
+    const { data: items, error: listErr } = await sb.storage
+      .from(BUCKET)
+      .list(folder, { limit: 1, search: filename });
+    if (listErr || !items || items.length === 0) {
       return new Response(
-        `uploaded object missing: ${sdkVerify.error.message} | raw: ${rawVerify.status} ${rawVerify.bodyText.slice(0, 120)}`,
+        `uploaded object missing: ${listErr?.message ?? "not in list"}`,
         { status: 400, headers: noStoreHeaders },
       );
     }
