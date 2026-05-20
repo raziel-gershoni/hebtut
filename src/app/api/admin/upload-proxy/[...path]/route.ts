@@ -54,21 +54,26 @@ async function forward(
 
   // Forward TUS-spec headers; deliberately drop ours (esp. Authorization,
   // which is OUR JWT — Supabase doesn't know about it). Add Supabase
-  // service-role auth.
+  // service-role auth and Supabase's x-upsert.
+  //
+  // Don't forward Content-Length: Node fetch sets it from the body
+  // ArrayBuffer itself, and including a manual one can conflict.
   const fwdHeaders = new Headers();
   for (const [k, v] of req.headers.entries()) {
     const kl = k.toLowerCase();
     if (
       kl.startsWith("tus-") ||
       kl.startsWith("upload-") ||
-      kl === "content-type" ||
-      kl === "content-length"
+      kl === "content-type"
     ) {
       fwdHeaders.set(k, v);
     }
   }
   fwdHeaders.set("Authorization", `Bearer ${serverEnv.SUPABASE_SERVICE_ROLE_KEY}`);
   fwdHeaders.set("apikey", serverEnv.SUPABASE_SERVICE_ROLE_KEY);
+  // Supabase example for TUS includes this; sending it on create is safe
+  // (won't override existing files for our fresh-UUID paths).
+  fwdHeaders.set("x-upsert", "true");
 
   // Buffer the body for POST/PATCH (chunks ≤4 MB — well under Vercel's
   // function memory). GET/HEAD/DELETE have no body.
