@@ -166,6 +166,22 @@ export async function POST(req: NextRequest): Promise<Response> {
   const tagIds = Array.from(new Set(body.tag_ids ?? []));
 
   const sb = getServiceRoleClient();
+
+  // Verify the object the client claims to have uploaded actually exists.
+  // The Supabase JS client + iOS Safari combo has been seen to report a
+  // successful upload when the bytes never actually arrived (fetch resolves
+  // "ok" prematurely on a flaky connection). Without this check the
+  // library row points to a ghost path and previews come back 502.
+  const { error: verifyErr } = await sb.storage
+    .from(BUCKET)
+    .createSignedUrl(body.storage_path, 60);
+  if (verifyErr) {
+    return new Response(`uploaded object missing: ${verifyErr.message}`, {
+      status: 400,
+      headers: noStoreHeaders,
+    });
+  }
+
   const { data: inserted, error: insertErr } = await sb
     .from("media_library")
     .insert({

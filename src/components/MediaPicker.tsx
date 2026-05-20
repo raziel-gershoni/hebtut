@@ -242,7 +242,12 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
     });
     setUploadBusy(false);
     if (!r.ok) {
-      setUploadError("не удалось зарегистрировать загрузку");
+      const body = await r.text().catch(() => "");
+      setUploadError(
+        body.startsWith("uploaded object missing")
+          ? "загрузка в хранилище не дошла — попробуй ещё раз"
+          : `не удалось зарегистрировать загрузку: ${body || r.statusText}`,
+      );
       return;
     }
     const { id } = (await r.json()) as { id: number };

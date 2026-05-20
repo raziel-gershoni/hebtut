@@ -63,6 +63,23 @@ export async function POST(
   }
 
   const sb = getServiceRoleClient();
+
+  // Verify the object the client claims to have uploaded actually exists
+  // in storage. The Supabase JS client + iOS Safari combo has been seen
+  // to report a successful upload when the bytes never actually arrived
+  // (fetch resolves "ok" prematurely on a flaky connection). Without this
+  // check the metadata row points to a ghost path and the preview comes
+  // back 502 "Object not found" forever.
+  const { error: verifyErr } = await sb.storage
+    .from(BUCKET)
+    .createSignedUrl(storage_path, 60);
+  if (verifyErr) {
+    return new Response(`uploaded object missing: ${verifyErr.message}`, {
+      status: 400,
+      headers: noStoreHeaders,
+    });
+  }
+
   const { data: existing } = await sb
     .from("onboarding_videos")
     .select("storage_path")

@@ -156,7 +156,12 @@ export function AdminOnboardingVideos({ jwt }: Props) {
     });
     setBusyStep(null);
     if (!r.ok) {
-      setError("не удалось зарегистрировать загрузку");
+      const body = await r.text().catch(() => "");
+      setError(
+        body.startsWith("uploaded object missing")
+          ? "загрузка в хранилище не дошла — попробуй ещё раз"
+          : `не удалось зарегистрировать загрузку: ${body || r.statusText}`,
+      );
       return;
     }
     await load();
