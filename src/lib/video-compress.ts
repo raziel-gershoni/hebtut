@@ -80,13 +80,13 @@ export interface PrepareOpts {
 
 /** Square dimension and duration cap for TG video_note format. */
 const VIDEO_NOTE_DIM = 384;
-const VIDEO_NOTE_MAX_DURATION_SEC = 60;
+export const VIDEO_NOTE_MAX_DURATION_SEC = 60;
 // Much tighter size target than regular video. TG's own recorded
 // video_notes are sub-1 MB; we aim for ~5 MB so the bot can fetch from
 // Supabase + upload to TG via multipart well within Vercel's function
 // timeout (10 s on Hobby, 60 s on Pro). 384×384 + 60 s + ~5 MB is also
 // plenty of bitrate budget for talking-head content.
-const VIDEO_NOTE_TARGET_BYTES = 5 * 1024 * 1024;
+export const VIDEO_NOTE_TARGET_BYTES = 5 * 1024 * 1024;
 
 // We pick resolution from the computed bitrate budget rather than running
 // a fixed ladder — long videos need radically lower resolutions to hit
@@ -368,6 +368,56 @@ export function isVideoPlayableByBrowser(file: File): Promise<boolean> {
     v.addEventListener("loadedmetadata", () => finish(true), { once: true });
     v.addEventListener("error", () => finish(false), { once: true });
     setTimeout(() => finish(false), 10_000);
+    v.src = url;
+  });
+}
+
+export interface VideoMetadata {
+  width: number;
+  height: number;
+  duration: number;
+}
+
+/**
+ * Reads dimensions + duration from the file via a hidden <video> element.
+ * Returns null if metadata can't load (codec the browser doesn't grok,
+ * corrupt file, 10-second timeout). The same call effectively proves
+ * iOS-WebKit decode compatibility — if metadata loaded, the file is
+ * playable in the same engine that'll render the admin preview.
+ *
+ * Used by the onboarding upload to skip ffmpeg.wasm entirely when the
+ * source is already a valid video_note (square + ≤60 s + small enough).
+ */
+export function probeVideoMetadata(file: File): Promise<VideoMetadata | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.muted = true;
+    let done = false;
+    const finish = (m: VideoMetadata | null) => {
+      if (done) return;
+      done = true;
+      URL.revokeObjectURL(url);
+      v.src = "";
+      resolve(m);
+    };
+    v.addEventListener(
+      "loadedmetadata",
+      () => {
+        const w = v.videoWidth;
+        const h = v.videoHeight;
+        const d = v.duration;
+        if (!Number.isFinite(d) || d <= 0 || !w || !h) {
+          finish(null);
+          return;
+        }
+        finish({ width: w, height: h, duration: d });
+      },
+      { once: true },
+    );
+    v.addEventListener("error", () => finish(null), { once: true });
+    setTimeout(() => finish(null), 10_000);
     v.src = url;
   });
 }

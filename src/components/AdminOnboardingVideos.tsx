@@ -5,7 +5,10 @@ import { Spinner } from "./Spinner";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { MAX_BYTES, formatBytes } from "@/lib/media";
 import {
+  VIDEO_NOTE_MAX_DURATION_SEC,
+  VIDEO_NOTE_TARGET_BYTES,
   prepareVideoForUpload,
+  probeVideoMetadata,
   type CompressProgress,
 } from "@/lib/video-compress";
 import { tusUpload } from "@/lib/direct-upload";
@@ -89,21 +92,34 @@ export function AdminOnboardingVideos({ jwt }: Props) {
     setBusyStep(step);
     setError(null);
     let fileToSend: File = file;
-    // Onboarding videos are sent as TG video_notes (round previews).
-    // ALWAYS re-encode through ffmpeg: video_notes must be square (we
-    // center-crop to 384×384) and ≤60 s (we hard-cap). No fast-path for
-    // small inputs — we still need the shape/duration transform.
-    setCompressing({ ratio: 0, preset: "video-note 384²" });
-    try {
-      fileToSend = await prepareVideoForUpload(file, {
-        videoNote: true,
-        onProgress: (p) => setCompressing(p),
-      });
-    } catch (e) {
-      setBusyStep(null);
-      setCompressing(null);
-      setError(`не удалось подготовить видео: ${(e as Error).message}`);
-      return;
+    // Probe the source first. If it's ALREADY a valid video_note (square
+    // dimensions, ≤60 s, ≤5 MB, browser can load it), skip ffmpeg.wasm
+    // entirely. Common cases this catches: re-uploading the same already-
+    // converted file, uploading a clip recorded as a video_note in TG
+    // then exported, uploading a square clip prepped externally. Most
+    // landscape phone footage still flows through compression below.
+    const meta = await probeVideoMetadata(file);
+    const alreadyValidVideoNote =
+      meta != null &&
+      meta.width === meta.height &&
+      meta.duration <= VIDEO_NOTE_MAX_DURATION_SEC &&
+      file.size <= VIDEO_NOTE_TARGET_BYTES;
+    if (!alreadyValidVideoNote) {
+      // Onboarding videos are sent as TG video_notes (round previews).
+      // Re-encode through ffmpeg: video_notes must be square (we
+      // center-crop to 384×384) and ≤60 s (we hard-cap).
+      setCompressing({ ratio: 0, preset: "video-note 384²" });
+      try {
+        fileToSend = await prepareVideoForUpload(file, {
+          videoNote: true,
+          onProgress: (p) => setCompressing(p),
+        });
+      } catch (e) {
+        setBusyStep(null);
+        setCompressing(null);
+        setError(`не удалось подготовить видео: ${(e as Error).message}`);
+        return;
+      }
     }
     setCompressing(null);
     if (fileToSend.size > MAX_BYTES) {
