@@ -14,7 +14,11 @@
 
 import type { MediaKind } from "@/types/database";
 
-export const COMPRESS_TARGET_BYTES = 48 * 1024 * 1024; // 48 MB — leave 2 MB headroom under TG's 50 MB ceiling.
+// 40 MB target. 10 MB cushion under TG's 50 MB ceiling — enough to absorb
+// libx264's bitrate overshoot at low rates AND ffmpeg's documented `-fs`
+// slack ("the size of the output file is slightly more than the requested
+// file size"). Don't lower further without measuring quality on a real clip.
+export const COMPRESS_TARGET_BYTES = 40 * 1024 * 1024;
 
 const CORE_URL = "/ffmpeg/ffmpeg-core.js";
 const WASM_URL = "/ffmpeg/ffmpeg-core.wasm";

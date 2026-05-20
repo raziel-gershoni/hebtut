@@ -92,6 +92,15 @@ export function AdminOnboardingVideos({ jwt }: Props) {
         return;
       }
       setCompressing(null);
+      // Belt-and-braces: if compression somehow returned a file the server
+      // would still reject, surface a clear error instead of a confusing 413.
+      if (fileToSend.size > MAX_BYTES) {
+        setBusyStep(null);
+        setError(
+          `после сжатия файл всё ещё ${formatBytes(fileToSend.size)} — попробуй обрезать клип`,
+        );
+        return;
+      }
     }
     const fd = new FormData();
     fd.append("file", fileToSend);
