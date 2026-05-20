@@ -51,3 +51,36 @@ export async function uploadToSignedUrl(
     throw new Error(error.message);
   }
 }
+
+/**
+ * Upload with automatic retry. Each attempt requests a fresh signed URL
+ * (via `getSignedUrl`) so a stale / consumed token doesn't poison the
+ * retry. iOS Safari + Telegram WebView is the typical environment, and
+ * its generic "Load failed" fetch error covers everything from CORS
+ * preflight quirks to a momentarily-dropped 5G connection — a single
+ * retry resolves most of them.
+ */
+export async function uploadWithRetry(
+  getSignedUrl: () => Promise<SignedUpload>,
+  file: File,
+  options: { attempts?: number; backoffMs?: number } = {},
+): Promise<SignedUpload> {
+  const attempts = options.attempts ?? 2;
+  const backoff = options.backoffMs ?? 1000;
+  let lastError: unknown = null;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      const signed = await getSignedUrl();
+      await uploadToSignedUrl(signed, file);
+      return signed;
+    } catch (e) {
+      lastError = e;
+      console.warn(`upload-to-storage attempt ${i + 1}/${attempts} failed`, e);
+      if (i === attempts - 1) break;
+      await new Promise((r) => setTimeout(r, backoff));
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`upload failed after ${attempts} attempts`);
+}

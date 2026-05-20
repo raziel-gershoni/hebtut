@@ -9,7 +9,7 @@ import {
   prepareVideoForUpload,
   type CompressProgress,
 } from "@/lib/video-compress";
-import { uploadToSignedUrl } from "@/lib/direct-upload";
+import { uploadWithRetry } from "@/lib/direct-upload";
 import type { OnboardingVideoStep } from "@/types/database";
 
 type Slot =
@@ -104,34 +104,37 @@ export function AdminOnboardingVideos({ jwt }: Props) {
     // Two-step upload: ask the server for a signed Supabase upload URL,
     // PUT the bytes directly to Supabase (Vercel functions have a 4.5 MB
     // body limit), then POST the metadata so the row gets registered.
-    const urlRes = await fetch(
-      `/api/admin/onboarding-videos/${step}/upload-url`,
-      {
-        method: "POST",
-        cache: "no-store",
-        headers: {
-          Authorization: `Bearer ${jwt}`,
-          "Content-Type": "application/json",
+    // The retry wrapper requests a fresh signed URL per attempt — a stale
+    // or consumed token can't poison the second try.
+    const getSignedUrl = async () => {
+      const urlRes = await fetch(
+        `/api/admin/onboarding-videos/${step}/upload-url`,
+        {
+          method: "POST",
+          cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${jwt}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ mime_type: fileToSend.type }),
         },
-        body: JSON.stringify({ mime_type: fileToSend.type }),
-      },
-    );
-    if (!urlRes.ok) {
-      setBusyStep(null);
-      setError(
-        urlRes.status === 415
-          ? "только mp4 / mov / webm"
-          : "не удалось получить URL для загрузки",
       );
-      return;
-    }
-    const signed = (await urlRes.json()) as {
-      bucket: string;
-      path: string;
-      token: string;
+      if (!urlRes.ok) {
+        throw new Error(
+          urlRes.status === 415
+            ? "только mp4 / mov / webm"
+            : `signed-url ${urlRes.status}`,
+        );
+      }
+      return (await urlRes.json()) as {
+        bucket: string;
+        path: string;
+        token: string;
+      };
     };
+    let signed: { bucket: string; path: string; token: string };
     try {
-      await uploadToSignedUrl(signed, fileToSend);
+      signed = await uploadWithRetry(getSignedUrl, fileToSend);
     } catch (e) {
       setBusyStep(null);
       setError(`не удалось загрузить файл в хранилище: ${(e as Error).message}`);
