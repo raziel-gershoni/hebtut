@@ -12,6 +12,12 @@ import { handleOnboardingCallback, handleOnboardingNameInput } from "@/server/ha
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Bump per-function timeout. The fresh-send path for an onboarding
+// video_note has to fetch the file from Supabase and forward it to TG
+// via multipart inside this single function invocation — Vercel's
+// default 10 s cap (Hobby plan limit) can be tight. 60 s is the Pro
+// ceiling; the directive is a no-op if the project's on Hobby.
+export const maxDuration = 60;
 
 let installed = false;
 function installHandlers(): void {

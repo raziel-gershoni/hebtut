@@ -81,6 +81,12 @@ export interface PrepareOpts {
 /** Square dimension and duration cap for TG video_note format. */
 const VIDEO_NOTE_DIM = 384;
 const VIDEO_NOTE_MAX_DURATION_SEC = 60;
+// Much tighter size target than regular video. TG's own recorded
+// video_notes are sub-1 MB; we aim for ~5 MB so the bot can fetch from
+// Supabase + upload to TG via multipart well within Vercel's function
+// timeout (10 s on Hobby, 60 s on Pro). 384×384 + 60 s + ~5 MB is also
+// plenty of bitrate budget for talking-head content.
+const VIDEO_NOTE_TARGET_BYTES = 5 * 1024 * 1024;
 
 // We pick resolution from the computed bitrate budget rather than running
 // a fixed ladder — long videos need radically lower resolutions to hit
@@ -244,7 +250,13 @@ export async function prepareVideoForUpload(
   file: File,
   opts: PrepareOpts = {},
 ): Promise<File> {
-  const maxBytes = opts.maxBytes ?? COMPRESS_TARGET_BYTES;
+  // Video_note mode uses a much tighter byte target — Vercel function
+  // timeouts limit how big a file the bot can fetch + upload to TG
+  // before being killed, so the output needs to be small enough that
+  // the full Supabase→Vercel→TG round-trip completes in a few seconds.
+  const maxBytes = opts.videoNote
+    ? VIDEO_NOTE_TARGET_BYTES
+    : (opts.maxBytes ?? COMPRESS_TARGET_BYTES);
   // Video-note mode ALWAYS re-encodes (we need square crop + duration
   // cap regardless of size). Normal mode skips the round-trip when the
   // file's already small enough.
