@@ -56,6 +56,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [busyStep, setBusyStep] = useState<OnboardingVideoStep | null>(null);
   const [compressing, setCompressing] = useState<CompressProgress | null>(null);
+  const [uploading, setUploading] = useState<{ loaded: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<OnboardingVideoStep | null>(null);
 
@@ -133,13 +134,18 @@ export function AdminOnboardingVideos({ jwt }: Props) {
       };
     };
     let signed: { bucket: string; path: string; token: string };
+    setUploading({ loaded: 0, total: fileToSend.size });
     try {
-      signed = await uploadWithRetry(getSignedUrl, fileToSend);
+      signed = await uploadWithRetry(getSignedUrl, fileToSend, {
+        onProgress: (loaded, total) => setUploading({ loaded, total }),
+      });
     } catch (e) {
       setBusyStep(null);
+      setUploading(null);
       setError(`не удалось загрузить файл в хранилище: ${(e as Error).message}`);
       return;
     }
+    setUploading(null);
     const r = await fetch(`/api/admin/onboarding-videos/${step}`, {
       method: "POST",
       cache: "no-store",
@@ -206,6 +212,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
                 slot={slot}
                 busy={busyStep === step}
                 compressing={busyStep === step ? compressing : null}
+                uploading={busyStep === step ? uploading : null}
                 disabledByOther={busyStep !== null && busyStep !== step}
                 onUpload={(file) => void upload(step, file)}
                 onDeleteRequest={() => setPendingDelete(step)}
@@ -230,6 +237,7 @@ function SlotCard({
   slot,
   busy,
   compressing,
+  uploading,
   disabledByOther,
   onUpload,
   onDeleteRequest,
@@ -238,6 +246,7 @@ function SlotCard({
   slot: Slot;
   busy: boolean;
   compressing: CompressProgress | null;
+  uploading: { loaded: number; total: number } | null;
   disabledByOther: boolean;
   onUpload: (file: File) => void;
   onDeleteRequest: () => void;
@@ -405,6 +414,27 @@ function SlotCard({
             <div
               className="h-full bg-tg-text-accent transition-[width] duration-150 ease-linear"
               style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {uploading && (
+        <div className="space-y-1 pt-1">
+          <div className="flex items-center justify-between text-xs text-tg-text">
+            <span>
+              Загружаем в хранилище… {formatBytes(uploading.loaded)} / {formatBytes(uploading.total)}
+            </span>
+            <span className="tabular-nums">
+              {Math.round((uploading.loaded / Math.max(1, uploading.total)) * 100)}%
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+            <div
+              className="h-full bg-tg-text-accent transition-[width] duration-150 ease-linear"
+              style={{
+                width: `${Math.min(100, Math.round((uploading.loaded / Math.max(1, uploading.total)) * 100))}%`,
+              }}
             />
           </div>
         </div>

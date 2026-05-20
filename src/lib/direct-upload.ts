@@ -84,7 +84,11 @@ export async function uploadToSignedUrl(
 export async function uploadWithRetry(
   getSignedUrl: () => Promise<SignedUpload>,
   file: File,
-  options: { attempts?: number; backoffMs?: number } = {},
+  options: {
+    attempts?: number;
+    backoffMs?: number;
+    onProgress?: (loaded: number, total: number) => void;
+  } = {},
 ): Promise<SignedUpload> {
   const attempts = options.attempts ?? 2;
   const backoff = options.backoffMs ?? 1000;
@@ -92,7 +96,7 @@ export async function uploadWithRetry(
   let lastError: unknown = null;
   for (let i = 0; i < attempts; i += 1) {
     try {
-      await uploadToSignedUrl(signed, file);
+      await uploadToSignedUrl(signed, file, options.onProgress);
       return signed;
     } catch (e) {
       lastError = e;

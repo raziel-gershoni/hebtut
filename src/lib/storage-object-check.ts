@@ -6,27 +6,40 @@
 
 import { publicEnv, serverEnv } from "./env";
 
+/**
+ * Polls storage.objects with short backoff. The PUT can succeed at the S3
+ * layer milliseconds before the storage.objects row is indexed; without
+ * the polling loop a fast registration POST may false-negative.
+ */
 export async function storageObjectExists(
   bucket: string,
   path: string,
+  options: { attempts?: number; delayMs?: number } = {},
 ): Promise<boolean> {
+  const attempts = options.attempts ?? 5;
+  const delayMs = options.delayMs ?? 500;
   const base = publicEnv.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "");
-  // PostgREST endpoint for the storage schema. ?select=id&bucket_id=eq.X
-  // &name=eq.Y returns an array of matching rows.
   const url =
     `${base}/rest/v1/objects?select=id` +
     `&bucket_id=eq.${encodeURIComponent(bucket)}` +
     `&name=eq.${encodeURIComponent(path)}` +
     `&limit=1`;
-  const res = await fetch(url, {
-    cache: "no-store",
-    headers: {
-      apikey: serverEnv.SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${serverEnv.SUPABASE_SERVICE_ROLE_KEY}`,
-      "Accept-Profile": "storage",
-    },
-  });
-  if (!res.ok) return false;
-  const rows = (await res.json()) as { id: string }[];
-  return Array.isArray(rows) && rows.length > 0;
+  for (let i = 0; i < attempts; i += 1) {
+    const res = await fetch(url, {
+      cache: "no-store",
+      headers: {
+        apikey: serverEnv.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${serverEnv.SUPABASE_SERVICE_ROLE_KEY}`,
+        "Accept-Profile": "storage",
+      },
+    });
+    if (res.ok) {
+      const rows = (await res.json()) as { id: string }[];
+      if (Array.isArray(rows) && rows.length > 0) return true;
+    }
+    if (i < attempts - 1) {
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  return false;
 }

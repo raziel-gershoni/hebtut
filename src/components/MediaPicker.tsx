@@ -52,6 +52,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [compressing, setCompressing] = useState<CompressProgress | null>(null);
+  const [uploading, setUploading] = useState<{ loaded: number; total: number } | null>(null);
 
   const [editing, setEditing] = useState<MediaLibraryListItem | null>(null);
   const [pendingDelete, setPendingDelete] = useState<MediaLibraryListItem | null>(null);
@@ -215,13 +216,18 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
       };
     };
     let signed: { bucket: string; path: string; token: string };
+    setUploading({ loaded: 0, total: fileToSend.size });
     try {
-      signed = await uploadWithRetry(getSignedUrl, fileToSend);
+      signed = await uploadWithRetry(getSignedUrl, fileToSend, {
+        onProgress: (loaded, total) => setUploading({ loaded, total }),
+      });
     } catch (e) {
       setUploadBusy(false);
+      setUploading(null);
       setUploadError(`не удалось загрузить в хранилище: ${(e as Error).message}`);
       return;
     }
+    setUploading(null);
 
     const r = await fetch("/api/admin/media", {
       method: "POST",
@@ -458,6 +464,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
           tagIds={uploadTagIds}
           busy={uploadBusy}
           compressing={compressing}
+          uploading={uploading}
           error={uploadError}
           jwt={jwt}
           onTitleChange={setUploadTitle}
@@ -506,6 +513,7 @@ function UploadConfirmDialog({
   tagIds,
   busy,
   compressing,
+  uploading,
   error,
   jwt,
   onTitleChange,
@@ -520,6 +528,7 @@ function UploadConfirmDialog({
   tagIds: number[];
   busy: boolean;
   compressing: CompressProgress | null;
+  uploading: { loaded: number; total: number } | null;
   error: string | null;
   jwt: string;
   onTitleChange: (s: string) => void;
@@ -530,6 +539,9 @@ function UploadConfirmDialog({
 }) {
   const willCompress = file.size > COMPRESS_TARGET_BYTES;
   const pct = compressing ? Math.round(compressing.ratio * 100) : 0;
+  const uploadPct = uploading
+    ? Math.min(100, Math.round((uploading.loaded / Math.max(1, uploading.total)) * 100))
+    : 0;
   return (
     <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-[60] animate-fade-in">
       <div className="bg-tg-bg-section text-tg-text w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 shadow-2xl animate-slide-up space-y-3 max-h-[92vh] overflow-y-auto">
@@ -552,6 +564,22 @@ function UploadConfirmDialog({
                 <div
                   className="h-full bg-tg-text-accent transition-[width] duration-150 ease-linear"
                   style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          )}
+          {uploading && (
+            <div className="mt-2 space-y-1">
+              <div className="flex items-center justify-between text-tg-text">
+                <span>
+                  Загружаем… {formatBytes(uploading.loaded)} / {formatBytes(uploading.total)}
+                </span>
+                <span className="tabular-nums">{uploadPct}%</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                <div
+                  className="h-full bg-tg-text-accent transition-[width] duration-150 ease-linear"
+                  style={{ width: `${uploadPct}%` }}
                 />
               </div>
             </div>
