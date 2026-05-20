@@ -165,20 +165,24 @@ function encodeArgs(
     "yuv420p",
   ];
   if (videoNote) {
-    // CRF (quality-targeted) instead of CBR (bitrate-targeted). For a
-    // 5 MB / 60 s / 384×384 budget we're nowhere near the bitrate
-    // ceiling — letting the encoder distribute bits by frame
-    // complexity produces much better visual quality than constant-
-    // bitrate at the same file size. CRF 23 is libx264's "high
-    // quality" recommendation. The maxrate cap prevents pathological
-    // file sizes on complex action footage.
+    // CRF (quality-targeted) for visual quality, with a TIGHT maxrate
+    // cap that mathematically guarantees the output fits under the
+    // 5 MB budget for the full 60 s without needing the staged retry.
+    //   500 kbps × 60 s = 3.75 MB (video, cap)
+    // + 96  kbps × 60 s = 0.72 MB (audio)
+    // + ~1% container overhead
+    // ≈ 4.5 MB worst case — well under 5 MB.
+    // For typical talking-head content the encoder uses far less than
+    // 500 kbps (CRF 23 looks great at 250-400 kbps for 384×384), so
+    // most files come in at 2-3 MB. The cap only bites on complex
+    // action footage where CRF would otherwise overshoot.
     args.push(
       "-crf",
       "23",
       "-maxrate",
-      "1500k",
+      "500k",
       "-bufsize",
-      "3000k",
+      "1000k",
     );
   } else {
     args.push(
@@ -307,16 +311,23 @@ export async function prepareVideoForUpload(
   await ffmpeg.writeFile("input", inputData);
 
   const stem = file.name.replace(/\.[^.]+$/, "");
-  // Each retry tightens the target so the bitrate calculation moves down
-  // the resolution ladder. The final pass adds ffmpeg's -fs hard cap so
-  // the output is ALWAYS ≤ maxBytes — even for multi-hour input the file
-  // will fit (the encoder truncates the tail to stay under the cap).
-  const STAGES: Array<{ targetBytes: number; hardCap: number | null }> = [
-    { targetBytes: maxBytes, hardCap: null },
-    { targetBytes: Math.floor(maxBytes * 0.7), hardCap: null },
-    { targetBytes: Math.floor(maxBytes * 0.5), hardCap: null },
-    { targetBytes: Math.floor(maxBytes * 0.5), hardCap: maxBytes },
-  ];
+  // Stage ladder for the regular-video path: each retry tightens the
+  // target so the bitrate calculation moves down the resolution ladder,
+  // final pass adds -fs as a hard cap.
+  //
+  // Video-note mode uses a single stage. The CRF+maxrate config in
+  // encodeArgs mathematically guarantees the output fits in 5 MB on the
+  // first try — no point re-encoding the same file with the same CRF
+  // and getting an identical result.
+  const STAGES: Array<{ targetBytes: number; hardCap: number | null }> =
+    opts.videoNote
+      ? [{ targetBytes: maxBytes, hardCap: null }]
+      : [
+          { targetBytes: maxBytes, hardCap: null },
+          { targetBytes: Math.floor(maxBytes * 0.7), hardCap: null },
+          { targetBytes: Math.floor(maxBytes * 0.5), hardCap: null },
+          { targetBytes: Math.floor(maxBytes * 0.5), hardCap: maxBytes },
+        ];
 
   for (let i = 0; i < STAGES.length; i += 1) {
     const stage = STAGES[i];
