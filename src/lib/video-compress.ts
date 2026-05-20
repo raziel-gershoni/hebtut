@@ -84,11 +84,12 @@ export interface PrepareOpts {
 // video_notes at progressively larger circles as the user taps them).
 const VIDEO_NOTE_DIM = 640;
 export const VIDEO_NOTE_MAX_DURATION_SEC = 60;
-// 20 MB output ceiling. TG's send limit is 50 MB but we want a buffer
-// for the Supabase→Vercel→TG roundtrip to fit in the Hobby plan's 10 s
-// function timeout. 20 MB on a fast connection clears in ~5-8 s of
-// total transfer, leaving headroom for encoding metadata + overhead.
-export const VIDEO_NOTE_TARGET_BYTES = 20 * 1024 * 1024;
+// TG enforces a HARD 12 MiB (12,582,912 bytes) limit on video_notes —
+// confirmed via the bot API rejection: "Bad Request: file ... is too
+// big for a video note; the maximum size is 12582912 bytes". We aim for
+// 11 MB so there's safety margin against container overhead pushing us
+// over the cap.
+export const VIDEO_NOTE_TARGET_BYTES = 11 * 1024 * 1024;
 
 // We pick resolution from the computed bitrate budget rather than running
 // a fixed ladder — long videos need radically lower resolutions to hit
@@ -167,23 +168,23 @@ function encodeArgs(
     "yuv420p",
   ];
   if (videoNote) {
-    // High-quality CRF target with generous maxrate ceiling. Math
-    // for the 60 s / 20 MB budget:
-    //   2500 kbps × 60 s = 18.75 MB (video, cap)
-    // +  128 kbps × 60 s = 0.96  MB (audio)
+    // CRF + maxrate sized for TG's 12 MiB video_note ceiling. Math
+    // for the 60 s / 11 MB budget:
+    //   1400 kbps × 60 s = 10.5 MB (video, cap)
+    // +   96 kbps × 60 s = 0.72 MB (audio)
     // + ~1% container overhead
-    // ≈ 19.9 MB worst case — fits within 20 MB.
-    // CRF 20 is libx264's "high quality" recommendation (visually
-    // near-lossless at 640×640). Encoder uses far less than the cap
-    // for typical talking-head content (~800-1200 kbps, ~6-9 MB);
+    // ≈ 11.3 MB worst case — under TG's 12 MB hard limit.
+    // CRF 20 is libx264's "high quality" recommendation. The encoder
+    // uses far less than the maxrate cap for typical talking-head
+    // content (~600-900 kbps for 640×640, files come in at 5-7 MB);
     // the cap only bites on complex action footage.
     args.push(
       "-crf",
       "20",
       "-maxrate",
-      "2500k",
+      "1400k",
       "-bufsize",
-      "5000k",
+      "2800k",
     );
   } else {
     args.push(
@@ -214,11 +215,11 @@ function encodeArgs(
     "-ac",
     "2",
     "-b:a",
-    // Fixed 128 kbps for video_notes — comfortable for speech + ambient
-    // mix, well above the threshold where compression artifacts become
-    // audible. Negligible against the video budget. Regular video keeps
-    // the duration-derived value.
-    videoNote ? "128k" : `${plan.audioKbps}k`,
+    // 96 kbps AAC for video_notes — solid for speech + light ambient
+    // mix, conservative enough to leave the 10.5 MB video budget intact
+    // under the 12 MiB TG cap. Regular video keeps the duration-derived
+    // value.
+    videoNote ? "96k" : `${plan.audioKbps}k`,
     "-movflags",
     "+faststart",
   );
