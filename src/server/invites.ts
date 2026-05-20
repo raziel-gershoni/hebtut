@@ -139,6 +139,16 @@ export async function createStudent(args: {
     })
     .select("id")
     .single();
+  if (!inserted) return null;
+  // Provision the subscription row immediately so the onboarding state
+  // machine has a place to live. Without this, `subscriptions` is null
+  // for fresh students and the callback handler defaults state to
+  // 'done_skipped' — which makes the very first "Начать" tap fire the
+  // "Кнопка устарела" toast. Defaults: status='trial' (3-day trial),
+  // onboarding_state='welcome' (matches the Step 1 message we just sent).
+  await sb
+    .from("subscriptions")
+    .upsert({ user_id: inserted.id }, { onConflict: "user_id" });
   return inserted;
 }
 

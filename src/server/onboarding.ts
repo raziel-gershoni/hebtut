@@ -70,14 +70,22 @@ export async function advanceOnboarding(
 ): Promise<void> {
   const sb = getServiceRoleClient();
   const nowIso = new Date().toISOString();
+  // Upsert (not update) so the row is provisioned for any legacy student
+  // that signed up before `createStudent` started provisioning subscriptions
+  // automatically. Without this, advancing the state for such a student
+  // would be a silent no-op and the callback handler would keep defaulting
+  // their state to 'done_skipped'.
   await sb
     .from("subscriptions")
-    .update({
-      onboarding_state: next,
-      onboarding_state_entered_at: nowIso,
-      updated_at: nowIso,
-    })
-    .eq("user_id", studentId);
+    .upsert(
+      {
+        user_id: studentId,
+        onboarding_state: next,
+        onboarding_state_entered_at: nowIso,
+        updated_at: nowIso,
+      },
+      { onConflict: "user_id" },
+    );
 }
 
 export async function scheduleTimer(
