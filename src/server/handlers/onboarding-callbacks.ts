@@ -43,7 +43,16 @@ export async function handleOnboardingCallback(ctx: Context): Promise<void> {
     .eq("tg_user_id", tgUserId)
     .maybeSingle();
   if (!user || user.role !== "student") {
-    await ctx.answerCallbackQuery().catch(() => {});
+    // Surface this instead of silent-no-op — debugging "nothing happens
+    // when I click" is impossible if every failure mode returns silently.
+    await ctx
+      .answerCallbackQuery({
+        text: !user
+          ? "Не нашёл твою регистрацию — нажми /start заново"
+          : "Это шаги онбординга для ученика, а ты не ученик",
+        show_alert: true,
+      })
+      .catch(() => {});
     return;
   }
 
@@ -68,7 +77,16 @@ export async function handleOnboardingCallback(ctx: Context): Promise<void> {
   };
 
   const stale = async () => {
-    await ctx.answerCallbackQuery({ text: ru.onbStaleButton }).catch(() => {});
+    // show_alert=true makes this a modal the user has to dismiss, instead
+    // of a subtle toast that disappears in 2 s — much easier to spot in
+    // iOS TG. Also append the current state so we can debug "the button
+    // does nothing" reports without needing server logs.
+    await ctx
+      .answerCallbackQuery({
+        text: `${ru.onbStaleButton} (состояние: ${state})`,
+        show_alert: true,
+      })
+      .catch(() => {});
   };
 
   switch (data) {
