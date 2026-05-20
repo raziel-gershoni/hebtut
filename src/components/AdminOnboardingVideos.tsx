@@ -11,13 +11,22 @@ import {
   type CompressProgress,
 } from "@/lib/video-compress";
 import { tusUpload } from "@/lib/direct-upload";
+import { publicEnv } from "@/lib/env";
 import type { OnboardingVideoStep } from "@/types/database";
+
+const BUCKET = "media-library";
+
+function publicUrlFor(storagePath: string): string {
+  const base = publicEnv.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "");
+  return `${base}/storage/v1/object/public/${BUCKET}/${storagePath}`;
+}
 
 type Slot =
   | { step: OnboardingVideoStep; present: false }
   | {
       step: OnboardingVideoStep;
       present: true;
+      storage_path: string;
       original_filename: string;
       mime_type: string;
       bytes: number;
@@ -274,51 +283,12 @@ function SlotCard({
   // can fail silently and leave the player stuck on the play-button
   // placeholder. Fetch the signed Supabase URL up-front and point
   // <video src> at it directly.
-  const [signedSrc, setSignedSrc] = useState<string | null>(null);
-  const [signedSrcError, setSignedSrcError] = useState<string | null>(null);
-  // Use uploaded_at as a change-marker: after a Replace, the slot stays
-  // (step, present) the same but the underlying file is different. Without
-  // a dep on uploaded_at the effect never re-fires and the old preview
-  // URL keeps pointing at the previous (now-deleted) path → 404.
-  const uploadedAt = slot.present ? slot.uploaded_at : null;
-  useEffect(() => {
-    if (!slot.present) {
-      setSignedSrc(null);
-      setSignedSrcError(null);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        const r = await fetch(
-          `/api/admin/onboarding-videos/${slot.step}/preview?as=json`,
-          {
-            cache: "no-store",
-            headers: { Authorization: `Bearer ${jwt}` },
-          },
-        );
-        if (!r.ok) {
-          const body = await r.text().catch(() => "");
-          if (!cancelled) setSignedSrcError(`${r.status} ${body || r.statusText || ""}`);
-          return;
-        }
-        const d = (await r.json()) as { signedUrl?: string };
-        if (!cancelled) {
-          if (d.signedUrl) {
-            setSignedSrc(d.signedUrl);
-            setSignedSrcError(null);
-          } else {
-            setSignedSrcError("server returned no signedUrl");
-          }
-        }
-      } catch (e) {
-        if (!cancelled) setSignedSrcError((e as Error).message);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [slot.step, slot.present, uploadedAt, jwt]);
+  // Construct the public URL directly from slot.storage_path. The bucket
+  // is public, getPublicUrl is just URL string concatenation — no extra
+  // fetch needed. This makes the URL a pure derivation of the slot prop:
+  // when slots refetches after Replace, the new storage_path immediately
+  // produces a new URL, no stale-state class possible.
+  const signedSrc = slot.present ? publicUrlFor(slot.storage_path) : null;
 
   function pick() {
     setLocalError(null);
@@ -356,45 +326,32 @@ function SlotCard({
         <div className="text-xs text-tg-text-hint">{meta.when}</div>
       </div>
 
-      {slot.present ? (
+      {slot.present && signedSrc ? (
         <>
-          {/* Show the player as soon as we have ANY URL. If the JSON fetch
-              for a signed URL hasn't returned yet, fall back to the 302
-              redirect endpoint so the player gets to try something. */}
-          {signedSrc || (signedSrcError != null) ? (
-            <video
-              src={
-                signedSrc ??
-                `/api/admin/onboarding-videos/${slot.step}/preview?token=${encodeURIComponent(jwt)}`
+          <video
+            // Key forces React to recreate the <video> element when the
+            // underlying file changes — otherwise iOS WebKit can latch
+            // onto the previous src's range-request state.
+            key={signedSrc}
+            src={signedSrc}
+            controls
+            playsInline
+            preload="metadata"
+            onError={(e) => {
+              const err = e.currentTarget.error;
+              if (err) {
+                const codes: Record<number, string> = {
+                  1: "ABORTED",
+                  2: "NETWORK",
+                  3: "DECODE",
+                  4: "SRC_NOT_SUPPORTED",
+                };
+                setVideoError(`${codes[err.code] ?? "UNKNOWN"} · ${err.message || "—"}`);
               }
-              controls
-              playsInline
-              preload="metadata"
-              onError={(e) => {
-                const err = e.currentTarget.error;
-                if (err) {
-                  const codes: Record<number, string> = {
-                    1: "ABORTED",
-                    2: "NETWORK",
-                    3: "DECODE",
-                    4: "SRC_NOT_SUPPORTED",
-                  };
-                  setVideoError(`${codes[err.code] ?? "UNKNOWN"} · ${err.message || "—"}`);
-                }
-              }}
-              onLoadedMetadata={() => setVideoError(null)}
-              className="block w-full max-w-sm max-h-48 rounded-lg bg-black"
-            />
-          ) : (
-            <div className="block w-full max-w-sm h-48 rounded-lg bg-black flex items-center justify-center">
-              <Spinner />
-            </div>
-          )}
-          {signedSrcError && (
-            <div className="text-[11px] text-tg-text-destructive">
-              signed-url: {signedSrcError}
-            </div>
-          )}
+            }}
+            onLoadedMetadata={() => setVideoError(null)}
+            className="block w-full max-w-sm max-h-48 rounded-lg bg-black"
+          />
           {videoError && (
             <div className="text-[11px] text-tg-text-destructive">
               видео не загружается: {videoError}
@@ -405,10 +362,7 @@ function SlotCard({
               {slot.original_filename} · {formatBytes(slot.bytes)}
             </span>
             <a
-              href={
-                signedSrc ??
-                `/api/admin/onboarding-videos/${slot.step}/preview?token=${encodeURIComponent(jwt)}`
-              }
+              href={signedSrc}
               target="_blank"
               rel="noreferrer"
               className="text-tg-text-link shrink-0"

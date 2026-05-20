@@ -15,6 +15,7 @@ type Slot =
   | {
       step: OnboardingVideoStep;
       present: true;
+      storage_path: string;
       original_filename: string;
       mime_type: string;
       bytes: number;
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   const { data: rows, error } = await sb
     .from("onboarding_videos")
     .select(
-      "step, original_filename, mime_type, bytes, duration_seconds, uploaded_at, uploaded_by_user_id",
+      "step, storage_path, original_filename, mime_type, bytes, duration_seconds, uploaded_at, uploaded_by_user_id",
     );
   if (error) {
     return new Response(error.message, { status: 500, headers: noStoreHeaders });
@@ -46,6 +47,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     return {
       step,
       present: true,
+      storage_path: r.storage_path,
       original_filename: r.original_filename,
       mime_type: r.mime_type,
       bytes: r.bytes,
