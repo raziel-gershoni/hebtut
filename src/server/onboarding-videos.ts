@@ -1,4 +1,5 @@
 import type { InlineKeyboardButton } from "grammy/types";
+import { InputFile } from "grammy";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { getBot } from "@/lib/tg";
 import { recordAudit } from "@/server/audit";
@@ -75,12 +76,16 @@ export async function sendOnboardingVideoOrFallback(
     return;
   }
 
-  let sendArg: string;
+  // Build the video_note source. The TG bot API has a hard restriction
+  // here: sendVideoNote does NOT accept HTTP(S) URLs — only a cached
+  // file_id (string) or bytes uploaded as multipart (InputFile). This is
+  // different from sendVideo which accepts URLs. So when we don't have
+  // a cached file_id yet, grammY's InputFile fetches the bytes from
+  // Supabase on our server and forwards them to TG as multipart.
+  let videoNoteArg: string | InputFile;
   if (row.tg_file_id) {
-    sendArg = row.tg_file_id;
+    videoNoteArg = row.tg_file_id;
   } else {
-    // Bucket is public — getPublicUrl just constructs the URL.
-    // Works around the broken sign endpoint (see migration 20260521000001).
     const { data } = sb.storage.from(BUCKET).getPublicUrl(row.storage_path);
     if (!data.publicUrl) {
       console.warn("onboarding video public-url construction failed", {
@@ -89,7 +94,7 @@ export async function sendOnboardingVideoOrFallback(
       });
       return;
     }
-    sendArg = data.publicUrl;
+    videoNoteArg = new InputFile(new URL(data.publicUrl));
   }
 
   try {
@@ -98,7 +103,7 @@ export async function sendOnboardingVideoOrFallback(
     // (capped during compression). reply_markup still attaches below
     // the circle so the "Дальше" inline button continues to drive the
     // onboarding state machine.
-    const sent = await getBot().api.sendVideoNote(u.tg_chat_id, sendArg, {
+    const sent = await getBot().api.sendVideoNote(u.tg_chat_id, videoNoteArg, {
       reply_markup,
     });
     // Cache the file_id on the first real send so subsequent sends to any
