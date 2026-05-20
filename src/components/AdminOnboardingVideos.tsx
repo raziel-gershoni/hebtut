@@ -240,6 +240,7 @@ function SlotCard({
   const meta = SLOT_META[slot.step];
   const inputRef = useRef<HTMLInputElement>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
   // iOS WebKit (TG Mini App webview) is flaky with <video> + 302 redirect
   // to a cross-origin signed URL — the range request after the redirect
   // can fail silently and leave the player stuck on the play-button
@@ -313,11 +314,29 @@ function SlotCard({
               controls
               playsInline
               preload="metadata"
+              onError={(e) => {
+                const err = e.currentTarget.error;
+                if (err) {
+                  const codes: Record<number, string> = {
+                    1: "ABORTED",
+                    2: "NETWORK",
+                    3: "DECODE",
+                    4: "SRC_NOT_SUPPORTED",
+                  };
+                  setVideoError(`${codes[err.code] ?? "UNKNOWN"} · ${err.message || "—"}`);
+                }
+              }}
+              onLoadedMetadata={() => setVideoError(null)}
               className="block w-full max-w-sm max-h-48 rounded-lg bg-black"
             />
           ) : (
             <div className="block w-full max-w-sm h-48 rounded-lg bg-black flex items-center justify-center">
               <Spinner />
+            </div>
+          )}
+          {videoError && (
+            <div className="text-[11px] text-tg-text-destructive">
+              видео не загружается: {videoError}
             </div>
           )}
           <div className="text-[11px] text-tg-text-hint truncate flex items-center gap-2">
