@@ -6,6 +6,7 @@ import { noStoreHeaders } from "@/lib/no-cache";
 import { readJsonBody } from "@/lib/http";
 import { recordAudit } from "@/server/audit";
 import { MAX_BYTES } from "@/lib/media";
+import { signStorageUrlRaw } from "@/lib/storage-sign";
 import type { OnboardingVideoStep } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -64,20 +65,20 @@ export async function POST(
 
   const sb = getServiceRoleClient();
 
-  // Verify the object the client claims to have uploaded actually exists
-  // in storage. The Supabase JS client + iOS Safari combo has been seen
-  // to report a successful upload when the bytes never actually arrived
-  // (fetch resolves "ok" prematurely on a flaky connection). Without this
-  // check the metadata row points to a ghost path and the preview comes
-  // back 502 "Object not found" forever.
-  const { error: verifyErr } = await sb.storage
-    .from(BUCKET)
-    .createSignedUrl(storage_path, 60);
-  if (verifyErr) {
-    return new Response(`uploaded object missing: ${verifyErr.message}`, {
-      status: 400,
-      headers: noStoreHeaders,
-    });
+  // Verify the object actually exists in storage. SDK first; if SDK
+  // returns "Object not found" for a row that's really there, the raw
+  // REST call may still succeed (the SDK has been seen to fail on rows
+  // created via signed-upload-URL). Only block registration if BOTH
+  // paths agree the object is missing.
+  const sdkVerify = await sb.storage.from(BUCKET).createSignedUrl(storage_path, 60);
+  if (sdkVerify.error) {
+    const rawVerify = await signStorageUrlRaw(BUCKET, storage_path, 60);
+    if (!rawVerify.signedUrl) {
+      return new Response(
+        `uploaded object missing: ${sdkVerify.error.message} | raw: ${rawVerify.status} ${rawVerify.bodyText.slice(0, 120)}`,
+        { status: 400, headers: noStoreHeaders },
+      );
+    }
   }
 
   const { data: existing } = await sb
