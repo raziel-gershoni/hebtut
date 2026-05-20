@@ -303,3 +303,34 @@ export function isCompressibleVideo(mime: string, kind: MediaKind | null): boole
   // ffmpeg.wasm can demux all three, output stays MP4.
   return mime === "video/mp4" || mime === "video/quicktime" || mime === "video/webm";
 }
+
+/**
+ * Tests whether the browser's <video> element can load the file. Resolves
+ * true if metadata loads (file is playable), false on decode/load error or
+ * a 10-second timeout.
+ *
+ * Used to decide whether to bypass ffmpeg.wasm for an already-iOS-compat
+ * file. DJI drones, some phone cameras, and HDR-aware recordings emit
+ * H.265 / 10-bit / unusual chroma which Safari's direct-navigation player
+ * handles but the <video> element rejects with SRC_NOT_SUPPORTED.
+ */
+export function isVideoPlayableByBrowser(file: File): Promise<boolean> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.muted = true;
+    let done = false;
+    const finish = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      URL.revokeObjectURL(url);
+      v.src = "";
+      resolve(ok);
+    };
+    v.addEventListener("loadedmetadata", () => finish(true), { once: true });
+    v.addEventListener("error", () => finish(false), { once: true });
+    setTimeout(() => finish(false), 10_000);
+    v.src = url;
+  });
+}

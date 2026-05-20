@@ -10,6 +10,7 @@ import { ALLOWED_MIME_TYPES, MAX_BYTES, MIME_TO_KIND, formatBytes } from "@/lib/
 import {
   COMPRESS_TRIGGER_BYTES,
   isCompressibleVideo,
+  isVideoPlayableByBrowser,
   prepareVideoForUpload,
   type CompressProgress,
 } from "@/lib/video-compress";
@@ -160,10 +161,15 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
 
     let fileToSend: File = uploadStaging;
     const kind = MIME_TO_KIND[uploadStaging.type] ?? null;
-    if (
-      uploadStaging.size > COMPRESS_TRIGGER_BYTES &&
-      isCompressibleVideo(uploadStaging.type, kind)
-    ) {
+    // Compress when EITHER the file is over the TG ceiling OR the browser
+    // can't decode it (DJI/HEVC/10-bit/etc.). Only run the playable-probe
+    // for compressible video kinds — photos / audio don't go through
+    // ffmpeg.wasm here.
+    const compressible = isCompressibleVideo(uploadStaging.type, kind);
+    const tooBig = uploadStaging.size > COMPRESS_TRIGGER_BYTES;
+    const playable =
+      !compressible || tooBig ? true : await isVideoPlayableByBrowser(uploadStaging);
+    if (compressible && (tooBig || !playable)) {
       setCompressing({ ratio: 0, preset: "720p" });
       try {
         fileToSend = await prepareVideoForUpload(uploadStaging, {

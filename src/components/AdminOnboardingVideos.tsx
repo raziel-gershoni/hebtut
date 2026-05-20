@@ -6,6 +6,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { MAX_BYTES, formatBytes } from "@/lib/media";
 import {
   COMPRESS_TRIGGER_BYTES,
+  isVideoPlayableByBrowser,
   prepareVideoForUpload,
   type CompressProgress,
 } from "@/lib/video-compress";
@@ -81,7 +82,14 @@ export function AdminOnboardingVideos({ jwt }: Props) {
     setBusyStep(step);
     setError(null);
     let fileToSend: File = file;
-    if (file.size > COMPRESS_TRIGGER_BYTES) {
+    // Compress when EITHER the file is over the TG ceiling OR the browser
+    // can't decode it (DJI/HEVC/10-bit/etc. — Safari direct-navigation
+    // plays them but the <video> element rejects with SRC_NOT_SUPPORTED).
+    // The probe is just a metadata-load via a hidden <video>; on the
+    // same engine that'll render the preview, so the answer is reliable.
+    const tooBig = file.size > COMPRESS_TRIGGER_BYTES;
+    const playable = tooBig ? false : await isVideoPlayableByBrowser(file);
+    if (tooBig || !playable) {
       setCompressing({ ratio: 0, preset: "720p" });
       try {
         fileToSend = await prepareVideoForUpload(file, {
