@@ -79,18 +79,17 @@ export async function sendOnboardingVideoOrFallback(
   if (row.tg_file_id) {
     sendArg = row.tg_file_id;
   } else {
-    const { data: signed, error } = await sb.storage
-      .from(BUCKET)
-      .createSignedUrl(row.storage_path, 300);
-    if (error || !signed?.signedUrl) {
-      console.warn("onboarding video sign-url failed", {
+    // Bucket is public — getPublicUrl just constructs the URL.
+    // Works around the broken sign endpoint (see migration 20260521000001).
+    const { data } = sb.storage.from(BUCKET).getPublicUrl(row.storage_path);
+    if (!data.publicUrl) {
+      console.warn("onboarding video public-url construction failed", {
         student_id: studentId,
         step,
-        reason: error?.message ?? "no url",
       });
       return;
     }
-    sendArg = signed.signedUrl;
+    sendArg = data.publicUrl;
   }
 
   try {

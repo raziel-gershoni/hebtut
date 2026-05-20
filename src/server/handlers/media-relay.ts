@@ -58,13 +58,13 @@ export async function sendLibraryItemToStudent(
   if (library.tg_file_id) {
     sendArg = library.tg_file_id;
   } else {
-    const { data: signed, error } = await sb.storage
-      .from(BUCKET)
-      .createSignedUrl(library.storage_path, 300);
-    if (error || !signed?.signedUrl) {
-      throw new Error(error?.message ?? "could not sign storage URL");
+    // Bucket is public — getPublicUrl just constructs the URL.
+    // Works around the broken sign endpoint (see migration 20260521000001).
+    const { data } = sb.storage.from(BUCKET).getPublicUrl(library.storage_path);
+    if (!data.publicUrl) {
+      throw new Error("could not construct public storage URL");
     }
-    sendArg = signed.signedUrl;
+    sendArg = data.publicUrl;
   }
 
   let newFileId: string | null = null;

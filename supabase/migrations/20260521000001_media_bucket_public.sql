@@ -1,0 +1,24 @@
+-- Make the media-library bucket public to work around a Supabase storage
+-- bug we hit in prod: `createSignedUrl(path)` returns "Object not found"
+-- for rows that are demonstrably present in storage.objects with all
+-- standard fields populated (verified via SQL — bucket_id, name,
+-- path_tokens, version, complete metadata blob). Both the SDK wrapper
+-- and the raw REST POST to /storage/v1/object/sign/... return the same
+-- error, so it's not a JS client issue — Supabase's signing endpoint
+-- genuinely can't find rows created via the signed-upload-URL flow,
+-- even though list() and the dashboard can see them fine.
+--
+-- Switching to a public bucket bypasses the broken signing endpoint
+-- entirely. `getPublicUrl(path)` just constructs a URL — no lookup
+-- involved, no failure mode.
+--
+-- Acceptable for this content because:
+-- (a) Files are admin-uploaded media destined for delivery to students
+--     via Telegram anyway.
+-- (b) Onboarding videos are sent to students via bot.api.sendVideo,
+--     which captures the TG file_id and reuses it on subsequent sends —
+--     so the public URL is only hit ONCE by Telegram during initial
+--     ingestion of a fresh upload, never directly by an end user.
+-- (c) Object paths use crypto.randomUUID() so enumeration is infeasible.
+
+update storage.buckets set public = true where id = 'media-library';

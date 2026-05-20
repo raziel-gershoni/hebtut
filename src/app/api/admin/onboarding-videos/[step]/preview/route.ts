@@ -2,7 +2,6 @@ import type { NextRequest } from "next/server";
 import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
-import { signStorageUrlRaw } from "@/lib/storage-sign";
 import type { OnboardingVideoStep } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -45,36 +44,20 @@ export async function GET(
     .maybeSingle();
   if (!row) return new Response("not found", { status: 404 });
 
-  // SDK path first. If it returns "Object not found" for a row that
-  // demonstrably exists in storage.objects, fall back to the raw REST call.
-  let signedUrl: string | null = null;
-  let lastErr: string | null = null;
-  const { data: sdkSigned, error: sdkErr } = await sb.storage
-    .from(BUCKET)
-    .createSignedUrl(row.storage_path, 900);
-  if (sdkSigned?.signedUrl && !sdkErr) {
-    signedUrl = sdkSigned.signedUrl;
-  } else {
-    lastErr = `sdk: ${sdkErr?.message ?? "no url"}`;
-    const fallback = await signStorageUrlRaw(BUCKET, row.storage_path, 900);
-    if (fallback.signedUrl) {
-      signedUrl = fallback.signedUrl;
-    } else {
-      lastErr += ` | raw: ${fallback.status} ${fallback.bodyText.slice(0, 200)}`;
-    }
-  }
-
-  if (!signedUrl) {
-    return new Response(lastErr ?? "no url", { status: 502 });
-  }
+  // Bucket is public (see 20260521000001_media_bucket_public.sql).
+  // getPublicUrl just constructs the URL — no lookup, no failure mode,
+  // works around the broken sign endpoint.
+  const { data } = sb.storage.from(BUCKET).getPublicUrl(row.storage_path);
+  const publicUrl = data.publicUrl;
+  if (!publicUrl) return new Response("no url", { status: 502 });
 
   if (asJson) {
-    return Response.json({ signedUrl }, { headers: noStoreHeaders });
+    return Response.json({ signedUrl: publicUrl }, { headers: noStoreHeaders });
   }
   return new Response(null, {
     status: 302,
     headers: {
-      Location: signedUrl,
+      Location: publicUrl,
       "Cache-Control": "private, max-age=600",
     },
   });
