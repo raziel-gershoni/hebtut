@@ -115,6 +115,14 @@ function planEncoding(durationSec: number, targetBytes: number): EncodePlan {
 }
 
 function encodeArgs(plan: EncodePlan, hardCapBytes: number | null): string[] {
+  // iOS Safari + Telegram Mini App webview is strict about H.264 streams:
+  // it needs yuv420p chroma, a constrained-Main / Main profile at level
+  // ≤ 4.1, AAC-LC audio (stereo), and `+faststart` moov. Without these the
+  // player loads metadata but freezes on a play-button placeholder.
+  // The scale filter uses `-2:H` so the width is auto-computed to keep
+  // aspect ratio and rounded to an even number (H.264 requires even
+  // dimensions); `force_original_aspect_ratio=decrease` ensures we never
+  // upscale a short clip.
   const args = [
     "-i",
     "input",
@@ -122,6 +130,12 @@ function encodeArgs(plan: EncodePlan, hardCapBytes: number | null): string[] {
     "libx264",
     "-preset",
     "veryfast",
+    "-profile:v",
+    "main",
+    "-level",
+    "4.1",
+    "-pix_fmt",
+    "yuv420p",
     "-b:v",
     `${plan.videoKbps}k`,
     "-maxrate",
@@ -129,9 +143,13 @@ function encodeArgs(plan: EncodePlan, hardCapBytes: number | null): string[] {
     "-bufsize",
     `${Math.floor(plan.videoKbps * 2)}k`,
     "-vf",
-    `scale='min(iw,trunc(oh*iw/ih/2)*2)':'min(ih,${plan.maxHeight})':force_original_aspect_ratio=decrease`,
+    `scale=-2:${plan.maxHeight}:force_original_aspect_ratio=decrease`,
     "-c:a",
     "aac",
+    "-ar",
+    "44100",
+    "-ac",
+    "2",
     "-b:a",
     `${plan.audioKbps}k`,
     "-movflags",

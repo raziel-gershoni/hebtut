@@ -320,11 +320,20 @@ function SlotCard({
               <Spinner />
             </div>
           )}
-          <div
-            className="text-[11px] text-tg-text-hint truncate"
-            title={slot.original_filename}
-          >
-            {slot.original_filename} · {formatBytes(slot.bytes)}
+          <div className="text-[11px] text-tg-text-hint truncate flex items-center gap-2">
+            <span className="truncate" title={slot.original_filename}>
+              {slot.original_filename} · {formatBytes(slot.bytes)}
+            </span>
+            {signedSrc && (
+              <a
+                href={signedSrc}
+                target="_blank"
+                rel="noreferrer"
+                className="text-tg-text-link shrink-0"
+              >
+                открыть в браузере
+              </a>
+            )}
           </div>
         </>
       ) : (
