@@ -239,8 +239,35 @@ function SlotCard({
 }) {
   const meta = SLOT_META[slot.step];
   const inputRef = useRef<HTMLInputElement>(null);
-  const previewSrc = `/api/admin/onboarding-videos/${slot.step}/preview?token=${encodeURIComponent(jwt)}`;
   const [localError, setLocalError] = useState<string | null>(null);
+  // iOS WebKit (TG Mini App webview) is flaky with <video> + 302 redirect
+  // to a cross-origin signed URL — the range request after the redirect
+  // can fail silently and leave the player stuck on the play-button
+  // placeholder. Fetch the signed Supabase URL up-front and point
+  // <video src> at it directly.
+  const [signedSrc, setSignedSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!slot.present) {
+      setSignedSrc(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const r = await fetch(
+        `/api/admin/onboarding-videos/${slot.step}/preview?as=json`,
+        {
+          cache: "no-store",
+          headers: { Authorization: `Bearer ${jwt}` },
+        },
+      );
+      if (!r.ok) return;
+      const d = (await r.json()) as { signedUrl?: string };
+      if (!cancelled && d.signedUrl) setSignedSrc(d.signedUrl);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [slot.step, slot.present, jwt]);
 
   function pick() {
     setLocalError(null);
@@ -280,12 +307,19 @@ function SlotCard({
 
       {slot.present ? (
         <>
-          <video
-            src={previewSrc}
-            controls
-            preload="metadata"
-            className="block w-full max-w-sm max-h-48 rounded-lg bg-black"
-          />
+          {signedSrc ? (
+            <video
+              src={signedSrc}
+              controls
+              playsInline
+              preload="metadata"
+              className="block w-full max-w-sm max-h-48 rounded-lg bg-black"
+            />
+          ) : (
+            <div className="block w-full max-w-sm h-48 rounded-lg bg-black flex items-center justify-center">
+              <Spinner />
+            </div>
+          )}
           <div
             className="text-[11px] text-tg-text-hint truncate"
             title={slot.original_filename}

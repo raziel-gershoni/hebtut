@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
+import { noStoreHeaders } from "@/lib/no-cache";
 import type { OnboardingVideoStep } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -13,6 +14,15 @@ const VALID: ReadonlySet<OnboardingVideoStep> = new Set([
   "video3",
 ]);
 
+/**
+ * Two modes:
+ * - default: 302 redirect to the Supabase signed URL — used by `<img>` and
+ *   `<audio>` tags where one round-trip is preferable.
+ * - `?as=json`: returns `{ signedUrl }` instead. iOS WebKit (Mini App
+ *   webview) is flaky with `<video>` + 302 redirect + cross-origin range
+ *   requests; the JSON path lets the client fetch the URL up-front and
+ *   point `<video src>` at it directly.
+ */
 export async function GET(
   req: NextRequest,
   { params }: { params: { step: string } },
@@ -24,6 +34,7 @@ export async function GET(
     return new Response("bad step", { status: 400 });
   }
   const step = params.step as OnboardingVideoStep;
+  const asJson = new URL(req.url).searchParams.get("as") === "json";
 
   const sb = getServiceRoleClient();
   const { data: row } = await sb
@@ -40,6 +51,12 @@ export async function GET(
     return new Response(error?.message ?? "no url", { status: 502 });
   }
 
+  if (asJson) {
+    return Response.json(
+      { signedUrl: signed.signedUrl },
+      { headers: noStoreHeaders },
+    );
+  }
   return new Response(null, {
     status: 302,
     headers: {
