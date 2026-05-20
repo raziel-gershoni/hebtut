@@ -47,7 +47,8 @@ const ROLE_DEFS: Record<
 type PendingChange =
   | { kind: "role"; id: number; role: AdminUser["role"] }
   | { kind: "admin"; id: number; is_admin: boolean }
-  | { kind: "delete"; id: number; name: string; ban: boolean };
+  | { kind: "delete"; id: number; name: string; ban: boolean }
+  | { kind: "reset-onboarding"; id: number; name: string };
 
 interface AdminUsersTableProps {
   jwt: string;
@@ -92,6 +93,15 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
     const url = `/api/admin/users/${id}${ban ? "?ban=1" : ""}`;
     await fetch(url, {
       method: "DELETE",
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${jwt}` },
+    });
+    await refetch();
+  }
+
+  async function resetOnboarding(id: number) {
+    await fetch(`/api/admin/users/${id}/reset-onboarding`, {
+      method: "POST",
       cache: "no-store",
       headers: { Authorization: `Bearer ${jwt}` },
     });
@@ -302,6 +312,22 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                       Подписка
                     </button>
                   )}
+                  {u.role === "student" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenMenuId(null);
+                        setPending({
+                          kind: "reset-onboarding",
+                          id: u.id,
+                          name: u.preferred_name ?? u.name ?? "",
+                        });
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-tg-bg-secondary transition-colors"
+                    >
+                      Сбросить онбординг
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -368,7 +394,9 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
               ? pending.ban
                 ? "Заблокировать навсегда?"
                 : "Удалить пользователя?"
-              : "Подтвердить смену роли"
+              : pending?.kind === "reset-onboarding"
+                ? "Сбросить онбординг?"
+                : "Подтвердить смену роли"
         }
         body={
           pending?.kind === "admin"
@@ -377,7 +405,9 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
               ? pending.ban
                 ? `${pending.name || "Пользователь"} не сможет зарегистрироваться заново. Все его сообщения будут удалены.`
                 : `${pending.name || "Пользователь"} будет удалён вместе с сообщениями. Он сможет зарегистрироваться заново.`
-              : "Это действие может разорвать существующие связи ученик↔тренер. Продолжить?"
+              : pending?.kind === "reset-onboarding"
+                ? `${pending.name || "Ученик"} вернётся к экрану «Привет». При следующем /start бот снова покажет первое сообщение онбординга. Предпочитаемое имя и таймеры тоже очистятся.`
+                : "Это действие может разорвать существующие связи ученик↔тренер. Продолжить?"
         }
         onCancel={() => setPending(null)}
         onConfirm={async () => {
@@ -385,6 +415,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
           if (pending.kind === "role") await patchRole(pending.id, { role: pending.role });
           else if (pending.kind === "admin") await patchRole(pending.id, { is_admin: pending.is_admin });
           else if (pending.kind === "delete") await deleteUser(pending.id, pending.ban);
+          else if (pending.kind === "reset-onboarding") await resetOnboarding(pending.id);
           setPending(null);
         }}
       />
