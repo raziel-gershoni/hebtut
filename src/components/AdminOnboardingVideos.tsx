@@ -276,6 +276,11 @@ function SlotCard({
   // <video src> at it directly.
   const [signedSrc, setSignedSrc] = useState<string | null>(null);
   const [signedSrcError, setSignedSrcError] = useState<string | null>(null);
+  // Use uploaded_at as a change-marker: after a Replace, the slot stays
+  // (step, present) the same but the underlying file is different. Without
+  // a dep on uploaded_at the effect never re-fires and the old preview
+  // URL keeps pointing at the previous (now-deleted) path → 404.
+  const uploadedAt = slot.present ? slot.uploaded_at : null;
   useEffect(() => {
     if (!slot.present) {
       setSignedSrc(null);
@@ -313,7 +318,7 @@ function SlotCard({
     return () => {
       cancelled = true;
     };
-  }, [slot.step, slot.present, jwt]);
+  }, [slot.step, slot.present, uploadedAt, jwt]);
 
   function pick() {
     setLocalError(null);
