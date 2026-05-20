@@ -9,6 +9,7 @@ import {
   prepareVideoForUpload,
   type CompressProgress,
 } from "@/lib/video-compress";
+import { uploadToSignedUrl } from "@/lib/direct-upload";
 import type { OnboardingVideoStep } from "@/types/database";
 
 type Slot =
@@ -92,8 +93,6 @@ export function AdminOnboardingVideos({ jwt }: Props) {
         return;
       }
       setCompressing(null);
-      // Belt-and-braces: if compression somehow returned a file the server
-      // would still reject, surface a clear error instead of a confusing 413.
       if (fileToSend.size > MAX_BYTES) {
         setBusyStep(null);
         setError(
@@ -102,23 +101,59 @@ export function AdminOnboardingVideos({ jwt }: Props) {
         return;
       }
     }
-    const fd = new FormData();
-    fd.append("file", fileToSend);
+    // Two-step upload: ask the server for a signed Supabase upload URL,
+    // PUT the bytes directly to Supabase (Vercel functions have a 4.5 MB
+    // body limit), then POST the metadata so the row gets registered.
+    const urlRes = await fetch(
+      `/api/admin/onboarding-videos/${step}/upload-url`,
+      {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ mime_type: fileToSend.type }),
+      },
+    );
+    if (!urlRes.ok) {
+      setBusyStep(null);
+      setError(
+        urlRes.status === 415
+          ? "только mp4 / mov / webm"
+          : "не удалось получить URL для загрузки",
+      );
+      return;
+    }
+    const signed = (await urlRes.json()) as {
+      bucket: string;
+      path: string;
+      token: string;
+    };
+    try {
+      await uploadToSignedUrl(signed, fileToSend);
+    } catch (e) {
+      setBusyStep(null);
+      setError(`не удалось загрузить файл в хранилище: ${(e as Error).message}`);
+      return;
+    }
     const r = await fetch(`/api/admin/onboarding-videos/${step}`, {
       method: "POST",
       cache: "no-store",
-      headers: { Authorization: `Bearer ${jwt}` },
-      body: fd,
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        storage_path: signed.path,
+        mime_type: fileToSend.type,
+        original_filename: fileToSend.name,
+        bytes: fileToSend.size,
+      }),
     });
     setBusyStep(null);
     if (!r.ok) {
-      setError(
-        r.status === 413
-          ? `файл больше ${formatBytes(MAX_BYTES)} даже после сжатия`
-          : r.status === 415
-            ? "только mp4 / mov / webm"
-            : "не удалось загрузить",
-      );
+      setError("не удалось зарегистрировать загрузку");
       return;
     }
     await load();

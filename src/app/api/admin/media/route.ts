@@ -1,13 +1,14 @@
 import type { NextRequest } from "next/server";
+import { z } from "zod";
 import { authFromRequest, canTeachOrReadAsAdmin } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
+import { readJsonBody } from "@/lib/http";
 import { recordAudit } from "@/server/audit";
 import { getMediaUploadsTeachersEnabled } from "@/server/settings";
 import {
   ALLOWED_MIME_TYPES,
   MAX_BYTES,
-  buildStoragePath,
   inferKindOrThrow,
 } from "@/lib/media";
 
@@ -117,6 +118,19 @@ export async function GET(req: NextRequest): Promise<Response> {
   return Response.json({ items: filtered, can_upload }, { headers: noStoreHeaders });
 }
 
+// Registration body. The bytes were already uploaded directly to Supabase
+// via /api/admin/media/upload-url; this endpoint just records the metadata.
+const Body = z.object({
+  storage_path: z.string().min(1).max(256),
+  mime_type: z.string(),
+  original_filename: z.string().min(1).max(255),
+  bytes: z.number().int().positive().max(MAX_BYTES),
+  title: z.string().max(80).nullable().optional(),
+  description: z.string().max(500).nullable().optional(),
+  tag_ids: z.array(z.number().int().positive()).optional(),
+  duration_seconds: z.number().int().positive().nullable().optional(),
+});
+
 export async function POST(req: NextRequest): Promise<Response> {
   const me = await authFromRequest(req);
   if (!canTeachOrReadAsAdmin(me)) {
@@ -128,75 +142,45 @@ export async function POST(req: NextRequest): Promise<Response> {
       headers: noStoreHeaders,
     });
   }
-
-  let form: FormData;
-  try {
-    form = await req.formData();
-  } catch {
-    return new Response("bad form", { status: 400, headers: noStoreHeaders });
+  const parsed = Body.safeParse(await readJsonBody(req));
+  if (!parsed.success) {
+    return new Response("bad body", { status: 400, headers: noStoreHeaders });
   }
-
-  const fileField = form.get("file");
-  if (!(fileField instanceof File)) {
-    return new Response("file required", { status: 400, headers: noStoreHeaders });
-  }
-  const file = fileField;
-  const mime = file.type;
-  if (!ALLOWED_MIME_TYPES.includes(mime)) {
+  const body = parsed.data;
+  if (!ALLOWED_MIME_TYPES.includes(body.mime_type)) {
     return new Response("unsupported mime", { status: 415, headers: noStoreHeaders });
   }
-  if (file.size <= 0 || file.size > MAX_BYTES) {
-    return new Response("file too large", { status: 413, headers: noStoreHeaders });
+  // Guard against a client picking arbitrary paths in the bucket. Per-user
+  // prefix lines up with the path layout that /upload-url generated.
+  if (!body.storage_path.startsWith(`${me.id}/`)) {
+    return new Response("bad path", { status: 400, headers: noStoreHeaders });
   }
-
-  const kind = inferKindOrThrow(mime);
-  const rawTitle = (form.get("title") ?? "").toString().trim();
+  const kind = inferKindOrThrow(body.mime_type);
+  const rawTitle = (body.title ?? "").trim();
   const title =
-    rawTitle.length > 0 ? rawTitle.slice(0, 80) : stripExt(file.name).slice(0, 80) || null;
-  const rawDesc = (form.get("description") ?? "").toString().trim();
+    rawTitle.length > 0
+      ? rawTitle.slice(0, 80)
+      : stripExt(body.original_filename).slice(0, 80) || null;
+  const rawDesc = (body.description ?? "").trim();
   const description = rawDesc.length > 0 ? rawDesc.slice(0, 500) : null;
+  const tagIds = Array.from(new Set(body.tag_ids ?? []));
 
-  let tagIds: number[] = [];
-  const rawTagIds = form.get("tag_ids");
-  if (typeof rawTagIds === "string" && rawTagIds.length > 0) {
-    try {
-      const parsed = JSON.parse(rawTagIds);
-      if (Array.isArray(parsed)) {
-        tagIds = parsed
-          .map((v) => Number(v))
-          .filter((n) => Number.isInteger(n) && n > 0);
-      }
-    } catch {
-      // ignore malformed tag_ids
-    }
-  }
-
-  const { path } = buildStoragePath(me.id, mime);
   const sb = getServiceRoleClient();
-  const bytes = await file.arrayBuffer();
-  const { error: uploadErr } = await sb.storage
-    .from(BUCKET)
-    .upload(path, bytes, { contentType: mime, upsert: false });
-  if (uploadErr) {
-    return new Response(uploadErr.message, { status: 500, headers: noStoreHeaders });
-  }
-
   const { data: inserted, error: insertErr } = await sb
     .from("media_library")
     .insert({
       kind,
       uploaded_by_user_id: me.id,
-      storage_path: path,
-      mime_type: mime,
-      original_filename: file.name,
+      storage_path: body.storage_path,
+      mime_type: body.mime_type,
+      original_filename: body.original_filename,
       title,
       description,
-      bytes: file.size,
+      bytes: body.bytes,
     })
     .select("id")
     .single();
   if (insertErr || !inserted) {
-    await sb.storage.from(BUCKET).remove([path]);
     return new Response(insertErr?.message ?? "insert failed", {
       status: 500,
       headers: noStoreHeaders,
@@ -226,7 +210,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     actorId: me.id,
     subjectType: "media_library",
     subjectId: inserted.id,
-    meta: { kind, bytes: file.size, mime, tag_ids: appliedTagIds },
+    meta: { kind, bytes: body.bytes, mime: body.mime_type, tag_ids: appliedTagIds },
   });
 
   return Response.json({ id: inserted.id }, { status: 201, headers: noStoreHeaders });

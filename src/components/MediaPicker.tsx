@@ -13,6 +13,7 @@ import {
   prepareVideoForUpload,
   type CompressProgress,
 } from "@/lib/video-compress";
+import { uploadToSignedUrl } from "@/lib/direct-upload";
 
 interface Props {
   open: boolean;
@@ -174,8 +175,6 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
         return;
       }
       setCompressing(null);
-      // Belt-and-braces: if compression somehow returned a file the server
-      // would still reject, surface a clear error instead of a confusing 413.
       if (fileToSend.size > MAX_BYTES) {
         setUploadBusy(false);
         setUploadError(
@@ -185,21 +184,62 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
       }
     }
 
-    const fd = new FormData();
-    fd.append("file", fileToSend);
-    fd.append("title", uploadTitle.trim());
-    fd.append("description", uploadDescription.trim());
-    fd.append("tag_ids", JSON.stringify(uploadTagIds));
+    // Two-step upload: ask the server for a signed Supabase upload URL,
+    // PUT the bytes directly to Supabase (Vercel functions have a 4.5 MB
+    // body limit), then POST the metadata so the row gets registered.
+    const urlRes = await fetch("/api/admin/media/upload-url", {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ mime_type: fileToSend.type }),
+    });
+    if (!urlRes.ok) {
+      setUploadBusy(false);
+      setUploadError(
+        urlRes.status === 403
+          ? "загрузка отключена администратором"
+          : urlRes.status === 415
+            ? "неподдерживаемый формат файла"
+            : "не удалось получить URL для загрузки",
+      );
+      return;
+    }
+    const signed = (await urlRes.json()) as {
+      bucket: string;
+      path: string;
+      token: string;
+    };
+    try {
+      await uploadToSignedUrl(signed, fileToSend);
+    } catch (e) {
+      setUploadBusy(false);
+      setUploadError(`не удалось загрузить в хранилище: ${(e as Error).message}`);
+      return;
+    }
+
     const r = await fetch("/api/admin/media", {
       method: "POST",
       cache: "no-store",
-      headers: { Authorization: `Bearer ${jwt}` },
-      body: fd,
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        storage_path: signed.path,
+        mime_type: fileToSend.type,
+        original_filename: fileToSend.name,
+        bytes: fileToSend.size,
+        title: uploadTitle.trim() || null,
+        description: uploadDescription.trim() || null,
+        tag_ids: uploadTagIds,
+      }),
     });
     setUploadBusy(false);
     if (!r.ok) {
-      const reason = r.status === 403 ? "загрузка отключена администратором" : "не удалось загрузить";
-      setUploadError(reason);
+      setUploadError("не удалось зарегистрировать загрузку");
       return;
     }
     const { id } = (await r.json()) as { id: number };

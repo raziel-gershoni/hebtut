@@ -1,9 +1,11 @@
 import type { NextRequest } from "next/server";
+import { z } from "zod";
 import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
+import { readJsonBody } from "@/lib/http";
 import { recordAudit } from "@/server/audit";
-import { MAX_BYTES, extFromMime } from "@/lib/media";
+import { MAX_BYTES } from "@/lib/media";
 import type { OnboardingVideoStep } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -24,6 +26,17 @@ function parseStep(raw: string): OnboardingVideoStep | null {
     : null;
 }
 
+// Registration body. The bytes were already uploaded directly to Supabase
+// via /upload-url; the server's job here is just to record where they live
+// and clean up any prior object for this slot.
+const Body = z.object({
+  storage_path: z.string().min(1).max(256),
+  mime_type: z.string(),
+  original_filename: z.string().min(1).max(255),
+  bytes: z.number().int().positive().max(MAX_BYTES),
+  duration_seconds: z.number().int().positive().nullable().optional(),
+});
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { step: string } },
@@ -36,23 +49,17 @@ export async function POST(
   if (!step) {
     return new Response("bad step", { status: 400, headers: noStoreHeaders });
   }
-
-  let form: FormData;
-  try {
-    form = await req.formData();
-  } catch {
-    return new Response("bad form", { status: 400, headers: noStoreHeaders });
+  const parsed = Body.safeParse(await readJsonBody(req));
+  if (!parsed.success) {
+    return new Response("bad body", { status: 400, headers: noStoreHeaders });
   }
-  const fileField = form.get("file");
-  if (!(fileField instanceof File)) {
-    return new Response("file required", { status: 400, headers: noStoreHeaders });
-  }
-  const file = fileField;
-  if (!VIDEO_MIMES.has(file.type)) {
+  const { storage_path, mime_type, original_filename, bytes } = parsed.data;
+  if (!VIDEO_MIMES.has(mime_type)) {
     return new Response("unsupported mime", { status: 415, headers: noStoreHeaders });
   }
-  if (file.size <= 0 || file.size > MAX_BYTES) {
-    return new Response("file too large", { status: 413, headers: noStoreHeaders });
+  // Guard against a client picking arbitrary paths in the bucket.
+  if (!storage_path.startsWith(`onboarding/${step}-`)) {
+    return new Response("bad path", { status: 400, headers: noStoreHeaders });
   }
 
   const sb = getServiceRoleClient();
@@ -62,25 +69,15 @@ export async function POST(
     .eq("step", step)
     .maybeSingle();
 
-  const ext = extFromMime(file.type);
-  const newPath = `onboarding/${step}-${crypto.randomUUID()}.${ext}`;
-  const bytes = await file.arrayBuffer();
-  const { error: uploadErr } = await sb.storage
-    .from(BUCKET)
-    .upload(newPath, bytes, { contentType: file.type, upsert: false });
-  if (uploadErr) {
-    return new Response(uploadErr.message, { status: 500, headers: noStoreHeaders });
-  }
-
   // Upsert by step PK. tg_file_id is cleared so the next bot send re-captures
   // a fresh one against the new bytes.
   const { error: upsertErr } = await sb.from("onboarding_videos").upsert(
     {
       step,
-      storage_path: newPath,
-      mime_type: file.type,
-      original_filename: file.name,
-      bytes: file.size,
+      storage_path,
+      mime_type,
+      original_filename,
+      bytes,
       tg_file_id: null,
       tg_file_unique_id: null,
       uploaded_by_user_id: me.id,
@@ -89,12 +86,11 @@ export async function POST(
     { onConflict: "step" },
   );
   if (upsertErr) {
-    await sb.storage.from(BUCKET).remove([newPath]);
     return new Response(upsertErr.message, { status: 500, headers: noStoreHeaders });
   }
 
   // Drop the prior object only after the new row points elsewhere.
-  if (existing && existing.storage_path !== newPath) {
+  if (existing && existing.storage_path !== storage_path) {
     await sb.storage.from(BUCKET).remove([existing.storage_path]);
   }
 
@@ -103,7 +99,7 @@ export async function POST(
     actorId: me.id,
     subjectType: "user",
     subjectId: me.id,
-    meta: { step, bytes: file.size, mime: file.type, replaced: !!existing },
+    meta: { step, bytes, mime: mime_type, replaced: !!existing },
   });
 
   return Response.json({ ok: true }, { status: 201, headers: noStoreHeaders });
