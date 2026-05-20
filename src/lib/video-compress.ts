@@ -256,10 +256,14 @@ export async function prepareVideoForUpload(
     const plan = planEncoding(duration, stage.targetBytes);
     const label = plan.label;
 
+    // Per-stage 0→100% progress. The previous formula divided each stage's
+    // progress by STAGES.length, so a successful first-stage encode only
+    // ever filled the bar to ~25% — confusing because that's the common
+    // case. If a stage fails and we retry at a more aggressive preset
+    // (rare), the bar resets to 0% which is honest about what's happening.
     const progressHandler = (ev: { progress: number }) => {
       const localRatio = Math.max(0, Math.min(1, ev.progress));
-      const ratio = (i + localRatio) / STAGES.length;
-      opts.onProgress?.({ ratio, preset: label });
+      opts.onProgress?.({ ratio: localRatio, preset: label });
     };
     ffmpeg.on("progress", progressHandler);
 
