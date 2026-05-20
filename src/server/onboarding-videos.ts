@@ -123,10 +123,37 @@ export async function sendOnboardingVideoOrFallback(
       meta: { source: "video_note", step },
     });
   } catch (e) {
-    console.warn("onboarding video send failed", {
+    // TG rejects non-square videos with "wrong file format" or similar.
+    // Most likely cause: file uploaded BEFORE the video_note pipeline
+    // landed, so the bytes in storage are regular landscape MP4. Don't
+    // leave the student stuck with no message — fall back to the text
+    // placeholder + button so they can at least continue. The admin sees
+    // the underlying error via the audit log with source='video_note_failed'
+    // and should re-upload through the new pipeline.
+    console.warn("onboarding video_note send failed; falling back to text", {
       student_id: studentId,
       step,
       reason: (e as Error).message,
     });
+    try {
+      await getBot().api.sendMessage(u.tg_chat_id, fallback.text, { reply_markup });
+      await recordAudit({
+        action: `onboarding.${fallback.auditStep}`,
+        actorId: null,
+        subjectType: "user",
+        subjectId: studentId,
+        meta: {
+          source: "video_note_failed",
+          step,
+          error: (e as Error).message,
+        },
+      });
+    } catch (e2) {
+      console.warn("onboarding text-fallback send also failed", {
+        student_id: studentId,
+        step,
+        reason: (e2 as Error).message,
+      });
+    }
   }
 }
