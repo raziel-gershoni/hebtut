@@ -11,7 +11,6 @@ import {
   MAX_BYTES,
   inferKindOrThrow,
 } from "@/lib/media";
-import { storageObjectExists } from "@/lib/storage-object-check";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -168,18 +167,9 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const sb = getServiceRoleClient();
 
-  // Verify the object actually exists in storage. The SDK's createSignedUrl
-  // is broken for this bucket (returns "Object not found" for rows that
-  // clearly exist) and list() prefix-matches the basename and can false-
-  // positive against older uploads. Direct table read is the only reliable
-  // probe; see src/lib/storage-object-check.ts.
-  if (!(await storageObjectExists(BUCKET, body.storage_path))) {
-    return new Response("uploaded object missing", {
-      status: 400,
-      headers: noStoreHeaders,
-    });
-  }
-
+  // Trust the upload: TUS's protocol requires per-chunk Upload-Offset
+  // confirmation, so the client's onSuccess fires only after the last
+  // chunk's 204. By the time we get here the file is at `storage_path`.
   const { data: inserted, error: insertErr } = await sb
     .from("media_library")
     .insert({

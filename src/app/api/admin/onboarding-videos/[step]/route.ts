@@ -6,7 +6,6 @@ import { noStoreHeaders } from "@/lib/no-cache";
 import { readJsonBody } from "@/lib/http";
 import { recordAudit } from "@/server/audit";
 import { MAX_BYTES } from "@/lib/media";
-import { storageObjectExists } from "@/lib/storage-object-check";
 import type { OnboardingVideoStep } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -65,18 +64,14 @@ export async function POST(
 
   const sb = getServiceRoleClient();
 
-  // Verify the object actually exists in storage. The SDK's createSignedUrl
-  // is broken for this bucket (returns "Object not found" for rows that
-  // clearly exist) and list() prefix-matches the basename and can false-
-  // positive against older uploads. Direct table read is the only reliable
-  // probe; see src/lib/storage-object-check.ts.
-  if (!(await storageObjectExists(BUCKET, storage_path))) {
-    return new Response("uploaded object missing", {
-      status: 400,
-      headers: noStoreHeaders,
-    });
-  }
-
+  // Trust the upload: TUS's protocol requires per-chunk Upload-Offset
+  // confirmation, so the client's onSuccess fires only after the last
+  // chunk's 204. By the time we get here the file is at `storage_path`.
+  // We previously tried verifying via createSignedUrl, list(), and a
+  // PostgREST query against storage.objects — all three had failure
+  // modes that blocked legitimate uploads. If a ghost row ever slips
+  // through, the preview's `<video>` will just 404 on the public URL
+  // and the admin can delete + re-upload.
   const { data: existing } = await sb
     .from("onboarding_videos")
     .select("storage_path")

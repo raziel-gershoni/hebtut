@@ -8,7 +8,7 @@ import { TagPicker, type TagOption } from "./TagPicker";
 import { EditMediaItemDialog } from "./EditMediaItemDialog";
 import { ALLOWED_MIME_TYPES, MAX_BYTES, MIME_TO_KIND, formatBytes } from "@/lib/media";
 import {
-  COMPRESS_TARGET_BYTES,
+  COMPRESS_TRIGGER_BYTES,
   isCompressibleVideo,
   prepareVideoForUpload,
   type CompressProgress,
@@ -161,7 +161,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
     let fileToSend: File = uploadStaging;
     const kind = MIME_TO_KIND[uploadStaging.type] ?? null;
     if (
-      uploadStaging.size > COMPRESS_TARGET_BYTES &&
+      uploadStaging.size > COMPRESS_TRIGGER_BYTES &&
       isCompressibleVideo(uploadStaging.type, kind)
     ) {
       setCompressing({ ratio: 0, preset: "720p" });
@@ -543,7 +543,7 @@ function UploadConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  const willCompress = file.size > COMPRESS_TARGET_BYTES;
+  const willCompress = file.size > COMPRESS_TRIGGER_BYTES;
   const pct = compressing ? Math.round(compressing.ratio * 100) : 0;
   const uploadPct = uploading
     ? Math.min(100, Math.round((uploading.loaded / Math.max(1, uploading.total)) * 100))
@@ -557,7 +557,7 @@ function UploadConfirmDialog({
           <div className="text-tg-text-hint mt-0.5">{file.type} · {formatBytes(file.size)}</div>
           {willCompress && !compressing && (
             <div className="text-tg-text-hint mt-1">
-              Файл больше {formatBytes(COMPRESS_TARGET_BYTES)} — перед загрузкой сожмём в браузере.
+              Файл больше {formatBytes(COMPRESS_TRIGGER_BYTES)} — перед загрузкой сожмём в браузере.
             </div>
           )}
           {compressing && (

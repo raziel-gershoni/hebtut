@@ -20,6 +20,13 @@ import type { MediaKind } from "@/types/database";
 // file size"). Don't lower further without measuring quality on a real clip.
 export const COMPRESS_TARGET_BYTES = 40 * 1024 * 1024;
 
+// Only TRIGGER compression for files clearly over the TG ceiling. Files
+// between target and trigger upload as-is — they're already small enough
+// to send through Telegram, and ffmpeg.wasm on a phone burns real minutes
+// of CPU per encode. Burning that time to shave 5-10 MB off a 45 MB file
+// is bad UX.
+export const COMPRESS_TRIGGER_BYTES = 48 * 1024 * 1024;
+
 const CORE_URL = "/ffmpeg/ffmpeg-core.js";
 const WASM_URL = "/ffmpeg/ffmpeg-core.wasm";
 

@@ -5,7 +5,7 @@ import { Spinner } from "./Spinner";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { MAX_BYTES, formatBytes } from "@/lib/media";
 import {
-  COMPRESS_TARGET_BYTES,
+  COMPRESS_TRIGGER_BYTES,
   prepareVideoForUpload,
   type CompressProgress,
 } from "@/lib/video-compress";
@@ -81,7 +81,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
     setBusyStep(step);
     setError(null);
     let fileToSend: File = file;
-    if (file.size > COMPRESS_TARGET_BYTES) {
+    if (file.size > COMPRESS_TRIGGER_BYTES) {
       setCompressing({ ratio: 0, preset: "720p" });
       try {
         fileToSend = await prepareVideoForUpload(file, {
