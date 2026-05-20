@@ -6,6 +6,7 @@ import { noStoreHeaders } from "@/lib/no-cache";
 import { readJsonBody } from "@/lib/http";
 import { recordAudit } from "@/server/audit";
 import { MAX_BYTES } from "@/lib/media";
+import { storageObjectExists } from "@/lib/storage-object-check";
 import type { OnboardingVideoStep } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -64,25 +65,16 @@ export async function POST(
 
   const sb = getServiceRoleClient();
 
-  // Verify the object actually exists in storage. We use `list()` (not
-  // `createSignedUrl`) because the latter has been seen to return "Object
-  // not found" for rows that are truly present in storage.objects — the
-  // dashboard reads via list() too and shows the file fine. Using sign()
-  // as the existence probe would block legitimate uploads.
-  {
-    const lastSlash = storage_path.lastIndexOf("/");
-    const folder = lastSlash > 0 ? storage_path.slice(0, lastSlash) : "";
-    const filename =
-      lastSlash >= 0 ? storage_path.slice(lastSlash + 1) : storage_path;
-    const { data: items, error: listErr } = await sb.storage
-      .from(BUCKET)
-      .list(folder, { limit: 1, search: filename });
-    if (listErr || !items || items.length === 0) {
-      return new Response(
-        `uploaded object missing: ${listErr?.message ?? "not in list"}`,
-        { status: 400, headers: noStoreHeaders },
-      );
-    }
+  // Verify the object actually exists in storage. The SDK's createSignedUrl
+  // is broken for this bucket (returns "Object not found" for rows that
+  // clearly exist) and list() prefix-matches the basename and can false-
+  // positive against older uploads. Direct table read is the only reliable
+  // probe; see src/lib/storage-object-check.ts.
+  if (!(await storageObjectExists(BUCKET, storage_path))) {
+    return new Response("uploaded object missing", {
+      status: 400,
+      headers: noStoreHeaders,
+    });
   }
 
   const { data: existing } = await sb

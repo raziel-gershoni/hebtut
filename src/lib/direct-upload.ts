@@ -53,12 +53,18 @@ export async function uploadToSignedUrl(
 }
 
 /**
- * Upload with automatic retry. Each attempt requests a fresh signed URL
- * (via `getSignedUrl`) so a stale / consumed token doesn't poison the
- * retry. iOS Safari + Telegram WebView is the typical environment, and
- * its generic "Load failed" fetch error covers everything from CORS
- * preflight quirks to a momentarily-dropped 5G connection — a single
- * retry resolves most of them.
+ * Upload with automatic retry. iOS Safari + TG WebView produces generic
+ * "Load failed" errors on transient network blips; one retry covers most.
+ *
+ * IMPORTANT: the signed URL is generated ONCE and reused across retries
+ * (not regenerated per attempt). Reason: iOS has been seen to report PUT
+ * failure on a connection drop AFTER the server already received the
+ * bytes. If we retry with a fresh URL we end up with TWO uploads — one
+ * orphan in storage and one ghost row in the DB pointing nowhere. With
+ * the same URL, a successful-then-spurious-failure retry will either
+ * succeed cleanly (Supabase reuses the existing object) or fail with
+ * token-already-used (in which case the original upload IS there at
+ * the path we already know about).
  */
 export async function uploadWithRetry(
   getSignedUrl: () => Promise<SignedUpload>,
@@ -67,10 +73,10 @@ export async function uploadWithRetry(
 ): Promise<SignedUpload> {
   const attempts = options.attempts ?? 2;
   const backoff = options.backoffMs ?? 1000;
+  const signed = await getSignedUrl();
   let lastError: unknown = null;
   for (let i = 0; i < attempts; i += 1) {
     try {
-      const signed = await getSignedUrl();
       await uploadToSignedUrl(signed, file);
       return signed;
     } catch (e) {
