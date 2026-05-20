@@ -1,7 +1,6 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { authFromRequest, canTeachOrReadAsAdmin } from "@/lib/auth-server";
-import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { readJsonBody } from "@/lib/http";
 import { getMediaUploadsTeachersEnabled } from "@/server/settings";
@@ -18,10 +17,9 @@ const Body = z.object({
 });
 
 /**
- * Issues a short-lived signed upload URL for a media-library item. The
- * browser PUTs the file directly to Supabase Storage (bypassing Vercel's
- * 4.5 MB function body limit), then calls /api/admin/media POST with the
- * resulting storage_path to register the metadata row.
+ * Returns a fresh storage path for a media-library item. The browser then
+ * uploads via TUS (through /api/admin/upload-proxy) to that path and
+ * finally posts metadata to /api/admin/media to register the row.
  */
 export async function POST(req: NextRequest): Promise<Response> {
   const me = await authFromRequest(req);
@@ -39,18 +37,5 @@ export async function POST(req: NextRequest): Promise<Response> {
     return new Response("unsupported mime", { status: 415, headers: noStoreHeaders });
   }
   const { path } = buildStoragePath(me.id, parsed.data.mime_type);
-  const sb = getServiceRoleClient();
-  const { data, error } = await sb.storage
-    .from(BUCKET)
-    .createSignedUploadUrl(path);
-  if (error || !data) {
-    return new Response(error?.message ?? "sign failed", {
-      status: 500,
-      headers: noStoreHeaders,
-    });
-  }
-  return Response.json(
-    { bucket: BUCKET, path, token: data.token },
-    { headers: noStoreHeaders },
-  );
+  return Response.json({ bucket: BUCKET, path }, { headers: noStoreHeaders });
 }

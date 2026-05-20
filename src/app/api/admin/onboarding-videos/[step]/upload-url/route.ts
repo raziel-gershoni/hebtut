@@ -1,7 +1,6 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
-import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { readJsonBody } from "@/lib/http";
 import { extFromMime } from "@/lib/media";
@@ -24,10 +23,9 @@ const Body = z.object({
 });
 
 /**
- * Issues a short-lived signed upload URL for an onboarding video slot.
- * The browser PUTs the file directly to Supabase Storage (bypassing
- * Vercel's 4.5 MB function body limit), then calls the parent POST
- * route to register the metadata.
+ * Returns a fresh storage path for an onboarding video slot. The browser
+ * then uploads via TUS (through /api/admin/upload-proxy) to that path
+ * and finally posts metadata to the parent POST route to register the row.
  */
 export async function POST(
   req: NextRequest,
@@ -49,18 +47,5 @@ export async function POST(
   }
   const ext = extFromMime(parsed.data.mime_type);
   const path = `onboarding/${step}-${crypto.randomUUID()}.${ext}`;
-  const sb = getServiceRoleClient();
-  const { data, error } = await sb.storage
-    .from(BUCKET)
-    .createSignedUploadUrl(path);
-  if (error || !data) {
-    return new Response(error?.message ?? "sign failed", {
-      status: 500,
-      headers: noStoreHeaders,
-    });
-  }
-  return Response.json(
-    { bucket: BUCKET, path, token: data.token },
-    { headers: noStoreHeaders },
-  );
+  return Response.json({ bucket: BUCKET, path }, { headers: noStoreHeaders });
 }

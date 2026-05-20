@@ -13,7 +13,7 @@ import {
   prepareVideoForUpload,
   type CompressProgress,
 } from "@/lib/video-compress";
-import { uploadWithRetry } from "@/lib/direct-upload";
+import { tusUpload } from "@/lib/direct-upload";
 
 interface Props {
   open: boolean;
@@ -185,12 +185,15 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
       }
     }
 
-    // Two-step upload: ask the server for a signed Supabase upload URL,
-    // PUT the bytes directly to Supabase (Vercel functions have a 4.5 MB
-    // body limit), then POST the metadata so the row gets registered.
-    // The retry wrapper requests a fresh signed URL per attempt — a stale
-    // or consumed token can't poison the second try.
-    const getSignedUrl = async () => {
+    // 1. Ask the server for a fresh storage path (admin gate + path
+    //    generation). 2. TUS-upload the bytes through our proxy
+    //    (/api/admin/upload-proxy) which forwards each 4 MB chunk to
+    //    Supabase with the service-role key — chunks stay under Vercel's
+    //    4.5 MB function body limit, and TUS resumes on a flaky network
+    //    instead of restarting. 3. POST metadata to register the row.
+    let bucket: string;
+    let path: string;
+    {
       const urlRes = await fetch("/api/admin/media/upload-url", {
         method: "POST",
         cache: "no-store",
@@ -201,24 +204,26 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
         body: JSON.stringify({ mime_type: fileToSend.type }),
       });
       if (!urlRes.ok) {
-        throw new Error(
+        setUploadBusy(false);
+        setUploadError(
           urlRes.status === 403
             ? "загрузка отключена администратором"
             : urlRes.status === 415
               ? "неподдерживаемый формат файла"
-              : `signed-url ${urlRes.status}`,
+              : `не удалось получить путь для загрузки: ${urlRes.status}`,
         );
+        return;
       }
-      return (await urlRes.json()) as {
-        bucket: string;
-        path: string;
-        token: string;
-      };
-    };
-    let signed: { bucket: string; path: string; token: string };
+      const d = (await urlRes.json()) as { bucket: string; path: string };
+      bucket = d.bucket;
+      path = d.path;
+    }
     setUploading({ loaded: 0, total: fileToSend.size });
     try {
-      signed = await uploadWithRetry(getSignedUrl, fileToSend, {
+      await tusUpload(fileToSend, {
+        bucket,
+        path,
+        jwt,
         onProgress: (loaded, total) => setUploading({ loaded, total }),
       });
     } catch (e) {
@@ -228,6 +233,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
       return;
     }
     setUploading(null);
+    const signed = { bucket, path };
 
     const r = await fetch("/api/admin/media", {
       method: "POST",

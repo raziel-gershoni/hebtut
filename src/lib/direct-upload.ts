@@ -1,111 +1,65 @@
 "use client";
 
-// Direct-to-Supabase-Storage uploads. Bypasses Vercel's 4.5 MB function
-// body limit (which is platform-level, not configurable, applies to all
-// plans). The server issues a short-lived signed-upload URL via the
-// service-role client; the browser PUTs the bytes directly to Supabase;
-// then the browser tells the server "the file is at <path>" so it can
-// register the metadata row.
+// Direct-to-Supabase-Storage uploads via the TUS resumable protocol.
 //
-// We hand-roll the PUT via XMLHttpRequest instead of using the Supabase
-// SDK's uploadToSignedUrl (which uses fetch internally). Reason: iOS
-// Safari + fetch + multi-MB PUT body + cellular network is a known
-// failure mode where fetch resolves "ok" prematurely without actually
-// transmitting the bytes — leaving an empty path the server has to
-// reject. XHR's network stack is older and more reliable for large
-// PUTs on iOS; bonus, it gives us real upload-progress events.
+// Why TUS: Supabase officially recommends it for files >6 MB. The previous
+// signed-upload-URL pattern (single PUT) was fragile on iOS WebKit +
+// cellular — fetch could resolve "ok" without actually transmitting the
+// bytes, leaving ghost storage.objects rows. TUS chunks the upload (4 MB
+// each, kept under Vercel's 4.5 MB function body limit) and explicitly
+// confirms each chunk's offset, so there's no false-success failure mode.
+// On a network blip TUS resumes from the last confirmed chunk instead of
+// restarting from zero.
+//
+// The browser never talks to Supabase directly — it goes through our
+// /api/admin/upload-proxy route, which validates admin via OUR JWT and
+// then forwards each chunk to Supabase with the service-role key. That
+// avoids needing any Supabase auth on the client.
 
-import { publicEnv } from "./env";
+import * as tus from "tus-js-client";
 
-export interface SignedUpload {
+export interface UploadOptions {
   bucket: string;
   path: string;
-  token: string;
+  jwt: string;
+  onProgress?: (loaded: number, total: number) => void;
 }
 
 /**
- * Upload a file using a signed upload URL previously issued by the server.
- * Throws on failure; resolves to nothing on success. After this resolves,
- * call the server's "register" endpoint to commit the metadata.
- *
- * Note: optional onProgress is called with (bytesUploaded, totalBytes)
- * during the PUT. We don't currently surface this in the UI but the hook
- * is here for when we want to.
+ * Uploads a file via TUS to our /api/admin/upload-proxy endpoint, which
+ * forwards to Supabase Storage. Resolves on success, throws on failure.
+ * After this resolves, call the server's registration endpoint with
+ * `storage_path: options.path` to record the metadata row.
  */
-export async function uploadToSignedUrl(
-  signed: SignedUpload,
-  file: File,
-  onProgress?: (loaded: number, total: number) => void,
-): Promise<void> {
-  const base = publicEnv.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "");
-  const url =
-    `${base}/storage/v1/object/upload/sign/${signed.bucket}/${signed.path}` +
-    `?token=${encodeURIComponent(signed.token)}`;
-  await new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url, true);
-    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
-    if (onProgress) {
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) onProgress(e.loaded, e.total);
-      });
-    }
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
+export async function tusUpload(file: File, options: UploadOptions): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const upload = new tus.Upload(file, {
+      endpoint: "/api/admin/upload-proxy/resumable",
+      retryDelays: [0, 1000, 3000, 5000, 10000, 20000],
+      // 4 MB chunks — Vercel functions cap request body at 4.5 MB. Each
+      // chunk is a separate PATCH so total file size is unbounded.
+      chunkSize: 4 * 1024 * 1024,
+      removeFingerprintOnSuccess: true,
+      headers: {
+        Authorization: `Bearer ${options.jwt}`,
+      },
+      metadata: {
+        bucketName: options.bucket,
+        objectName: options.path,
+        contentType: file.type || "application/octet-stream",
+        cacheControl: "3600",
+      },
+      onError: (err) => {
+        console.warn("tus upload error", err);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      },
+      onProgress: (loaded, total) => {
+        options.onProgress?.(loaded, total);
+      },
+      onSuccess: () => {
         resolve();
-      } else {
-        reject(
-          new Error(
-            `PUT ${xhr.status}: ${(xhr.responseText || xhr.statusText || "").slice(0, 200)}`,
-          ),
-        );
-      }
-    };
-    xhr.onerror = () => reject(new Error("PUT network error"));
-    xhr.ontimeout = () => reject(new Error("PUT timeout"));
-    xhr.send(file);
+      },
+    });
+    upload.start();
   });
-}
-
-/**
- * Upload with automatic retry. iOS Safari + TG WebView produces generic
- * "Load failed" errors on transient network blips; one retry covers most.
- *
- * IMPORTANT: the signed URL is generated ONCE and reused across retries
- * (not regenerated per attempt). Reason: iOS has been seen to report PUT
- * failure on a connection drop AFTER the server already received the
- * bytes. If we retry with a fresh URL we end up with TWO uploads — one
- * orphan in storage and one ghost row in the DB pointing nowhere. With
- * the same URL, a successful-then-spurious-failure retry will either
- * succeed cleanly (Supabase reuses the existing object) or fail with
- * token-already-used (in which case the original upload IS there at
- * the path we already know about).
- */
-export async function uploadWithRetry(
-  getSignedUrl: () => Promise<SignedUpload>,
-  file: File,
-  options: {
-    attempts?: number;
-    backoffMs?: number;
-    onProgress?: (loaded: number, total: number) => void;
-  } = {},
-): Promise<SignedUpload> {
-  const attempts = options.attempts ?? 2;
-  const backoff = options.backoffMs ?? 1000;
-  const signed = await getSignedUrl();
-  let lastError: unknown = null;
-  for (let i = 0; i < attempts; i += 1) {
-    try {
-      await uploadToSignedUrl(signed, file, options.onProgress);
-      return signed;
-    } catch (e) {
-      lastError = e;
-      console.warn(`upload-to-storage attempt ${i + 1}/${attempts} failed`, e);
-      if (i === attempts - 1) break;
-      await new Promise((r) => setTimeout(r, backoff));
-    }
-  }
-  throw lastError instanceof Error
-    ? lastError
-    : new Error(`upload failed after ${attempts} attempts`);
 }
