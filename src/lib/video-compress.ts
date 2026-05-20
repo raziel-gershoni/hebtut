@@ -151,26 +151,54 @@ function encodeArgs(
     "input",
     "-c:v",
     "libx264",
+    // Slower preset for video_notes — they're an admin's content the
+    // students will see repeatedly, and the 384×384 frame is small enough
+    // that 'fast' preset (~1-2 min for 60 s on a phone) is tractable.
+    // 'veryfast' for the regular library where speed matters more.
     "-preset",
-    "veryfast",
+    videoNote ? "fast" : "veryfast",
     "-profile:v",
     "main",
     "-level",
     "4.1",
     "-pix_fmt",
     "yuv420p",
-    "-b:v",
-    `${plan.videoKbps}k`,
-    "-maxrate",
-    `${Math.floor(plan.videoKbps * 1.15)}k`,
-    "-bufsize",
-    `${Math.floor(plan.videoKbps * 2)}k`,
+  ];
+  if (videoNote) {
+    // CRF (quality-targeted) instead of CBR (bitrate-targeted). For a
+    // 5 MB / 60 s / 384×384 budget we're nowhere near the bitrate
+    // ceiling — letting the encoder distribute bits by frame
+    // complexity produces much better visual quality than constant-
+    // bitrate at the same file size. CRF 23 is libx264's "high
+    // quality" recommendation. The maxrate cap prevents pathological
+    // file sizes on complex action footage.
+    args.push(
+      "-crf",
+      "23",
+      "-maxrate",
+      "1500k",
+      "-bufsize",
+      "3000k",
+    );
+  } else {
+    args.push(
+      "-b:v",
+      `${plan.videoKbps}k`,
+      "-maxrate",
+      `${Math.floor(plan.videoKbps * 1.15)}k`,
+      "-bufsize",
+      `${Math.floor(plan.videoKbps * 2)}k`,
+    );
+  }
+  args.push(
     "-vf",
     videoNote
-      ? // Video-note: center-crop to the shortest dimension, then scale to
-        // a fixed square. TG video-notes are circular previews of a square
-        // source; non-square inputs get an off-center crop without this.
-        `crop='min(iw\\,ih)':'min(iw\\,ih)',scale=${VIDEO_NOTE_DIM}:${VIDEO_NOTE_DIM}`
+      ? // Video-note: center-crop to the shortest dimension, then scale
+        // to a fixed square with lanczos (sharper downscale than the
+        // default bicubic). TG video-notes are circular previews of a
+        // square source; non-square inputs get an off-center crop
+        // without this.
+        `crop='min(iw\\,ih)':'min(iw\\,ih)',scale=${VIDEO_NOTE_DIM}:${VIDEO_NOTE_DIM}:flags=lanczos`
       : // Regular video: scale to max height, auto-width rounded to even,
         // never upscale.
         `scale=-2:${plan.maxHeight}:force_original_aspect_ratio=decrease`,
@@ -181,10 +209,13 @@ function encodeArgs(
     "-ac",
     "2",
     "-b:a",
-    `${plan.audioKbps}k`,
+    // Fixed 96 kbps for video_notes — speech + ambient mix sounds much
+    // better than the 48 kbps the auto-calculation would pick at this
+    // file budget. Regular video keeps the duration-derived value.
+    videoNote ? "96k" : `${plan.audioKbps}k`,
     "-movflags",
     "+faststart",
-  ];
+  );
   if (videoNote) {
     // Hard-cap the duration. TG video_notes are rejected past 60 s; cap
     // the encode so we never produce a file the bot can't send.
