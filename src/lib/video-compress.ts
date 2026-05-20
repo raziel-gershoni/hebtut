@@ -79,14 +79,16 @@ export interface PrepareOpts {
 }
 
 /** Square dimension and duration cap for TG video_note format. */
-const VIDEO_NOTE_DIM = 384;
+// TG accepts video_notes up to 640×640. We use the max so the circular
+// preview in chat is crisp at the player's larger sizes (iOS plays
+// video_notes at progressively larger circles as the user taps them).
+const VIDEO_NOTE_DIM = 640;
 export const VIDEO_NOTE_MAX_DURATION_SEC = 60;
-// Much tighter size target than regular video. TG's own recorded
-// video_notes are sub-1 MB; we aim for ~5 MB so the bot can fetch from
-// Supabase + upload to TG via multipart well within Vercel's function
-// timeout (10 s on Hobby, 60 s on Pro). 384×384 + 60 s + ~5 MB is also
-// plenty of bitrate budget for talking-head content.
-export const VIDEO_NOTE_TARGET_BYTES = 5 * 1024 * 1024;
+// 20 MB output ceiling. TG's send limit is 50 MB but we want a buffer
+// for the Supabase→Vercel→TG roundtrip to fit in the Hobby plan's 10 s
+// function timeout. 20 MB on a fast connection clears in ~5-8 s of
+// total transfer, leaving headroom for encoding metadata + overhead.
+export const VIDEO_NOTE_TARGET_BYTES = 20 * 1024 * 1024;
 
 // We pick resolution from the computed bitrate budget rather than running
 // a fixed ladder — long videos need radically lower resolutions to hit
@@ -151,12 +153,12 @@ function encodeArgs(
     "input",
     "-c:v",
     "libx264",
-    // Slower preset for video_notes — they're an admin's content the
-    // students will see repeatedly, and the 384×384 frame is small enough
-    // that 'fast' preset (~1-2 min for 60 s on a phone) is tractable.
-    // 'veryfast' for the regular library where speed matters more.
+    // 'medium' for video_notes — admin's content, students watch
+    // repeatedly, one-time encode cost (3-8 min on a phone for 60 s)
+    // worth the visible quality bump over 'fast'. 'veryfast' for the
+    // regular library where the same admin uploads many files.
     "-preset",
-    videoNote ? "fast" : "veryfast",
+    videoNote ? "medium" : "veryfast",
     "-profile:v",
     "main",
     "-level",
@@ -165,24 +167,23 @@ function encodeArgs(
     "yuv420p",
   ];
   if (videoNote) {
-    // CRF (quality-targeted) for visual quality, with a TIGHT maxrate
-    // cap that mathematically guarantees the output fits under the
-    // 5 MB budget for the full 60 s without needing the staged retry.
-    //   500 kbps × 60 s = 3.75 MB (video, cap)
-    // + 96  kbps × 60 s = 0.72 MB (audio)
+    // High-quality CRF target with generous maxrate ceiling. Math
+    // for the 60 s / 20 MB budget:
+    //   2500 kbps × 60 s = 18.75 MB (video, cap)
+    // +  128 kbps × 60 s = 0.96  MB (audio)
     // + ~1% container overhead
-    // ≈ 4.5 MB worst case — well under 5 MB.
-    // For typical talking-head content the encoder uses far less than
-    // 500 kbps (CRF 23 looks great at 250-400 kbps for 384×384), so
-    // most files come in at 2-3 MB. The cap only bites on complex
-    // action footage where CRF would otherwise overshoot.
+    // ≈ 19.9 MB worst case — fits within 20 MB.
+    // CRF 20 is libx264's "high quality" recommendation (visually
+    // near-lossless at 640×640). Encoder uses far less than the cap
+    // for typical talking-head content (~800-1200 kbps, ~6-9 MB);
+    // the cap only bites on complex action footage.
     args.push(
       "-crf",
-      "23",
+      "20",
       "-maxrate",
-      "500k",
+      "2500k",
       "-bufsize",
-      "1000k",
+      "5000k",
     );
   } else {
     args.push(
@@ -213,10 +214,11 @@ function encodeArgs(
     "-ac",
     "2",
     "-b:a",
-    // Fixed 96 kbps for video_notes — speech + ambient mix sounds much
-    // better than the 48 kbps the auto-calculation would pick at this
-    // file budget. Regular video keeps the duration-derived value.
-    videoNote ? "96k" : `${plan.audioKbps}k`,
+    // Fixed 128 kbps for video_notes — comfortable for speech + ambient
+    // mix, well above the threshold where compression artifacts become
+    // audible. Negligible against the video budget. Regular video keeps
+    // the duration-derived value.
+    videoNote ? "128k" : `${plan.audioKbps}k`,
     "-movflags",
     "+faststart",
   );
