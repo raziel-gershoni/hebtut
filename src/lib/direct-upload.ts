@@ -30,6 +30,23 @@ export interface UploadOptions {
  * forwards to Supabase Storage. Resolves on success, throws on failure.
  * After this resolves, call the server's registration endpoint with
  * `storage_path: options.path` to record the metadata row.
+ *
+ * Reliability within one call:
+ * - 7 attempts per chunk (immediate + 6 backoff delays: 1s, 3s, 5s, 10s,
+ *   20s). On a single chunk that's ~40 s of total trying before giving
+ *   up; on a multi-chunk upload it's per-chunk so the total cap depends
+ *   on file size.
+ * - 4 MB chunks keep each PATCH small enough to complete within typical
+ *   cellular stability windows.
+ *
+ * Cross-session resume is NOT enabled. We'd need to coordinate the
+ * storage_path between the initial call and the resumed call (otherwise
+ * the resumed file lands at the original session's path while we
+ * register the new path — exactly the split-brain we just fixed). If
+ * users start hitting "all 7 attempts failed" regularly we'll add it,
+ * but it costs a server-side path-cache + client-side state machine.
+ * For now, a final failure means clicking "Загрузить" again and starting
+ * over.
  */
 export async function tusUpload(file: File, options: UploadOptions): Promise<void> {
   return new Promise((resolve, reject) => {
