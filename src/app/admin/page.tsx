@@ -12,6 +12,7 @@ import { BannedUsersPanel } from "@/components/BannedUsersPanel";
 import { AdminSettingsPanel } from "@/components/AdminSettingsPanel";
 import { AdminTagsManager } from "@/components/AdminTagsManager";
 import { AdminOnboardingVideos } from "@/components/AdminOnboardingVideos";
+import { AdminVersionFooter } from "@/components/AdminVersionFooter";
 
 export default function AdminPage() {
   return (
@@ -97,6 +98,7 @@ function AdminBody({ jwt }: { jwt: string }) {
       <AdminUsersTable jwt={jwt} users={users} loaded={loaded} refetch={refetch} />
       <BannedUsersPanel jwt={jwt} />
       <AdminConnectionsPanel jwt={jwt} users={users} links={links} refetch={refetch} />
+      <AdminVersionFooter />
     </>
   );
 }
