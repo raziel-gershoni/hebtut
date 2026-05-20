@@ -7,23 +7,15 @@
 // then the browser tells the server "the file is at <path>" so it can
 // register the metadata row.
 //
-// This is the standard Supabase pattern for any upload that might exceed
-// the function body limit.
+// We hand-roll the PUT via XMLHttpRequest instead of using the Supabase
+// SDK's uploadToSignedUrl (which uses fetch internally). Reason: iOS
+// Safari + fetch + multi-MB PUT body + cellular network is a known
+// failure mode where fetch resolves "ok" prematurely without actually
+// transmitting the bytes — leaving an empty path the server has to
+// reject. XHR's network stack is older and more reliable for large
+// PUTs on iOS; bonus, it gives us real upload-progress events.
 
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { publicEnv } from "./env";
-
-let cachedClient: SupabaseClient | null = null;
-
-function getBrowserSupabase(): SupabaseClient {
-  if (cachedClient) return cachedClient;
-  cachedClient = createClient(
-    publicEnv.NEXT_PUBLIC_SUPABASE_URL,
-    publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { auth: { persistSession: false } },
-  );
-  return cachedClient;
-}
 
 export interface SignedUpload {
   bucket: string;
@@ -35,21 +27,44 @@ export interface SignedUpload {
  * Upload a file using a signed upload URL previously issued by the server.
  * Throws on failure; resolves to nothing on success. After this resolves,
  * call the server's "register" endpoint to commit the metadata.
+ *
+ * Note: optional onProgress is called with (bytesUploaded, totalBytes)
+ * during the PUT. We don't currently surface this in the UI but the hook
+ * is here for when we want to.
  */
 export async function uploadToSignedUrl(
   signed: SignedUpload,
   file: File,
+  onProgress?: (loaded: number, total: number) => void,
 ): Promise<void> {
-  const sb = getBrowserSupabase();
-  const { error } = await sb.storage
-    .from(signed.bucket)
-    .uploadToSignedUrl(signed.path, signed.token, file, {
-      contentType: file.type,
-      upsert: false,
-    });
-  if (error) {
-    throw new Error(error.message);
-  }
+  const base = publicEnv.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "");
+  const url =
+    `${base}/storage/v1/object/upload/sign/${signed.bucket}/${signed.path}` +
+    `?token=${encodeURIComponent(signed.token)}`;
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url, true);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    if (onProgress) {
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) onProgress(e.loaded, e.total);
+      });
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(
+          new Error(
+            `PUT ${xhr.status}: ${(xhr.responseText || xhr.statusText || "").slice(0, 200)}`,
+          ),
+        );
+      }
+    };
+    xhr.onerror = () => reject(new Error("PUT network error"));
+    xhr.ontimeout = () => reject(new Error("PUT timeout"));
+    xhr.send(file);
+  });
 }
 
 /**
