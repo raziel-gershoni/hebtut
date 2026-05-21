@@ -13,6 +13,7 @@ import { AdminSettingsPanel } from "@/components/AdminSettingsPanel";
 import { AdminTagsManager } from "@/components/AdminTagsManager";
 import { AdminOnboardingVideos } from "@/components/AdminOnboardingVideos";
 import { AdminVersionFooter } from "@/components/AdminVersionFooter";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 
 export default function AdminPage() {
   return (
@@ -91,13 +92,27 @@ function AdminBody({ jwt }: { jwt: string }) {
           → Журнал действий
         </Link>
       </div>
-      <AdminSettingsPanel jwt={jwt} />
-      <AdminOnboardingVideos jwt={jwt} />
-      <AdminTagsManager jwt={jwt} />
-      <TeacherInvites jwt={jwt} />
-      <AdminUsersTable jwt={jwt} users={users} loaded={loaded} refetch={refetch} />
-      <BannedUsersPanel jwt={jwt} />
-      <AdminConnectionsPanel jwt={jwt} users={users} links={links} refetch={refetch} />
+      <CollapsibleSection title="Пользователи" defaultOpen>
+        <AdminUsersTable jwt={jwt} users={users} loaded={loaded} refetch={refetch} />
+      </CollapsibleSection>
+      <CollapsibleSection title="Настройки">
+        <AdminSettingsPanel jwt={jwt} />
+      </CollapsibleSection>
+      <CollapsibleSection title="Видео онбординга">
+        <AdminOnboardingVideos jwt={jwt} />
+      </CollapsibleSection>
+      <CollapsibleSection title="Теги медиа-библиотеки">
+        <AdminTagsManager jwt={jwt} />
+      </CollapsibleSection>
+      <CollapsibleSection title="Приглашения тренеров">
+        <TeacherInvites jwt={jwt} />
+      </CollapsibleSection>
+      <CollapsibleSection title="Заблокированные">
+        <BannedUsersPanel jwt={jwt} />
+      </CollapsibleSection>
+      <CollapsibleSection title="Связи">
+        <AdminConnectionsPanel jwt={jwt} users={users} links={links} refetch={refetch} />
+      </CollapsibleSection>
       <AdminVersionFooter />
     </>
   );
