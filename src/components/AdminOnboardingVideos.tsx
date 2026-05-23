@@ -72,6 +72,10 @@ type BusyKey = { clipId: number | null } | null;
 export function AdminOnboardingVideos({ jwt }: Props) {
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [busy, setBusy] = useState<BusyKey>(null);
+  // Which step is currently uploading a NEW clip (no clip card exists yet)
+  // — drives where the compress/upload progress bars render. For Replace,
+  // the existing ClipCard already shows progress via busy.clipId match.
+  const [uploadingStep, setUploadingStep] = useState<OnboardingVideoStep | null>(null);
   const [compressing, setCompressing] = useState<CompressProgress | null>(null);
   const [uploading, setUploading] = useState<{ loaded: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +110,9 @@ export function AdminOnboardingVideos({ jwt }: Props) {
     file: File,
   ) {
     setBusy({ clipId: targetClipId });
+    // Track step only for the add-new case so StepSection knows where to
+    // render progress. Replace already has a ClipCard hosting its own bars.
+    if (targetClipId == null) setUploadingStep(step);
     setError(null);
     let fileToSend: File = file;
     // Probe the source first. If it's ALREADY a valid video_note (square
@@ -126,6 +133,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
         });
       } catch (e) {
         setBusy(null);
+        setUploadingStep(null);
         setCompressing(null);
         setError(`не удалось подготовить видео: ${(e as Error).message}`);
         return;
@@ -134,6 +142,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
     setCompressing(null);
     if (fileToSend.size > MAX_BYTES) {
       setBusy(null);
+      setUploadingStep(null);
       setError(
         `после сжатия файл всё ещё ${formatBytes(fileToSend.size)} — попробуй обрезать клип`,
       );
@@ -159,6 +168,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
       );
       if (!urlRes.ok) {
         setBusy(null);
+        setUploadingStep(null);
         setError(
           urlRes.status === 415
             ? "только mp4 / mov / webm"
@@ -180,6 +190,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
       });
     } catch (e) {
       setBusy(null);
+      setUploadingStep(null);
       setUploading(null);
       setError(`не удалось загрузить файл в хранилище: ${(e as Error).message}`);
       return;
@@ -201,6 +212,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
       }),
     });
     setBusy(null);
+    setUploadingStep(null);
     if (!r.ok) {
       const body = await r.text().catch(() => "");
       setError(
@@ -276,6 +288,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
                 clips={slot.clips}
                 busyClipId={busy?.clipId ?? null}
                 anyBusy={busy != null}
+                addingToThisStep={uploadingStep === step}
                 compressing={compressing}
                 uploading={uploading}
                 onAdd={(file) => void upload(step, null, null, file)}
@@ -303,6 +316,7 @@ function StepSection({
   clips,
   busyClipId,
   anyBusy,
+  addingToThisStep,
   compressing,
   uploading,
   onAdd,
@@ -314,6 +328,7 @@ function StepSection({
   clips: Clip[];
   busyClipId: number | null;
   anyBusy: boolean;
+  addingToThisStep: boolean;
   compressing: CompressProgress | null;
   uploading: { loaded: number; total: number } | null;
   onAdd: (file: File) => void;
@@ -374,6 +389,10 @@ function StepSection({
         </ol>
       )}
 
+      {addingToThisStep && (compressing || uploading) && (
+        <ProgressBars compressing={compressing} uploading={uploading} />
+      )}
+
       {localError && (
         <div className="text-xs text-tg-text-destructive">{localError}</div>
       )}
@@ -385,7 +404,7 @@ function StepSection({
           disabled={atCap || anyBusy}
           className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-tg-button text-tg-button-text text-xs font-semibold transition-transform active:scale-95 disabled:opacity-50"
         >
-          + Добавить клип
+          {addingToThisStep ? <Spinner size={12} /> : "+ Добавить клип"}
         </button>
       </div>
 
@@ -439,8 +458,6 @@ function ClipCard({
     if (!validateFile(f, setLocalError)) return;
     onReplace(f!);
   }
-
-  const pct = compressing ? Math.round(compressing.ratio * 100) : 0;
 
   return (
     <li className="rounded-lg bg-tg-bg-section p-3 space-y-2">
@@ -512,41 +529,7 @@ function ClipCard({
         </a>
       </div>
 
-      {compressing && (
-        <div className="space-y-1 pt-1">
-          <div className="flex items-center justify-between text-xs text-tg-text">
-            <span>Сжимаем видео ({compressing.preset})…</span>
-            <span className="tabular-nums">{pct}%</span>
-          </div>
-          <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
-            <div
-              className="h-full bg-tg-text-accent transition-[width] duration-150 ease-linear"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {uploading && (
-        <div className="space-y-1 pt-1">
-          <div className="flex items-center justify-between text-xs text-tg-text">
-            <span>
-              Загружаем… {formatBytes(uploading.loaded)} / {formatBytes(uploading.total)}
-            </span>
-            <span className="tabular-nums">
-              {Math.round((uploading.loaded / Math.max(1, uploading.total)) * 100)}%
-            </span>
-          </div>
-          <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
-            <div
-              className="h-full bg-tg-text-accent transition-[width] duration-150 ease-linear"
-              style={{
-                width: `${Math.min(100, Math.round((uploading.loaded / Math.max(1, uploading.total)) * 100))}%`,
-              }}
-            />
-          </div>
-        </div>
-      )}
+      <ProgressBars compressing={compressing} uploading={uploading} />
 
       {localError && (
         <div className="text-xs text-tg-text-destructive">{localError}</div>
@@ -579,6 +562,54 @@ function ClipCard({
         className="hidden"
       />
     </li>
+  );
+}
+
+function ProgressBars({
+  compressing,
+  uploading,
+}: {
+  compressing: CompressProgress | null;
+  uploading: { loaded: number; total: number } | null;
+}) {
+  if (!compressing && !uploading) return null;
+  const compressPct = compressing ? Math.round(compressing.ratio * 100) : 0;
+  const uploadPct = uploading
+    ? Math.min(100, Math.round((uploading.loaded / Math.max(1, uploading.total)) * 100))
+    : 0;
+  return (
+    <div className="space-y-2">
+      {compressing && (
+        <div className="space-y-1 pt-1">
+          <div className="flex items-center justify-between text-xs text-tg-text">
+            <span>Сжимаем видео ({compressing.preset})…</span>
+            <span className="tabular-nums">{compressPct}%</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+            <div
+              className="h-full bg-tg-text-accent transition-[width] duration-150 ease-linear"
+              style={{ width: `${compressPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+      {uploading && (
+        <div className="space-y-1 pt-1">
+          <div className="flex items-center justify-between text-xs text-tg-text">
+            <span>
+              Загружаем… {formatBytes(uploading.loaded)} / {formatBytes(uploading.total)}
+            </span>
+            <span className="tabular-nums">{uploadPct}%</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+            <div
+              className="h-full bg-tg-text-accent transition-[width] duration-150 ease-linear"
+              style={{ width: `${uploadPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
