@@ -6,6 +6,7 @@ import { StudentPicker } from "./StudentPicker";
 import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
 import { formatDuration } from "@/lib/i18n";
 import { bgFromHandle } from "@/lib/handle";
+import { PAUSE_INACTIVITY_MS } from "@/lib/time";
 
 type LastMessage = {
   id: number;
@@ -109,6 +110,27 @@ export function InboxList({
   );
 }
 
+type StatusDot = "red" | "orange" | null;
+
+/**
+ * Decides whether the chat row should show a status indicator on the avatar.
+ *   red    → student is waiting for a teacher (last message is inbound + not
+ *            yet answered). Uses the server-computed `has_unanswered` flag.
+ *   orange → teacher has replied, but the student hasn't followed up within
+ *            `PAUSE_INACTIVITY_MS` (mirrors the bot's pause-nudge gate).
+ *   null   → either no message yet, or the chat is in a healthy state.
+ */
+function computeStatusDot(chat: Chat): StatusDot {
+  const last = chat.last_message;
+  if (!last) return null;
+  if (chat.has_unanswered) return "red";
+  if (last.direction === "out") {
+    const ageMs = Date.now() - new Date(last.created_at).getTime();
+    if (ageMs > PAUSE_INACTIVITY_MS) return "orange";
+  }
+  return null;
+}
+
 function ChatRow({
   chat,
   jwt,
@@ -120,8 +142,8 @@ function ChatRow({
 }) {
   const name = chat.student_handle;
   const time = chat.last_message ? formatChatTimestamp(chat.last_message.created_at) : "";
-  const unanswered = chat.has_unanswered;
   const heldByOther = chat.claim && !chat.claim.is_self;
+  const dot = computeStatusDot(chat);
   // Names mode: server returns emoji=null; if student_has_avatar, construct
   // the TG photo URL. Anon mode: emoji is set, no avatar. Avatar component
   // prefers imageUrl over emoji; the bgClass only matters as the emoji-circle
@@ -135,17 +157,29 @@ function ChatRow({
     <li>
       <Link
         href={`/students/${chat.student_id}`}
-        className={`flex items-center gap-3 px-3 py-3 rounded-2xl transition-colors active:bg-tg-bg-secondary/60 ${
-          unanswered ? "border-l-2 border-tg-text-accent/50 pl-[14px]" : ""
-        }`}
+        className="flex items-center gap-3 px-3 py-3 rounded-2xl transition-colors active:bg-tg-bg-secondary/60"
       >
-        <Avatar
-          name={name}
-          imageUrl={imageUrl}
-          emoji={chat.student_emoji ?? undefined}
-          bgClass={chat.student_emoji ? bgFromHandle(chat.student_handle) : undefined}
-          size={48}
-        />
+        <div className="relative shrink-0">
+          <Avatar
+            name={name}
+            imageUrl={imageUrl}
+            emoji={chat.student_emoji ?? undefined}
+            bgClass={chat.student_emoji ? bgFromHandle(chat.student_handle) : undefined}
+            size={48}
+          />
+          {dot && (
+            <span
+              aria-label={
+                dot === "red"
+                  ? "ждёт ответа"
+                  : "ученик давно не отвечает"
+              }
+              className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-tg-bg-primary ${
+                dot === "red" ? "bg-red-500" : "bg-orange-500"
+              }`}
+            />
+          )}
+        </div>
         <div className="min-w-0 flex-1 leading-tight">
           <div className="flex items-baseline gap-2">
             <span className="font-medium tracking-tight truncate">{name}</span>
@@ -196,7 +230,7 @@ function Preview({ chat, myUserId }: { chat: Chat; myUserId: number }) {
       </span>
     );
   }
-  const icon = m.kind === "voice" ? "🎙️" : "🟢";
+  const icon = m.kind === "voice" ? "🎙️" : "🎥";
   const dur = formatDuration(m.duration);
   return (
     <span>

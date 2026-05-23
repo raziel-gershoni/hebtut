@@ -21,7 +21,7 @@ import {
   isStateMatchingStep,
   sendOneClip,
 } from "@/server/onboarding-videos";
-import { localDateInTz } from "@/lib/time";
+import { localDateInTz, PAUSE_INACTIVITY_MS } from "@/lib/time";
 import { nextWindowOpen } from "@/server/response-window";
 import type {
   Database,
@@ -35,8 +35,6 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type Sub = Database["public"]["Tables"]["subscriptions"]["Row"];
-
-const PAUSE_INACTIVITY_MS = 6 * 60 * 60 * 1000;
 
 type DispatchResult =
   | { handled: false }

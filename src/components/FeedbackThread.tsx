@@ -1,7 +1,9 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { differenceInCalendarDays } from "date-fns";
 import { Avatar } from "./Avatar";
 import { Spinner } from "./Spinner";
+import { DateSeparator } from "./DateSeparator";
 import { useRealtimeFeedback } from "@/hooks/useRealtimeFeedback";
 
 interface AuthorRef {
@@ -207,38 +209,48 @@ export function FeedbackThread({
             Сообщений нет.
           </div>
         )}
-        {messages.map((m) => {
+        {messages.map((m, i) => {
+          const prev = i > 0 ? messages[i - 1] : null;
+          const showSep =
+            !prev ||
+            differenceInCalendarDays(new Date(m.created_at), new Date(prev.created_at)) !== 0;
           // user-direction messages = from user to admin pool. Display left-aligned.
           // out-direction = from an admin. Display right-aligned (us / our pool).
           if (m.direction === "in") {
             return (
-              <div key={m.id} className="flex justify-start">
-                <div className="max-w-[80%] rounded-2xl px-3 py-2 bg-tg-bg-section border-l-[3px] border-sky-500">
-                  <div className="text-xs whitespace-pre-wrap break-words">
-                    {m.text_content}
-                  </div>
-                  <div className="mt-1 text-[10px] tabular-nums text-tg-text-hint">
-                    {formatTime(m.created_at)}
+              <Fragment key={m.id}>
+                {showSep && <DateSeparator at={new Date(m.created_at)} />}
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] rounded-2xl px-3 py-2 bg-tg-bg-section border-l-[3px] border-sky-500">
+                    <div className="text-xs whitespace-pre-wrap break-words">
+                      {m.text_content}
+                    </div>
+                    <div className="mt-1 text-[10px] tabular-nums text-tg-text-hint">
+                      {formatTime(m.created_at)}
+                    </div>
                   </div>
                 </div>
-              </div>
+              </Fragment>
             );
           }
           const author = m.author;
           return (
-            <div key={m.id} className="flex justify-end">
-              <div className="max-w-[80%] rounded-2xl px-3 py-2 bg-emerald-500/15 border-r-[3px] border-emerald-500">
-                {author && (
-                  <div className="text-[11px] mb-1 font-semibold text-emerald-700 dark:text-emerald-400">
-                    {author.name ?? author.handle}
+            <Fragment key={m.id}>
+              {showSep && <DateSeparator at={new Date(m.created_at)} />}
+              <div className="flex justify-end">
+                <div className="max-w-[80%] rounded-2xl px-3 py-2 bg-emerald-500/15 border-r-[3px] border-emerald-500">
+                  {author && (
+                    <div className="text-[11px] mb-1 font-semibold text-emerald-700 dark:text-emerald-400">
+                      {author.name ?? author.handle}
+                    </div>
+                  )}
+                  <div className="text-xs whitespace-pre-wrap break-words">{m.text_content}</div>
+                  <div className="mt-1 text-[10px] tabular-nums text-tg-text-hint text-right">
+                    {formatTime(m.created_at)}
                   </div>
-                )}
-                <div className="text-xs whitespace-pre-wrap break-words">{m.text_content}</div>
-                <div className="mt-1 text-[10px] tabular-nums text-tg-text-hint text-right">
-                  {formatTime(m.created_at)}
                 </div>
               </div>
-            </div>
+            </Fragment>
           );
         })}
       </div>

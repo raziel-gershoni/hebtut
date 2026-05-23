@@ -1,7 +1,9 @@
 "use client";
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { Fragment, useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { differenceInCalendarDays } from "date-fns";
 import { MessageBubble, type ThreadMsg, type Speaker } from "./MessageBubble";
 import { Avatar } from "./Avatar";
+import { DateSeparator } from "./DateSeparator";
 import { PlaybackProvider } from "./PlaybackProvider";
 import { MediaPicker } from "./MediaPicker";
 import { speakerColor, type SpeakerColorClasses } from "@/lib/speaker-color";
@@ -285,21 +287,27 @@ export function ThreadView({
           Сообщений ещё нет.
         </div>
       ) : (
-        messages.map((m) => {
+        messages.map((m, i) => {
+          const prev = i > 0 ? messages[i - 1] : null;
+          const showSep =
+            !prev ||
+            differenceInCalendarDays(new Date(m.created_at), new Date(prev.created_at)) !== 0;
           const replyToMsg = m.reply_to_id != null ? byId.get(m.reply_to_id) ?? null : null;
           return (
-            <MessageBubble
-              key={m.id}
-              msg={m}
-              jwt={jwt}
-              speaker={speakerFor(m)}
-              speakerColors={colorFor(m)}
-              replyTo={replyToMsg}
-              replyToSpeaker={replyToMsg ? speakerFor(replyToMsg) : null}
-              replyToSpeakerColors={replyToMsg ? colorFor(replyToMsg) : null}
-              onReply={onReply}
-              replyDisabledReason={replyDisabledReason}
-            />
+            <Fragment key={m.id}>
+              {showSep && <DateSeparator at={new Date(m.created_at)} />}
+              <MessageBubble
+                msg={m}
+                jwt={jwt}
+                speaker={speakerFor(m)}
+                speakerColors={colorFor(m)}
+                replyTo={replyToMsg}
+                replyToSpeaker={replyToMsg ? speakerFor(replyToMsg) : null}
+                replyToSpeakerColors={replyToMsg ? colorFor(replyToMsg) : null}
+                onReply={onReply}
+                replyDisabledReason={replyDisabledReason}
+              />
+            </Fragment>
           );
         })
       )}

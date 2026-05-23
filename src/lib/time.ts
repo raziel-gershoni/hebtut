@@ -2,6 +2,15 @@ import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 import { differenceInCalendarDays } from "date-fns";
 import { ru } from "date-fns/locale/ru";
 
+/**
+ * Threshold for "this person has gone quiet". Mirrors the bot's own
+ * pause-nudge cron gate (`/api/cron/onboarding`). Six hours of inactivity
+ * is when the bot itself stops assuming a conversation is live; the inbox
+ * uses the same number to flip a chat's status dot from red (student
+ * waiting) to orange (teacher's reply gone unanswered for a while).
+ */
+export const PAUSE_INACTIVITY_MS = 6 * 60 * 60 * 1000;
+
 export function localDateInTz(date: Date, tz: string): string {
   return formatInTimeZone(date, tz, "yyyy-MM-dd");
 }
