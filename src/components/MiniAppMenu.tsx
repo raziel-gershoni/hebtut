@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 interface MenuItem {
@@ -35,10 +36,64 @@ const ITEMS: MenuItem[] = [
   },
 ];
 
-export function MiniAppMenu() {
+// Minimal status shape — only the discriminator matters for gating.
+type StatusKind =
+  | "trial"
+  | "trial_ending"
+  | "active"
+  | "renewing_soon"
+  | "trial_expired"
+  | "lapsed"
+  | "payment_failed"
+  | "frozen";
+
+/**
+ * Per-item visibility rules driven by subscription status:
+ *   /student/freeze    — only when status is `active` (server also enforces).
+ *   /student/referrals — only AFTER the trial ends (any kind except trial /
+ *                        trial_ending), regardless of pay status.
+ *
+ * While the status fetch is pending we hide the gated items — better
+ * to under-show briefly than flash-then-hide. The /feedback and
+ * /student/response-window items have no gate; they're always visible.
+ */
+function isItemVisible(href: string, kind: StatusKind | null): boolean {
+  switch (href) {
+    case "/student/freeze":
+      return kind === "active";
+    case "/student/referrals":
+      return kind != null && kind !== "trial" && kind !== "trial_ending";
+    default:
+      return true;
+  }
+}
+
+export function MiniAppMenu({ jwt }: { jwt: string }) {
+  const [kind, setKind] = useState<StatusKind | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/student/summary", {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${jwt}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { status?: { kind?: StatusKind } } | null) => {
+        if (!cancelled && d?.status?.kind) setKind(d.status.kind);
+      })
+      .catch(() => {
+        // Network hiccup — gated items stay hidden, ungated stay visible.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [jwt]);
+
+  const visibleItems = ITEMS.filter((it) => isItemVisible(it.href, kind));
+
   return (
     <div className="space-y-3">
-      {ITEMS.map((item) => (
+      {visibleItems.map((item) => (
         <Link
           key={item.href}
           href={item.href}

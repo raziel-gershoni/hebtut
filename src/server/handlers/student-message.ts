@@ -3,7 +3,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { ru, formatDuration } from "@/lib/i18n";
 import { getUsedForToday, decideQuota, commitUsageSplit } from "@/server/quota";
 import { serverEnv } from "@/lib/env";
-import { fanOutToTeachers } from "@/server/notifications";
+import { fanOutToTeachers, fanOutUnassignedToAdmins } from "@/server/notifications";
 import { isTgUserBanned } from "@/server/invites";
 import { userHandle } from "@/lib/handle";
 import { recordAudit } from "@/server/audit";
@@ -186,15 +186,15 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
     return true;
   }
 
-  // Make sure the student has at least one teacher; otherwise tell them.
+  // Look up assigned teacher(s). Unlike before, we DO NOT early-return when
+  // there are none — the message still gets recorded so admins can see it in
+  // their inbox and assign a teacher after the fact. The fan-out branch below
+  // routes either to the linked teachers or to all admins.
   const { data: links } = await sb
     .from("student_teachers")
     .select("teacher_id")
     .eq("student_id", user.id);
-  if (!links?.length) {
-    await ctx.reply(ru.noTeachers);
-    return true;
-  }
+  const hasTeachers = (links?.length ?? 0) > 0;
 
   const { data: inserted, error } = await sb
     .from("messages")
@@ -230,18 +230,27 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
   // When the global toggle is off the entire quota narrative is suppressed —
   // the student gets a flat "✅ Отправлено." and reads remaining time on the
   // Mini App dashboard instead.
-  let reply: string;
-  if (!quotaChat) {
-    reply = ru.acceptedStudentNeutral;
-  } else if (decision.tomorrowDebit > 0) {
-    reply = ru.acceptedStudentOverflow(formatDuration(decision.tomorrowDebit));
-  } else if (decision.newRemainingToday > 0 && decision.newRemainingToday <= 60) {
-    reply = ru.acceptedStudentLow(formatDuration(decision.newRemainingToday));
+  //
+  // Unassigned-student branch: the message is recorded, but no teacher exists
+  // to pick it up. Send the dedicated ack so the student knows we received
+  // them, and DM all admins with a one-tap link to assign a teacher.
+  if (hasTeachers) {
+    let reply: string;
+    if (!quotaChat) {
+      reply = ru.acceptedStudentNeutral;
+    } else if (decision.tomorrowDebit > 0) {
+      reply = ru.acceptedStudentOverflow(formatDuration(decision.tomorrowDebit));
+    } else if (decision.newRemainingToday > 0 && decision.newRemainingToday <= 60) {
+      reply = ru.acceptedStudentLow(formatDuration(decision.newRemainingToday));
+    } else {
+      reply = ru.acceptedStudent(formatDuration(decision.newRemainingToday));
+    }
+    await ctx.reply(reply);
+    await fanOutToTeachers(inserted.id);
   } else {
-    reply = ru.acceptedStudent(formatDuration(decision.newRemainingToday));
+    await ctx.reply(ru.unassignedAck);
+    await fanOutUnassignedToAdmins(inserted.id);
   }
-  await ctx.reply(reply);
-  await fanOutToTeachers(inserted.id);
 
   // Onboarding limit-hit hooks. Run after the success reply so any failure
   // here doesn't break the student's normal flow.

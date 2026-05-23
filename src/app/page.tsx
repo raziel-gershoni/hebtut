@@ -49,7 +49,7 @@ export default function Home() {
           {role === "student" && (
             <>
               <SubscriberSummary jwt={jwt} />
-              <MiniAppMenu />
+              <MiniAppMenu jwt={jwt} />
             </>
           )}
 

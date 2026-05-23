@@ -83,7 +83,38 @@ function Body({ jwt }: { jwt: string }) {
     );
   }
 
-  const isFrozen = data.status === "frozen";
+  // Gate: freeze is only meaningful for active subscribers. Server enforces
+  // (returns error: "not_active") on the POST, but the page-level gate keeps
+  // the picker out of sight entirely for trial / lapsed / payment_failed /
+  // already-frozen statuses, matching the hidden menu entry.
+  if (data.status !== "active") {
+    return (
+      <div className="rounded-2xl bg-tg-bg-section p-5 space-y-2">
+        <p className="text-xs uppercase tracking-widest text-tg-text-hint">
+          Заморозка недоступна
+        </p>
+        {data.status === "frozen" ? (
+          <>
+            <p className="text-sm text-tg-text-subtitle">
+              Подписка уже на паузе до{" "}
+              <span className="font-medium text-tg-text tabular-nums">
+                {formatDate(data.frozen_until_iso)}
+              </span>
+              .
+            </p>
+            <p className="text-sm text-tg-text-subtitle">
+              Новая заморозка станет доступна, когда текущая закончится.
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-tg-text-subtitle">
+            Заморозка доступна только при активной подписке.
+          </p>
+        )}
+      </div>
+    );
+  }
+
   const allowedMax = Math.min(3, data.remaining_days);
 
   return (
@@ -101,64 +132,45 @@ function Body({ jwt }: { jwt: string }) {
         </p>
       </section>
 
-      {isFrozen ? (
-        <section className="rounded-2xl bg-tg-bg-section p-5 space-y-2">
-          <p className="text-xs uppercase tracking-widest text-tg-text-hint">
-            Сейчас на паузе
-          </p>
-          <p className="text-tg-text">
-            Заморозка действует до{" "}
-            <span className="font-medium tabular-nums">
-              {formatDate(data.frozen_until_iso)}
-            </span>
-            .
-          </p>
-          <p className="text-sm text-tg-text-subtitle">
-            Подписка автоматически продлится; новых заморозок до конца месяца
-            доступно: <span className="tabular-nums">{data.remaining_days}</span>.
-          </p>
-        </section>
-      ) : (
-        <section className="rounded-2xl bg-tg-bg-section p-5 space-y-3">
-          <p className="text-xs uppercase tracking-widest text-tg-text-hint">
-            Сколько дней заморозить
-          </p>
-          <p className="text-sm text-tg-text-subtitle">
-            На этот месяц доступно: <span className="tabular-nums">{data.remaining_days}</span> из{" "}
-            <span className="tabular-nums">{data.budget_days}</span>.
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            {[1, 2, 3].map((n) => {
-              const allowed = n <= allowedMax;
-              const picked = pickedDays === n;
-              return (
-                <button
-                  key={n}
-                  type="button"
-                  disabled={!allowed || busy}
-                  onClick={() => setPickedDays(n as 1 | 2 | 3)}
-                  className={`h-12 rounded-2xl text-sm font-semibold transition-all ${
-                    picked
-                      ? "bg-tg-button text-tg-button-text"
-                      : "bg-tg-bg-secondary text-tg-text"
-                  } disabled:opacity-40`}
-                >
-                  {n} {n === 1 ? "день" : "дня"}
-                </button>
-              );
-            })}
-          </div>
-          {error && <div className="text-xs text-tg-text-destructive">{error}</div>}
-          <button
-            type="button"
-            disabled={!pickedDays || busy || allowedMax === 0}
-            onClick={() => void activate()}
-            className="w-full h-10 rounded-2xl bg-tg-button text-tg-button-text text-sm font-semibold transition-transform active:scale-[0.99] disabled:opacity-50"
-          >
-            {busy ? "Включаем…" : "Заморозить со следующего дня"}
-          </button>
-        </section>
-      )}
+      <section className="rounded-2xl bg-tg-bg-section p-5 space-y-3">
+        <p className="text-xs uppercase tracking-widest text-tg-text-hint">
+          Сколько дней заморозить
+        </p>
+        <p className="text-sm text-tg-text-subtitle">
+          На этот месяц доступно: <span className="tabular-nums">{data.remaining_days}</span> из{" "}
+          <span className="tabular-nums">{data.budget_days}</span>.
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {[1, 2, 3].map((n) => {
+            const allowed = n <= allowedMax;
+            const picked = pickedDays === n;
+            return (
+              <button
+                key={n}
+                type="button"
+                disabled={!allowed || busy}
+                onClick={() => setPickedDays(n as 1 | 2 | 3)}
+                className={`h-12 rounded-2xl text-sm font-semibold transition-all ${
+                  picked
+                    ? "bg-tg-button text-tg-button-text"
+                    : "bg-tg-bg-secondary text-tg-text"
+                } disabled:opacity-40`}
+              >
+                {n} {n === 1 ? "день" : "дня"}
+              </button>
+            );
+          })}
+        </div>
+        {error && <div className="text-xs text-tg-text-destructive">{error}</div>}
+        <button
+          type="button"
+          disabled={!pickedDays || busy || allowedMax === 0}
+          onClick={() => void activate()}
+          className="w-full h-10 rounded-2xl bg-tg-button text-tg-button-text text-sm font-semibold transition-transform active:scale-[0.99] disabled:opacity-50"
+        >
+          {busy ? "Включаем…" : "Заморозить со следующего дня"}
+        </button>
+      </section>
     </div>
   );
 }

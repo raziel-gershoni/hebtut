@@ -9,6 +9,18 @@ interface ReferralsData {
   paid_count: number;
 }
 
+// Mirrors the discriminator in /api/student/summary's response. Only used
+// to gate the referral UI behind "trial has ended".
+type StatusKind =
+  | "trial"
+  | "trial_ending"
+  | "active"
+  | "renewing_soon"
+  | "trial_expired"
+  | "lapsed"
+  | "payment_failed"
+  | "frozen";
+
 export default function ReferralsPage() {
   return (
     <AppShell title="Рефералы" back="/">
@@ -28,6 +40,8 @@ export default function ReferralsPage() {
 
 function Body({ jwt }: { jwt: string }) {
   const [data, setData] = useState<ReferralsData | null>(null);
+  // null while loading, "locked" before trial ends, "open" once trial is over.
+  const [gate, setGate] = useState<"loading" | "locked" | "open">("loading");
   const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
@@ -39,9 +53,40 @@ function Body({ jwt }: { jwt: string }) {
     setData((await r.json()) as ReferralsData);
   }, [jwt]);
 
+  // Independent fetch of the subscription summary purely for the gate.
+  // Referrals open AFTER the trial ends (any kind except trial / trial_ending),
+  // regardless of pay status — same rule as MiniAppMenu.
   useEffect(() => {
-    void load();
-  }, [load]);
+    let cancelled = false;
+    void fetch("/api/student/summary", {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${jwt}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { status?: { kind?: StatusKind } } | null) => {
+        if (cancelled) return;
+        const kind = d?.status?.kind ?? null;
+        if (kind == null) {
+          // Fail-open: if we can't fetch the gate, show the locked panel
+          // rather than leak the referral link prematurely.
+          setGate("locked");
+        } else if (kind === "trial" || kind === "trial_ending") {
+          setGate("locked");
+        } else {
+          setGate("open");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setGate("locked");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [jwt]);
+
+  useEffect(() => {
+    if (gate === "open") void load();
+  }, [gate, load]);
 
   async function copyLink() {
     if (!data) return;
@@ -66,6 +111,28 @@ function Body({ jwt }: { jwt: string }) {
     } else {
       void copyLink();
     }
+  }
+
+  if (gate === "loading") {
+    return (
+      <div className="space-y-4 animate-pulse">
+        <div className="h-24 rounded-2xl bg-tg-bg-secondary" />
+        <div className="h-12 rounded-2xl bg-tg-bg-secondary" />
+      </div>
+    );
+  }
+
+  if (gate === "locked") {
+    return (
+      <div className="rounded-2xl bg-tg-bg-section p-5 space-y-2">
+        <p className="text-xs uppercase tracking-widest text-tg-text-hint">
+          Рефералы недоступны
+        </p>
+        <p className="text-sm text-tg-text-subtitle">
+          Реферальная программа откроется, когда закончится пробный период.
+        </p>
+      </div>
+    );
   }
 
   if (!data) {

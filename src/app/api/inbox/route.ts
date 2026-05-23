@@ -47,6 +47,13 @@ interface InboxChat {
    * thread has moved on.
    */
   has_unanswered: boolean;
+  /**
+   * Admin-only signal: this student isn't linked to any teacher in
+   * `student_teachers`. Drives the "без тренера" badge + assign-teacher
+   * dialog in the admin inbox. Always `false` in a teacher's payload (they
+   * only see students they're already linked to).
+   */
+  has_no_teacher: boolean;
   claim:
     | {
         teacher_id: number;
@@ -92,6 +99,21 @@ export async function GET(req: NextRequest) {
   }
   if (studentIds.length === 0) {
     return Response.json({ chats: [] }, { headers: noStoreHeaders });
+  }
+
+  // For the admin oversight view, mark which students currently have no
+  // teacher in student_teachers — drives the inbox "без тренера" badge.
+  // For teachers, this is always false (their studentIds come from their
+  // own links). One query over the admin's student set; small N.
+  const studentsWithTeacherSet = new Set<number>();
+  if (user.isAdmin) {
+    const { data: linkRows } = await sb
+      .from("student_teachers")
+      .select("student_id")
+      .in("student_id", studentIds);
+    for (const row of linkRows ?? []) {
+      studentsWithTeacherSet.add(row.student_id);
+    }
   }
 
   // 2) Recent message slice across all my linked students.
@@ -208,6 +230,7 @@ export async function GET(req: NextRequest) {
         unread_count: unreadByStudent.get(sid) ?? 0,
         has_unanswered:
           last !== null && last.direction === "in" && last.status !== "answered",
+        has_no_teacher: user.isAdmin ? !studentsWithTeacherSet.has(sid) : false,
         claim: claim
           ? {
               teacher_id: claim.teacher_id,

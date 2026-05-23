@@ -3,6 +3,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { ru, formatDuration } from "@/lib/i18n";
 import { resolveDisplay } from "@/server/display";
 import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
+import { serverEnv } from "@/lib/env";
 
 // Used by the fan-out copy below — picks the user's display label per the
 // global names-vs-handles toggle. Resolved at the start of the fan-out so a
@@ -124,6 +125,60 @@ export async function fanOutToTeachers(messageId: number): Promise<void> {
   }
   if (rows.length) {
     await sb.from("notifications").insert(rows);
+  }
+}
+
+/**
+ * Fans out a DM to every admin when a student with no row in
+ * `student_teachers` sends a message. Mirrors `fanOutFeedbackToAdmins`
+ * in `src/server/feedback.ts`. The inline `web_app` button deep-links
+ * into the Mini App inbox with `?focus_student=<id>`, which the inbox
+ * page reads to auto-open the AssignTeacherDialog.
+ *
+ * Fail-soft per admin — one bad chat_id doesn't sink the batch.
+ */
+export async function fanOutUnassignedToAdmins(messageId: number): Promise<void> {
+  const sb = getServiceRoleClient();
+  const { data: msg } = await sb
+    .from("messages")
+    .select("id, kind, duration, student_id")
+    .eq("id", messageId)
+    .single();
+  if (!msg) return;
+
+  const anonMode = await getDisplayAnonymousHandlesEnabled();
+  const { data: student } = await sb
+    .from("users")
+    .select("tg_user_id, name, preferred_name, display_handle, display_emoji, avatar_file_id")
+    .eq("id", msg.student_id)
+    .single();
+  if (!student) return;
+  const studentLabel = handleFromDisplay(student, anonMode);
+
+  const { data: admins } = await sb
+    .from("users")
+    .select("tg_chat_id")
+    .eq("is_admin", true);
+  if (!admins?.length) return;
+
+  const url = `${serverEnv.APP_BASE_URL.replace(/\/$/, "")}/inbox?focus_student=${msg.student_id}`;
+  const kindLabel = msg.kind === "voice" ? "Голосовое" : "Круглое видео";
+  const text = ru.adminUnassignedPing(studentLabel, kindLabel);
+
+  const bot = getBot();
+  for (const admin of admins) {
+    try {
+      await bot.api.sendMessage(admin.tg_chat_id, text, {
+        reply_markup: {
+          inline_keyboard: [[{ text: "Назначить тренера", web_app: { url } }]],
+        },
+      });
+    } catch (e) {
+      console.warn("unassigned admin DM failed", {
+        chat_id: admin.tg_chat_id,
+        reason: (e as Error).message,
+      });
+    }
   }
 }
 

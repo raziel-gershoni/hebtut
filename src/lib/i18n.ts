@@ -13,6 +13,8 @@ export const ru = {
   pendingNotice: "Сообщение сохранено. Жди — администратор подключит тебя к тренеру.",
   noTeachers:
     "Сообщение принято, но за тобой пока не закреплён ни один тренер. Сообщи администратору.",
+  unassignedAck:
+    "Получили твоё сообщение. Сейчас подключим тренера, и он ответит.",
   overQuota: (remaining: string) =>
     `На сегодня осталось ${remaining}. Сократи запись или попробуй завтра.`,
   overQuotaExhausted: "Лимит на сегодня исчерпан. Попробуй завтра.",
@@ -178,6 +180,8 @@ export const ru = {
     `📩 Кому: ${studentName}. Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
   adminFeedbackPing: (userLabel: string, snippet: string) =>
     `💬 От ${userLabel}: «${snippet}». Открой админку, чтобы ответить.`,
+  adminUnassignedPing: (userLabel: string, kindLabel: string) =>
+    `📥 ${kindLabel} от ${userLabel} — ученик пока не закреплён ни за одним тренером. Назначь тренера, чтобы ответ пошёл.`,
   userFeedbackReplyPing:
     "💬 Новый ответ от админа. Открой обратную связь, чтобы прочитать и ответить.",
   teacherNotificationActionable: (studentName: string, kindLabel: string, durationLabel: string) =>

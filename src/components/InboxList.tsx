@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { Avatar } from "./Avatar";
 import { StudentPicker } from "./StudentPicker";
+import { AssignTeacherDialog } from "./AssignTeacherDialog";
 import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
 import { formatDuration } from "@/lib/i18n";
 import { bgFromHandle } from "@/lib/handle";
@@ -29,6 +30,10 @@ interface Chat {
   last_message: LastMessage | null;
   unread_count: number;
   has_unanswered: boolean;
+  // Admin-only flag — true when this student has no row in student_teachers.
+  // Teachers always see this as false (their inbox is filtered to their own
+  // linked students).
+  has_no_teacher: boolean;
   claim: {
     teacher_id: number;
     teacher_handle: string;
@@ -50,6 +55,7 @@ export function InboxList({
   const [chats, setChats] = useState<Chat[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [assigningStudentId, setAssigningStudentId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/inbox", {
@@ -68,6 +74,40 @@ export function InboxList({
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Honor the ?focus_student=<id> deep link from the admin DM fan-out
+  // (`fanOutUnassignedToAdmins` in src/server/notifications.ts). When the
+  // inbox has loaded and the matching chat is unassigned, auto-open the
+  // assignment dialog. Run once per `loaded` flip to avoid re-opening if
+  // the user manually closed it.
+  useEffect(() => {
+    if (!loaded || assigningStudentId != null) return;
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("focus_student");
+    if (!raw) return;
+    const id = Number(raw);
+    if (!Number.isFinite(id)) return;
+    const chat = chats.find((c) => c.student_id === id);
+    if (chat?.has_no_teacher) setAssigningStudentId(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
+
+  function closeAssignDialog() {
+    setAssigningStudentId(null);
+    // Clear the query param so a tab-refresh doesn't re-open the dialog.
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("focus_student")) {
+        url.searchParams.delete("focus_student");
+        window.history.replaceState({}, "", url.toString());
+      }
+    }
+  }
+
+  async function onAssignSaved() {
+    closeAssignDialog();
+    await load();
+  }
 
   useRealtimeMessages(jwt, load);
 
@@ -100,12 +140,32 @@ export function InboxList({
       ) : (
         <ul className="space-y-1">
           {chats.map((c) => (
-            <ChatRow key={c.student_id} chat={c} jwt={jwt} myUserId={myUserId} />
+            <ChatRow
+              key={c.student_id}
+              chat={c}
+              jwt={jwt}
+              myUserId={myUserId}
+              onAssignClick={() => setAssigningStudentId(c.student_id)}
+            />
           ))}
         </ul>
       )}
 
       {pickerOpen && <StudentPicker jwt={jwt} onClose={() => setPickerOpen(false)} />}
+      {assigningStudentId != null && (() => {
+        const target = chats.find((c) => c.student_id === assigningStudentId);
+        if (!target) return null;
+        return (
+          <AssignTeacherDialog
+            open
+            jwt={jwt}
+            studentId={target.student_id}
+            studentLabel={target.student_handle}
+            onClose={closeAssignDialog}
+            onSaved={() => void onAssignSaved()}
+          />
+        );
+      })()}
     </>
   );
 }
@@ -135,10 +195,12 @@ function ChatRow({
   chat,
   jwt,
   myUserId,
+  onAssignClick,
 }: {
   chat: Chat;
   jwt: string;
   myUserId: number;
+  onAssignClick: () => void;
 }) {
   const name = chat.student_handle;
   const time = chat.last_message ? formatChatTimestamp(chat.last_message.created_at) : "";
@@ -183,6 +245,19 @@ function ChatRow({
         <div className="min-w-0 flex-1 leading-tight">
           <div className="flex items-baseline gap-2">
             <span className="font-medium tracking-tight truncate">{name}</span>
+            {chat.has_no_teacher && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onAssignClick();
+                }}
+                className="shrink-0 inline-flex items-center h-5 px-2 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-semibold uppercase tracking-wide transition-opacity active:opacity-70"
+              >
+                без тренера
+              </button>
+            )}
             {time && (
               <span className="ml-auto shrink-0 text-[11px] tabular-nums text-tg-text-hint">
                 {time}
