@@ -42,7 +42,8 @@ export type OnboardingTimerKind =
   | "meta_explainer"
   | "day2_conversion"
   | "survey"
-  | "churn_followup";
+  | "churn_followup"
+  | "video_sequence_next";
 
 export interface Database {
   public: {
@@ -385,6 +386,7 @@ export interface Database {
           fired_at: string | null;
           cancelled_at: string | null;
           created_at: string;
+          meta: Json | null;
         };
         Insert: {
           student_id: number;
@@ -393,6 +395,7 @@ export interface Database {
           fired_at?: string | null;
           cancelled_at?: string | null;
           created_at?: string;
+          meta?: Json | null;
         };
         Update: Partial<Database["public"]["Tables"]["onboarding_timers"]["Insert"]>;
         Relationships: [];
@@ -539,7 +542,9 @@ export interface Database {
       };
       onboarding_videos: {
         Row: {
+          id: number;
           step: OnboardingVideoStep;
+          position: number;
           storage_path: string;
           mime_type: string;
           original_filename: string;
@@ -551,7 +556,9 @@ export interface Database {
           uploaded_at: string;
         };
         Insert: {
+          id?: number;
           step: OnboardingVideoStep;
+          position?: number;
           storage_path: string;
           mime_type: string;
           original_filename: string;
@@ -574,6 +581,10 @@ export interface Database {
       };
       delete_user_cascade: {
         Args: { target_id: number };
+        Returns: void;
+      };
+      swap_onboarding_video_positions: {
+        Args: { id_a: number; id_b: number };
         Returns: void;
       };
     };

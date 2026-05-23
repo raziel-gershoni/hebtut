@@ -6,9 +6,12 @@ import { getBot } from "@/lib/tg";
 import { ru } from "@/lib/i18n";
 import { recordAudit } from "@/server/audit";
 import { serverEnv } from "@/lib/env";
-import type { OnboardingState, OnboardingTimerKind } from "@/types/database";
+import type { Json, OnboardingState, OnboardingTimerKind } from "@/types/database";
 import type { InlineKeyboardButton } from "grammy/types";
-import { sendOnboardingVideoOrFallback } from "@/server/onboarding-videos";
+import {
+  fallbackForStep,
+  sendOnboardingVideoSequence,
+} from "@/server/onboarding-videos";
 
 /* -------------------------------------------------------------------------
  * Pure helpers — easy to unit-test, no side effects.
@@ -92,12 +95,14 @@ export async function scheduleTimer(
   studentId: number,
   kind: OnboardingTimerKind,
   dueAt: Date,
+  meta: Json | null = null,
 ): Promise<void> {
   const sb = getServiceRoleClient();
   // Upsert: rescheduling an unfired timer overwrites due_at + clears the
-  // soft-cancel flag. A timer that's already fired stays fired (we don't
-  // re-arm a delivered nudge automatically — the caller would advance state
-  // first, which usually changes which timer is next anyway).
+  // soft-cancel flag. A previously-fired timer of the same kind is also
+  // re-armed here — the upsert resets `fired_at` to null and the cron's
+  // mark-fired-before-reschedule ordering (in /api/cron/onboarding) is
+  // what keeps self-rearming kinds like video_sequence_next sane.
   await sb.from("onboarding_timers").upsert(
     {
       student_id: studentId,
@@ -105,6 +110,7 @@ export async function scheduleTimer(
       due_at: dueAt.toISOString(),
       fired_at: null,
       cancelled_at: null,
+      meta,
     },
     { onConflict: "student_id,kind" },
   );
@@ -191,19 +197,11 @@ export async function sendStep1Welcome(studentId: number): Promise<void> {
 }
 
 export async function sendStep2Video1(studentId: number): Promise<void> {
-  await sendOnboardingVideoOrFallback(studentId, "video1", {
-    text: ru.onbVideo1Placeholder,
-    buttons: [[{ text: ru.onbStep2Button, callback_data: "onb:continue" }]],
-    auditStep: "step2_video1",
-  });
+  await sendOnboardingVideoSequence(studentId, "video1", fallbackForStep("video1"));
 }
 
 export async function sendStep3Video2(studentId: number): Promise<void> {
-  await sendOnboardingVideoOrFallback(studentId, "video2", {
-    text: ru.onbVideo2Placeholder,
-    buttons: [[{ text: ru.onbStep3Button, callback_data: "onb:next" }]],
-    auditStep: "step3_video2",
-  });
+  await sendOnboardingVideoSequence(studentId, "video2", fallbackForStep("video2"));
 }
 
 export async function sendStep4CtaRecord(studentId: number): Promise<void> {
@@ -303,11 +301,7 @@ export async function sendStep12_2LaterAck(studentId: number): Promise<void> {
 }
 
 export async function sendStep12_3Video3(studentId: number): Promise<void> {
-  await sendOnboardingVideoOrFallback(studentId, "video3", {
-    text: ru.onbVideo3Placeholder,
-    buttons: [[{ text: ru.onbVideo3Button, url: feedbackUrl() }]],
-    auditStep: "step12_3_video3",
-  });
+  await sendOnboardingVideoSequence(studentId, "video3", fallbackForStep("video3"));
 }
 
 /**
