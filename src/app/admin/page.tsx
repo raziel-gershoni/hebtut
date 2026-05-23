@@ -92,26 +92,26 @@ function AdminBody({ jwt }: { jwt: string }) {
           → Журнал действий
         </Link>
       </div>
-      <CollapsibleSection title="Пользователи" defaultOpen>
+      <CollapsibleSection id="users" title="Пользователи" defaultOpen>
         <AdminUsersTable jwt={jwt} users={users} loaded={loaded} refetch={refetch} />
       </CollapsibleSection>
-      <CollapsibleSection title="Настройки">
+      <CollapsibleSection id="connections" title="Связи">
+        <AdminConnectionsPanel jwt={jwt} users={users} links={links} refetch={refetch} />
+      </CollapsibleSection>
+      <CollapsibleSection id="settings" title="Настройки">
         <AdminSettingsPanel jwt={jwt} />
       </CollapsibleSection>
-      <CollapsibleSection title="Видео онбординга">
+      <CollapsibleSection id="onboarding-videos" title="Видео онбординга">
         <AdminOnboardingVideos jwt={jwt} />
       </CollapsibleSection>
-      <CollapsibleSection title="Теги медиа-библиотеки">
+      <CollapsibleSection id="tags" title="Теги медиа-библиотеки">
         <AdminTagsManager jwt={jwt} />
       </CollapsibleSection>
-      <CollapsibleSection title="Приглашения тренеров">
+      <CollapsibleSection id="invites" title="Приглашения тренеров">
         <TeacherInvites jwt={jwt} />
       </CollapsibleSection>
-      <CollapsibleSection title="Заблокированные">
+      <CollapsibleSection id="banned" title="Заблокированные">
         <BannedUsersPanel jwt={jwt} />
-      </CollapsibleSection>
-      <CollapsibleSection title="Связи">
-        <AdminConnectionsPanel jwt={jwt} users={users} links={links} refetch={refetch} />
       </CollapsibleSection>
       <AdminVersionFooter />
     </>
