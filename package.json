@@ -7,7 +7,7 @@
     "predev": "node scripts/fetch-ffmpeg.mjs",
     "build": "next build",
     "prebuild": "node scripts/fetch-ffmpeg.mjs",
-    "vercel-build": "node scripts/fetch-ffmpeg.mjs && node scripts/db-push.mjs && node scripts/sync-qstash.mjs && node scripts/sync-tg-webhook.mjs && next build",
+    "vercel-build": "node scripts/fetch-ffmpeg.mjs && node scripts/db-push.mjs && node scripts/sync-qstash.mjs && node scripts/sync-tg-webhook.mjs && next build && node scripts/notify-deploy.mjs",
     "db:push": "supabase db push --db-url \"$SUPABASE_DB_URL\" --include-all",
     "start": "next start",
     "lint": "next lint",
