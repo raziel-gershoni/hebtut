@@ -12,36 +12,39 @@ export default function Home() {
     <AppShell>
       {({ jwt, role, isAdmin, name }) => (
         <div className="space-y-6">
-          <section className="rounded-2xl bg-tg-bg-section p-5">
-            <div className="flex items-center gap-2">
-              <p className="text-xs uppercase tracking-widest text-tg-text-hint">
-                {ROLE_LABEL[role] ?? role}
-              </p>
-              {isAdmin && (
-                <span className="text-[10px] font-semibold tracking-widest px-1.5 py-0.5 rounded-full bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-400">
-                  {ru.student.home.adminTag}
-                </span>
+          {/* Greeting card. Students don't need it: their SubscriberSummary
+              below already shows the name as a heading and a context-aware
+              main line, and the bot's own /start reply covers the
+              "record-a-voice" hint. Without this guard the home stacked
+              two text panels with the name duplicated — see spec table
+              at https://docs.google.com/document/d/1eKf0xxZh5tOyI2XUmYWHX9292N4FnEeCtq9jueVYcDs */}
+          {role !== "student" && (
+            <section className="rounded-2xl bg-tg-bg-section p-5">
+              <div className="flex items-center gap-2">
+                <p className="text-xs uppercase tracking-widest text-tg-text-hint">
+                  {ROLE_LABEL[role] ?? role}
+                </p>
+                {isAdmin && (
+                  <span className="text-[10px] font-semibold tracking-widest px-1.5 py-0.5 rounded-full bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-400">
+                    {ru.student.home.adminTag}
+                  </span>
+                )}
+              </div>
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+                {ru.student.home.greeting(name ?? ru.student.home.fallbackName)}
+              </h1>
+              {role === "pending" && !isAdmin && (
+                <p className="mt-3 text-sm text-tg-text-subtitle">
+                  {ru.student.home.pendingHint}
+                </p>
               )}
-            </div>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-              {ru.student.home.greeting(name ?? ru.student.home.fallbackName)}
-            </h1>
-            {role === "pending" && !isAdmin && (
-              <p className="mt-3 text-sm text-tg-text-subtitle">
-                {ru.student.home.pendingHint}
-              </p>
-            )}
-            {role === "student" && (
-              <p className="mt-3 text-sm text-tg-text-subtitle">
-                {ru.student.home.studentHint}
-              </p>
-            )}
-            {isAdmin && role !== "teacher" && (
-              <p className="mt-3 text-sm text-tg-text-subtitle">
-                {ru.student.home.adminHint}
-              </p>
-            )}
-          </section>
+              {isAdmin && role !== "teacher" && (
+                <p className="mt-3 text-sm text-tg-text-subtitle">
+                  {ru.student.home.adminHint}
+                </p>
+              )}
+            </section>
+          )}
 
           {role === "student" && (
             <>

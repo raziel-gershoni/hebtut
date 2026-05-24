@@ -28,8 +28,8 @@ const summary = {
   strip: {
     trial: (n: number, word: string, verb: string) =>
       `Пробный период • ${n} ${word} ${verb}`,
-    trialEndsTodayShort: "Пробный период заканчивается сегодня",
-    trialEndsTomorrowShort: "Пробный период заканчивается завтра",
+    trialEndsTodayShort: "Пробный период • заканчивается сегодня",
+    trialEndsTomorrowShort: "Пробный период • заканчивается завтра",
     renewingToday: "Продление сегодня",
     renewingInDays: (n: number, word: string) => `Продление через ${n} ${word}`,
     trialExpired: "Пробный период закончился",
@@ -133,7 +133,6 @@ const home = {
   greeting: (name: string) => `Привет, ${name}!`,
   fallbackName: "пользователь",
   pendingHint: "Жди — администратор подключит тебя в ближайшее время.",
-  studentHint: "Запиши голосовое или круглое видео в чат с ботом — тренер ответит вам.",
   adminHint:
     "Ты администратор. Если хочешь ещё и принимать ответы — назначь себе роль «teacher» в админке.",
   inboxTitle: "Входящие",

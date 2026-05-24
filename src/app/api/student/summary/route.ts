@@ -67,7 +67,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   const sb = getServiceRoleClient();
   const { data: row } = await sb
     .from("users")
-    .select("name, tz")
+    .select("name, preferred_name, tz")
     .eq("id", user.id)
     .single();
   const tz = row?.tz ?? serverEnv.DEFAULT_TZ;
@@ -91,7 +91,10 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   return Response.json(
     {
-      name: row?.name ?? ru.bot.labels.studentFallback,
+      // Same precedence as the admin table + bot personalization: prefer
+      // the manually-set preferred_name (also written by onboarding step
+      // 3.5), fall back to the TG-synced name.
+      name: row?.preferred_name ?? row?.name ?? ru.bot.labels.studentFallback,
       status: toApiStatus(sub.derived),
       practice: {
         used_seconds: used,
