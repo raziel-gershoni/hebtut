@@ -4,6 +4,7 @@ import { Avatar } from "./Avatar";
 import { type AdminUser } from "./AdminUsersTable";
 import { SearchableUserChecklist } from "./SearchableUserChecklist";
 import { Spinner } from "./Spinner";
+import { pluralLink, ru } from "@/lib/i18n";
 
 export interface Connection {
   student_id: number;
@@ -199,24 +200,26 @@ export function AdminConnectionsPanel({
     return Array.from(map.entries()).map(([id, group]) => ({ id, ...group }));
   }, [filteredLinks, mode]);
 
-  const secondaryNoun = mode === "student" ? "преп." : "уч.";
+  const secondaryNoun = mode === "student"
+    ? ru.admin.connections.secondaryNounTeacher
+    : ru.admin.connections.secondaryNounStudent;
 
   const buttonDisabled = busy || preview.toCreate.length === 0;
   const buttonLabel = (() => {
     if (busy) return null;
     if (selectedStudents.size === 0 || selectedTeachers.size === 0) {
-      return "Выбери учеников и тренеров";
+      return ru.admin.connections.buttonChooseBoth;
     }
     if (preview.toCreate.length === 0 && preview.alreadyExist.length > 0) {
-      return "Все выбранные пары уже связаны";
+      return ru.admin.connections.buttonAllExist;
     }
-    return `Связать (${preview.toCreate.length} ${pluralLink(preview.toCreate.length)})`;
+    return ru.admin.connections.buttonPair(preview.toCreate.length, pluralLink(preview.toCreate.length));
   })();
 
   return (
     <section className="mt-8">
       <header className="flex items-baseline justify-between gap-3 mb-3">
-        <h2 className="text-lg font-semibold tracking-tight">Связи</h2>
+        <h2 className="text-lg font-semibold tracking-tight">{ru.admin.connections.sectionTitle}</h2>
         <span className="text-xs text-tg-text-hint tabular-nums">{links.length}</span>
       </header>
 
@@ -228,16 +231,16 @@ export function AdminConnectionsPanel({
             users={students}
             selected={selectedStudents}
             onToggle={toggleStudent}
-            label="Ученики"
-            emptyText="Учеников нет"
+            label={ru.admin.connections.studentsLabel}
+            emptyText={ru.admin.connections.studentsEmpty}
           />
           <SearchableUserChecklist
             jwt={jwt}
             users={teachers}
             selected={selectedTeachers}
             onToggle={toggleTeacher}
-            label="Тренеры"
-            emptyText="Тренеров нет"
+            label={ru.admin.connections.teachersLabel}
+            emptyText={ru.admin.connections.teachersEmpty}
           />
         </div>
 
@@ -246,7 +249,7 @@ export function AdminConnectionsPanel({
           <div className="rounded-2xl bg-tg-bg-secondary/40 p-3 space-y-2 text-xs">
             {selectedStudents.size > 0 && (
               <ChipRow
-                label="Ученики"
+                label={ru.admin.connections.studentsLabel}
                 ids={Array.from(selectedStudents)}
                 usersById={usersById}
                 onRemove={toggleStudent}
@@ -254,7 +257,7 @@ export function AdminConnectionsPanel({
             )}
             {selectedTeachers.size > 0 && (
               <ChipRow
-                label="Тренеры"
+                label={ru.admin.connections.teachersLabel}
                 ids={Array.from(selectedTeachers)}
                 usersById={usersById}
                 onRemove={toggleTeacher}
@@ -262,7 +265,7 @@ export function AdminConnectionsPanel({
             )}
             {(selectedStudents.size > 0 && selectedTeachers.size > 0) && (
               <p className="text-[11px] text-tg-text-hint pt-1">
-                Будет создано:{" "}
+                {ru.admin.connections.willCreate}{" "}
                 <span className="font-medium text-tg-text tabular-nums">
                   {preview.toCreate.length}
                 </span>{" "}
@@ -270,9 +273,9 @@ export function AdminConnectionsPanel({
                 {preview.alreadyExist.length > 0 && (
                   <span className="text-tg-text-hint">
                     {" "}
-                    ({preview.alreadyExist.length}{" "}
-                    {pluralLink(preview.alreadyExist.length)} уже{" "}
-                    {preview.alreadyExist.length === 1 ? "существует" : "существуют"})
+                    {preview.alreadyExist.length === 1
+                      ? ru.admin.connections.alreadyExistOne(preview.alreadyExist.length, pluralLink(preview.alreadyExist.length))
+                      : ru.admin.connections.alreadyExistMany(preview.alreadyExist.length, pluralLink(preview.alreadyExist.length))}
                   </span>
                 )}
               </p>
@@ -292,9 +295,9 @@ export function AdminConnectionsPanel({
 
         {recentResult && (
           <div className="rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 p-2 text-xs text-center font-medium">
-            Создано: {recentResult.created}
-            {recentResult.skipped > 0 && ` · пропущено: ${recentResult.skipped}`}
-            {recentResult.failed > 0 && ` · ошибок: ${recentResult.failed}`}
+            {ru.admin.connections.resultCreated(recentResult.created)}
+            {recentResult.skipped > 0 && ru.admin.connections.resultSkipped(recentResult.skipped)}
+            {recentResult.failed > 0 && ru.admin.connections.resultFailed(recentResult.failed)}
           </div>
         )}
       </div>
@@ -303,10 +306,10 @@ export function AdminConnectionsPanel({
       <div className="flex items-center gap-2 mb-3">
         <div className="inline-flex rounded-full bg-tg-bg-secondary p-0.5 text-xs font-medium">
           <ToggleButton active={mode === "student"} onClick={() => setMode("student")}>
-            По ученикам
+            {ru.admin.connections.byStudents}
           </ToggleButton>
           <ToggleButton active={mode === "teacher"} onClick={() => setMode("teacher")}>
-            По тренерам
+            {ru.admin.connections.byTeachers}
           </ToggleButton>
         </div>
       </div>
@@ -315,13 +318,13 @@ export function AdminConnectionsPanel({
         type="search"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
-        placeholder="Поиск по имени"
+        placeholder={ru.admin.connections.searchPlaceholder}
         className="w-full mb-3 h-10 px-3 rounded-xl bg-tg-bg-secondary text-tg-text placeholder:text-tg-text-hint outline-none focus:ring-2 focus:ring-tg-button/40"
       />
 
       {groups.length === 0 ? (
         <div className="rounded-2xl bg-tg-bg-section p-6 text-center text-sm text-tg-text-hint">
-          {links.length === 0 ? "Пока нет связей." : "Никого не нашлось."}
+          {links.length === 0 ? ru.admin.connections.noLinks : ru.admin.connections.noMatch}
         </div>
       ) : (
         <ul className="space-y-2">
@@ -353,7 +356,7 @@ export function AdminConnectionsPanel({
                         onClick={() => void handleUnlink(row.student_id, row.teacher_id)}
                         disabled={isUnlinking}
                         aria-busy={isUnlinking}
-                        aria-label="Удалить связь"
+                        aria-label={ru.admin.connections.unlinkLabel}
                         className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full text-tg-text-hint hover:text-tg-text-destructive transition-colors active:scale-90 disabled:opacity-60"
                       >
                         {isUnlinking ? <Spinner size={12} /> : "✕"}
@@ -388,7 +391,7 @@ function ChipRow({
       </span>
       {ids.map((id) => {
         const u = usersById.get(id);
-        const name = u?.name ?? `ID ${id}`;
+        const name = u?.name ?? ru.admin.connections.fallbackName(id);
         return (
           <button
             key={id}
@@ -425,14 +428,4 @@ function ToggleButton({
       {children}
     </button>
   );
-}
-
-function pluralLink(n: number): string {
-  // Russian: 1 связь / 2-4 связи / 5+ связей. n%100 in [11..14] → связей.
-  const n100 = n % 100;
-  const n10 = n % 10;
-  if (n100 >= 11 && n100 <= 14) return "связей";
-  if (n10 === 1) return "связь";
-  if (n10 >= 2 && n10 <= 4) return "связи";
-  return "связей";
 }

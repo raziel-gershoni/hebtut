@@ -43,7 +43,7 @@ export async function handleStart(ctx: Context): Promise<void> {
 
   if (existing) {
     if (existing.status === "suspended") {
-      await ctx.reply(ru.suspendedNotice);
+      await ctx.reply(ru.bot.access.suspendedNotice);
       return;
     }
     await sb
@@ -67,7 +67,7 @@ export async function handleStart(ctx: Context): Promise<void> {
         return;
       }
       // Token invalid or already consumed — fall through to standard greeting.
-      await ctx.reply(ru.inviteRevokedOrUsed);
+      await ctx.reply(ru.bot.invites.revokedOrUsed);
     }
 
     await welcomeExistingUser(ctx, existing);
@@ -98,7 +98,7 @@ export async function handleStart(ctx: Context): Promise<void> {
     }
     // Race lost — invite consumed between validity check and insert. Tell
     // the user, then fall through and register them as a student.
-    await ctx.reply(ru.inviteRevokedOrUsed);
+    await ctx.reply(ru.bot.invites.revokedOrUsed);
   }
 
   const student = await createStudent({
@@ -156,18 +156,18 @@ async function welcomeNewStudent(ctx: Context, studentId: number | null): Promis
   // and the first-voice CTA. createStudent() may have been silently raced;
   // if no row, fall back to the legacy greeting so the user isn't stranded.
   if (studentId == null) {
-    await ctx.reply(ru.greetingStudentNew);
+    await ctx.reply(ru.bot.greetings.studentNew);
     return;
   }
   await sendStep1Welcome(studentId);
 }
 
 async function welcomeNewTeacher(ctx: Context): Promise<void> {
-  await ctx.reply(ru.inviteConsumedTeacher);
+  await ctx.reply(ru.bot.invites.consumedTeacher);
 }
 
 async function welcomeUpgradedTeacher(ctx: Context): Promise<void> {
-  await ctx.reply(ru.upgradedToTeacher);
+  await ctx.reply(ru.bot.invites.upgradedToTeacher);
 }
 
 async function welcomeExistingUser(
@@ -175,7 +175,7 @@ async function welcomeExistingUser(
   user: { role: string; is_admin: boolean; id: number; tz: string },
 ): Promise<void> {
   if (user.is_admin || user.role === "teacher") {
-    await ctx.reply(ru.greetingTeacher);
+    await ctx.reply(ru.bot.greetings.teacher);
     return;
   }
   if (user.role === "student") {
@@ -194,13 +194,13 @@ async function welcomeExistingUser(
     }
     if (await getQuotaChatNotificationsEnabled()) {
       const remaining = await getRemainingForToday(user.id, user.tz);
-      await ctx.reply(ru.greetingStudent(formatDuration(remaining)));
+      await ctx.reply(ru.bot.greetings.student(formatDuration(remaining)));
     } else {
-      await ctx.reply(ru.greetingStudentNeutral);
+      await ctx.reply(ru.bot.greetings.studentNeutral);
     }
     return;
   }
   // Legacy 'pending' rows (pre-rework). Should be empty after the migration's
   // backfill, but keep a sane fallback.
-  await ctx.reply(ru.greetingRegistered);
+  await ctx.reply(ru.bot.greetings.registered);
 }

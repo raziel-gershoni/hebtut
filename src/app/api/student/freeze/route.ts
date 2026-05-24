@@ -167,7 +167,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   // DM the user — preserves the spec's wording so they have a chat-side record.
   if (userRow?.tg_chat_id) {
     try {
-      await getBot().api.sendMessage(userRow.tg_chat_id, ru.freezeActivated(days));
+      await getBot().api.sendMessage(userRow.tg_chat_id, ru.bot.subscription.freezeActivated(days));
     } catch (e) {
       console.warn("freeze DM failed", { reason: (e as Error).message });
     }

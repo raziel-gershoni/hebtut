@@ -72,7 +72,7 @@ export async function handleSuccessfulPayment(ctx: Context): Promise<void> {
     month: "2-digit",
   });
   try {
-    await ctx.reply(ru.paymentSucceeded(endDate));
+    await ctx.reply(ru.bot.subscription.paymentSucceeded(endDate));
   } catch (e) {
     console.warn("payment confirm DM failed", { reason: (e as Error).message });
   }
@@ -95,7 +95,7 @@ export async function handleSuccessfulPayment(ctx: Context): Promise<void> {
         try {
           await ctx.api.sendMessage(
             refUser.tg_chat_id,
-            ru.referralCreditApplied(result.referrerCreditedDays),
+            ru.bot.subscription.referralCreditApplied(result.referrerCreditedDays),
           );
         } catch (e) {
           console.warn("referrer DM failed", { reason: (e as Error).message });

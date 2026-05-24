@@ -83,7 +83,7 @@ export async function handleOnboardingCallback(ctx: Context): Promise<void> {
     // does nothing" reports without needing server logs.
     await ctx
       .answerCallbackQuery({
-        text: `${ru.onbStaleButton} (состояние: ${state})`,
+        text: `${ru.bot.onboarding.staleButton} (состояние: ${state})`,
         show_alert: true,
       })
       .catch(() => {});
@@ -204,11 +204,11 @@ export async function handleOnboardingNameInput(ctx: Context): Promise<boolean> 
   // regardless of validation outcome. Bot replies guide them to a valid name.
   const rawName = msg.text.trim();
   if (rawName.length === 0) {
-    await ctx.reply(ru.onbNameTooShort);
+    await ctx.reply(ru.bot.onboarding.nameTooShort);
     return true;
   }
   if (rawName.length > MAX_NAME_LENGTH) {
-    await ctx.reply(ru.onbNameTooLong);
+    await ctx.reply(ru.bot.onboarding.nameTooLong);
     return true;
   }
   // Single-line: TG text inputs usually don't include newlines, but a paste
@@ -241,7 +241,7 @@ export async function handleOnboardingNameInput(ctx: Context): Promise<boolean> 
 
   // Brief acknowledgment + the record-CTA in two messages so the personal
   // greeting doesn't compete with the action.
-  await ctx.reply(ru.onbNameThanks(name));
+  await ctx.reply(ru.bot.onboarding.nameThanks(name));
   await sendStep4CtaRecord(user.id);
   return true;
 }

@@ -99,8 +99,8 @@ export async function fanOutToTeachers(messageId: number): Promise<void> {
   const bot = getBot();
   const kindLabel = msg.kind === "voice" ? "голосовое" : "круглое видео";
   const durationLabel = formatDuration(msg.duration);
-  const actionable = ru.teacherNotificationActionable(studentHandle, kindLabel, durationLabel);
-  const taken = (name: string) => ru.teacherNotificationTaken(name, studentHandle);
+  const actionable = ru.bot.notifications.teacherNotificationActionable(studentHandle, kindLabel, durationLabel);
+  const taken = (name: string) => ru.bot.notifications.teacherNotificationTaken(name, studentHandle);
 
   const rows: {
     message_id: number;
@@ -163,7 +163,7 @@ export async function fanOutUnassignedToAdmins(messageId: number): Promise<void>
 
   const url = `${serverEnv.APP_BASE_URL.replace(/\/$/, "")}/inbox?focus_student=${msg.student_id}`;
   const kindLabel = msg.kind === "voice" ? "Голосовое" : "Круглое видео";
-  const text = ru.adminUnassignedPing(studentLabel, kindLabel);
+  const text = ru.bot.notifications.adminUnassignedPing(studentLabel, kindLabel);
 
   const bot = getBot();
   for (const admin of admins) {

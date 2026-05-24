@@ -46,12 +46,12 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
       display_emoji: h.emoji,
       role: "student",
     });
-    await ctx.reply(ru.greetingStudentNew);
+    await ctx.reply(ru.bot.greetings.studentNew);
     return true;
   }
 
   if (user.status === "suspended") {
-    await ctx.reply(ru.suspendedNotice);
+    await ctx.reply(ru.bot.access.suspendedNotice);
     return true;
   }
 
@@ -76,7 +76,7 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
       status: "orphaned",
       tg_message_id_in_student_chat: msg.message_id,
     });
-    await ctx.reply(ru.pendingNotice);
+    await ctx.reply(ru.bot.access.pendingNotice);
     return true;
   }
 
@@ -97,7 +97,7 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
           day: "2-digit",
           month: "2-digit",
         });
-        await ctx.reply(ru.frozenNotice(until));
+        await ctx.reply(ru.bot.subscription.frozenNotice(until));
       } else {
         // The button label + URL adapt to the billing mode. With Stars on,
         // the deep-link opens the Mini App pay surface (`?startapp=pay`).
@@ -107,14 +107,14 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
         const starsOn = await getBillingStarsEnabled();
         const button = starsOn
           ? {
-              text: ru.lockedTemplateButton,
+              text: ru.bot.locked.templateButton,
               url: `https://t.me/${serverEnv.TELEGRAM_BOT_USERNAME}?startapp=pay`,
             }
           : {
-              text: ru.manualBillingButton,
+              text: ru.bot.locked.manualBillingButton,
               url: `https://t.me/${serverEnv.TELEGRAM_BOT_USERNAME}?startapp=feedback`,
             };
-        await ctx.reply(ru.lockedTemplateText, {
+        await ctx.reply(ru.bot.locked.templateText, {
           reply_markup: { inline_keyboard: [[button]] },
         });
       }
@@ -177,11 +177,11 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
     if (quotaChat) {
       await ctx.reply(
         decision.remainingIncludingGrace > 0
-          ? ru.overQuota(formatDuration(decision.remainingIncludingGrace))
-          : ru.overQuotaExhausted,
+          ? ru.bot.quota.overQuota(formatDuration(decision.remainingIncludingGrace))
+          : ru.bot.quota.overQuotaExhausted,
       );
     } else {
-      await ctx.reply(ru.quotaRejectedNeutral);
+      await ctx.reply(ru.bot.quota.rejectedNeutral);
     }
     return true;
   }
@@ -211,7 +211,7 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
     .select("id")
     .single();
   if (error || !inserted) {
-    await ctx.reply(ru.unknownInput);
+    await ctx.reply(ru.bot.access.unknownInput);
     return true;
   }
 
@@ -237,18 +237,18 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
   if (hasTeachers) {
     let reply: string;
     if (!quotaChat) {
-      reply = ru.acceptedStudentNeutral;
+      reply = ru.bot.quota.acceptedNeutral;
     } else if (decision.tomorrowDebit > 0) {
-      reply = ru.acceptedStudentOverflow(formatDuration(decision.tomorrowDebit));
+      reply = ru.bot.quota.acceptedOverflow(formatDuration(decision.tomorrowDebit));
     } else if (decision.newRemainingToday > 0 && decision.newRemainingToday <= 60) {
-      reply = ru.acceptedStudentLow(formatDuration(decision.newRemainingToday));
+      reply = ru.bot.quota.acceptedLow(formatDuration(decision.newRemainingToday));
     } else {
-      reply = ru.acceptedStudent(formatDuration(decision.newRemainingToday));
+      reply = ru.bot.quota.accepted(formatDuration(decision.newRemainingToday));
     }
     await ctx.reply(reply);
     await fanOutToTeachers(inserted.id);
   } else {
-    await ctx.reply(ru.unassignedAck);
+    await ctx.reply(ru.bot.access.unassignedAck);
     await fanOutUnassignedToAdmins(inserted.id);
   }
 

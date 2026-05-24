@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Spinner } from "./Spinner";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { ru } from "@/lib/i18n";
 
 interface TagRow {
   id: number;
@@ -61,11 +62,11 @@ export function AdminTagsManager({ jwt }: Props) {
     setBusy(false);
     if (r.status === 409) {
       const d = (await r.json().catch(() => ({}))) as { tag?: { name?: string } };
-      setError(`Уже существует: ${d.tag?.name ?? trimmed}`);
+      setError(ru.admin.tags.alreadyExists(d.tag?.name ?? trimmed));
       return;
     }
     if (!r.ok) {
-      setError("не удалось добавить");
+      setError(ru.admin.tags.addFailed);
       return;
     }
     setName("");
@@ -82,7 +83,7 @@ export function AdminTagsManager({ jwt }: Props) {
       headers: { Authorization: `Bearer ${jwt}` },
     });
     if (!r.ok) {
-      setError("не удалось удалить");
+      setError(ru.admin.tags.deleteFailed);
       return;
     }
     await load();
@@ -90,14 +91,14 @@ export function AdminTagsManager({ jwt }: Props) {
 
   return (
     <section className="mb-4 rounded-2xl bg-tg-bg-section p-4 space-y-3">
-      <h2 className="text-lg font-semibold tracking-tight">Теги медиа-библиотеки</h2>
+      <h2 className="text-lg font-semibold tracking-tight">{ru.admin.tags.sectionTitle}</h2>
       <div className="flex gap-2">
         <input
           type="text"
           value={name}
           maxLength={40}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Новый тег"
+          placeholder={ru.admin.tags.newTagPlaceholder}
           className="flex-1 h-10 px-3 rounded-xl bg-tg-bg-secondary text-tg-text outline-none focus:ring-2 focus:ring-tg-button/40"
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -113,7 +114,7 @@ export function AdminTagsManager({ jwt }: Props) {
           aria-busy={busy}
           className="h-10 px-4 rounded-full bg-tg-button text-tg-button-text text-sm font-medium transition-transform active:scale-95 disabled:opacity-50 inline-flex items-center justify-center min-w-[5rem]"
         >
-          {busy ? <Spinner /> : "Добавить"}
+          {busy ? <Spinner /> : ru.admin.tags.addButton}
         </button>
       </div>
       {error && <div className="text-xs text-tg-text-destructive">{error}</div>}
@@ -121,7 +122,7 @@ export function AdminTagsManager({ jwt }: Props) {
       {tags === null ? (
         <div className="py-4 text-center"><Spinner /></div>
       ) : tags.length === 0 ? (
-        <div className="text-xs text-tg-text-hint">Тегов пока нет.</div>
+        <div className="text-xs text-tg-text-hint">{ru.admin.tags.empty}</div>
       ) : (
         <ul className="divide-y divide-tg-text-hint/10">
           {tags.map((t) => (
@@ -132,7 +133,7 @@ export function AdminTagsManager({ jwt }: Props) {
               <div className="min-w-0">
                 <div className="text-sm font-medium text-tg-text truncate">{t.name}</div>
                 <div className="text-[11px] text-tg-text-hint">
-                  {t.usage_count > 0 ? `${t.usage_count} материалов` : "не используется"}
+                  {t.usage_count > 0 ? ru.admin.tags.usageCount(t.usage_count) : ru.admin.tags.notUsed}
                 </div>
               </div>
               <button
@@ -140,7 +141,7 @@ export function AdminTagsManager({ jwt }: Props) {
                 onClick={() => setPendingDelete(t)}
                 className="text-xs text-tg-text-destructive font-medium"
               >
-                Удалить
+                {ru.admin.tags.deleteButton}
               </button>
             </li>
           ))}
@@ -149,11 +150,11 @@ export function AdminTagsManager({ jwt }: Props) {
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title={pendingDelete ? `Удалить тег «${pendingDelete.name}»?` : ""}
+        title={pendingDelete ? ru.admin.tags.deleteConfirmTitle(pendingDelete.name) : ""}
         body={
           pendingDelete && pendingDelete.usage_count > 0
-            ? `Тег будет снят с ${pendingDelete.usage_count} материалов.`
-            : "Этот тег пока ни к чему не привязан."
+            ? ru.admin.tags.deleteConfirmBody(pendingDelete.usage_count)
+            : ru.admin.tags.deleteConfirmBodyEmpty
         }
         onCancel={() => setPendingDelete(null)}
         onConfirm={performDelete}

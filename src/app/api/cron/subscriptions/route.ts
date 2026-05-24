@@ -159,7 +159,7 @@ async function handler(req: NextRequest): Promise<Response> {
           userId: row.user_id,
           plan: "monthly",
         });
-        button = { text: ru.lockedTemplateButton, url: link.url };
+        button = { text: ru.bot.locked.templateButton, url: link.url };
       } catch (e) {
         console.warn("renewal invoice creation failed", {
           user_id: row.user_id,
@@ -169,18 +169,18 @@ async function handler(req: NextRequest): Promise<Response> {
       }
     } else {
       button = {
-        text: ru.manualBillingButton,
+        text: ru.bot.locked.manualBillingButton,
         url: `https://t.me/${serverEnv.TELEGRAM_BOT_USERNAME}?startapp=feedback`,
       };
     }
 
     const text = dayOf
       ? row.status === "trial"
-        ? ru.trialEndsToday
-        : ru.subscriptionEndsToday
+        ? ru.bot.subscription.trialEndsToday
+        : ru.bot.subscription.endsToday
       : row.status === "trial"
-        ? ru.trialEndsTomorrow
-        : ru.subscriptionEndsTomorrow;
+        ? ru.bot.subscription.trialEndsTomorrow
+        : ru.bot.subscription.endsTomorrow;
 
     try {
       await getBot().api.sendMessage(user.tg_chat_id, text, {

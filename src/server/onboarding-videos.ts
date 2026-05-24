@@ -33,20 +33,20 @@ export function fallbackForStep(step: OnboardingVideoStep): OnboardingFallback {
   switch (step) {
     case "video1":
       return {
-        text: ru.onbVideo1Placeholder,
-        buttons: [[{ text: ru.onbStep2Button, callback_data: "onb:continue" }]],
+        text: ru.bot.onboarding.video1Placeholder,
+        buttons: [[{ text: ru.bot.onboarding.step2Button, callback_data: "onb:continue" }]],
         auditStep: "step2_video1",
       };
     case "video2":
       return {
-        text: ru.onbVideo2Placeholder,
-        buttons: [[{ text: ru.onbStep3Button, callback_data: "onb:next" }]],
+        text: ru.bot.onboarding.video2Placeholder,
+        buttons: [[{ text: ru.bot.onboarding.step3Button, callback_data: "onb:next" }]],
         auditStep: "step3_video2",
       };
     case "video3":
       return {
-        text: ru.onbVideo3Placeholder,
-        buttons: [[{ text: ru.onbVideo3Button, url: feedbackUrl() }]],
+        text: ru.bot.onboarding.video3Placeholder,
+        buttons: [[{ text: ru.bot.onboarding.video3Button, url: feedbackUrl() }]],
         auditStep: "step12_3_video3",
       };
   }

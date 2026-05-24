@@ -85,7 +85,7 @@ async function handler(req: NextRequest): Promise<Response> {
           await bot.api.editMessageText(
             p.tg_chat_id,
             p.tg_prompt_message_id,
-            ru.teacherNotificationExpired,
+            ru.bot.notifications.teacherNotificationExpired,
           );
         } catch (e) {
           console.warn("expiry editMessageText", e);
@@ -113,7 +113,7 @@ async function handler(req: NextRequest): Promise<Response> {
         const kindLabel = m.kind === "voice" ? "голосовое" : "круглое видео";
         await editAllNotificationsForMessage(
           m.id,
-          ru.teacherNotificationActionable(studentHandle, kindLabel, formatDuration(m.duration)),
+          ru.bot.notifications.teacherNotificationActionable(studentHandle, kindLabel, formatDuration(m.duration)),
         );
       }
     }

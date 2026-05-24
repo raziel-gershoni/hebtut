@@ -190,8 +190,8 @@ const feedbackUrl = (): string =>
 
 export async function sendStep1Welcome(studentId: number): Promise<void> {
   await sendOnboardingMessage(studentId, {
-    text: ru.onbStep1Welcome,
-    buttons: [[{ text: ru.onbStep1Button, callback_data: "onb:start" }]],
+    text: ru.bot.onboarding.step1Welcome,
+    buttons: [[{ text: ru.bot.onboarding.step1Button, callback_data: "onb:start" }]],
     step: "step1_welcome",
   });
 }
@@ -207,7 +207,7 @@ export async function sendStep3Video2(studentId: number): Promise<void> {
 export async function sendStep4CtaRecord(studentId: number): Promise<void> {
   // No button — Step 4 expects a voice/video recording, not a tap.
   await sendOnboardingMessage(studentId, {
-    text: ru.onbStep4CtaRecord,
+    text: ru.bot.onboarding.step4CtaRecord,
     step: "step4_cta_record",
   });
 }
@@ -219,42 +219,42 @@ export async function sendStep4CtaRecord(studentId: number): Promise<void> {
  */
 export async function sendStepNameAsk(studentId: number): Promise<void> {
   await sendOnboardingMessage(studentId, {
-    text: ru.onbNameAsk,
+    text: ru.bot.onboarding.nameAsk,
     step: "step3_5_name_ask",
   });
 }
 
 export async function sendStep5Nudge2h(studentId: number): Promise<void> {
   await sendOnboardingMessage(studentId, {
-    text: ru.onbStep5Nudge2h,
+    text: ru.bot.onboarding.step5Nudge2h,
     step: "step5_nudge_2h",
   });
 }
 
 export async function sendStep6Nudge24h(studentId: number): Promise<void> {
   await sendOnboardingMessage(studentId, {
-    text: ru.onbStep6Nudge24h,
+    text: ru.bot.onboarding.step6Nudge24h,
     step: "step6_nudge_24h",
   });
 }
 
 export async function sendStep8MetaExplainer(studentId: number): Promise<void> {
   await sendOnboardingMessage(studentId, {
-    text: ru.onbStep8MetaExplainer,
+    text: ru.bot.onboarding.step8MetaExplainer,
     step: "step8_meta_explainer",
   });
 }
 
 export async function sendStep9Day1LimitDone(studentId: number): Promise<void> {
   await sendOnboardingMessage(studentId, {
-    text: ru.onbStep9Day1LimitDone,
+    text: ru.bot.onboarding.step9Day1LimitDone,
     step: "step9_day1_limit_done",
   });
 }
 
 export async function sendStep10PauseNudge(studentId: number): Promise<void> {
   await sendOnboardingMessage(studentId, {
-    text: ru.onbStep10PauseNudge,
+    text: ru.bot.onboarding.step10PauseNudge,
     step: "step10_pause_nudge",
   });
 }
@@ -265,20 +265,20 @@ export async function sendStep11Day2Conversion(studentId: number): Promise<void>
   // when on, the in-app PayCTA handles the actual purchase. For a TG-DM
   // button, the cleanest is feedback for now (manual-billing era).
   await sendOnboardingMessage(studentId, {
-    text: ru.onbStep11Day2Conversion,
-    buttons: [[{ text: ru.onbStep11Button, url: feedbackUrl() }]],
+    text: ru.bot.onboarding.step11Day2Conversion,
+    buttons: [[{ text: ru.bot.onboarding.step11Button, url: feedbackUrl() }]],
     step: "step11_day2_conversion",
   });
 }
 
 export async function sendStep12Survey(studentId: number): Promise<void> {
   await sendOnboardingMessage(studentId, {
-    text: ru.onbStep12Survey,
+    text: ru.bot.onboarding.step12Survey,
     buttons: [
       [
-        { text: ru.onbSurveyYes, callback_data: "onb:survey:yes" },
-        { text: ru.onbSurveyLater, callback_data: "onb:survey:later" },
-        { text: ru.onbSurveyNo, callback_data: "onb:survey:no" },
+        { text: ru.bot.onboarding.surveyYes, callback_data: "onb:survey:yes" },
+        { text: ru.bot.onboarding.surveyLater, callback_data: "onb:survey:later" },
+        { text: ru.bot.onboarding.surveyNo, callback_data: "onb:survey:no" },
       ],
     ],
     step: "step12_survey",
@@ -287,15 +287,15 @@ export async function sendStep12Survey(studentId: number): Promise<void> {
 
 export async function sendStep12_1OpenAccess(studentId: number): Promise<void> {
   await sendOnboardingMessage(studentId, {
-    text: ru.onbStep12_1Yes,
-    buttons: [[{ text: ru.onbStep12_1Button, url: feedbackUrl() }]],
+    text: ru.bot.onboarding.step12_1Yes,
+    buttons: [[{ text: ru.bot.onboarding.step12_1Button, url: feedbackUrl() }]],
     step: "step12_1_open_access",
   });
 }
 
 export async function sendStep12_2LaterAck(studentId: number): Promise<void> {
   await sendOnboardingMessage(studentId, {
-    text: ru.onbStep12_2Later,
+    text: ru.bot.onboarding.step12_2Later,
     step: "step12_2_later",
   });
 }

@@ -49,12 +49,12 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     return false; // not a teacher → not our route, fall through to student-message
   }
   if (teacher.status === "suspended") {
-    await ctx.reply(ru.suspendedNotice);
+    await ctx.reply(ru.bot.access.suspendedNotice);
     return true;
   }
 
   if (!replyTo) {
-    await ctx.reply(ru.teacherReplyMissingContext);
+    await ctx.reply(ru.bot.notifications.teacherReplyMissingContext);
     return true;
   }
 
@@ -65,7 +65,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     .eq("tg_prompt_message_id", replyTo.message_id)
     .maybeSingle();
   if (!prompt) {
-    await ctx.reply(ru.teacherReplyMissingContext);
+    await ctx.reply(ru.bot.notifications.teacherReplyMissingContext);
     return true;
   }
 
@@ -75,7 +75,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
       { tg_prompt_message_id: prompt.tg_prompt_message_id, teacher_id: prompt.teacher_id },
     )
   ) {
-    await ctx.reply(ru.teacherReplyMissingContext);
+    await ctx.reply(ru.bot.notifications.teacherReplyMissingContext);
     return true;
   }
 
@@ -95,7 +95,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
       .eq("id", prompt.student_message_id)
       .single();
     if (!orig || orig.direction !== "in" || orig.status === "orphaned") {
-      await ctx.reply(ru.teacherReplyFailed);
+      await ctx.reply(ru.bot.notifications.teacherReplyFailed);
       return true;
     }
     original = orig;
@@ -109,7 +109,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     .eq("teacher_id", teacher.id)
     .maybeSingle();
   if (!link) {
-    await ctx.reply(ru.teacherReplyFailed);
+    await ctx.reply(ru.bot.notifications.teacherReplyFailed);
     return true;
   }
 
@@ -125,7 +125,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     const claimActive =
       !!claim && new Date(claim.expires_at).getTime() > Date.now() && claim.teacher_id === teacher.id;
     if (!claimActive) {
-      await ctx.reply(ru.teacherReplyFailed);
+      await ctx.reply(ru.bot.notifications.teacherReplyFailed);
       return true;
     }
   }
@@ -136,7 +136,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     .eq("id", prompt.student_id)
     .single();
   if (!student) {
-    await ctx.reply(ru.teacherReplyFailed);
+    await ctx.reply(ru.bot.notifications.teacherReplyFailed);
     return true;
   }
 
@@ -186,7 +186,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
         sub?.response_window_tz ?? "Asia/Jerusalem",
         "HH:mm",
       );
-      await ctx.reply(ru.teacherReplyScheduled(localTime));
+      await ctx.reply(ru.bot.notifications.teacherReplyScheduled(localTime));
       return true;
     }
   }
@@ -223,7 +223,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     }
   } catch (e) {
     console.error("relay to student failed", e);
-    await ctx.reply(ru.teacherReplyFailed);
+    await ctx.reply(ru.bot.notifications.teacherReplyFailed);
     return true;
   }
 
@@ -300,7 +300,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     const studentHandle = student.display_handle ?? userHandle(student.tg_user_id).handle;
     await editAllNotificationsForMessage(
       original.id,
-      ru.teacherNotificationTaken(teacherHandle, studentHandle),
+      ru.bot.notifications.teacherNotificationTaken(teacherHandle, studentHandle),
     );
   }
 
@@ -326,7 +326,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     meta: { kind: "reply-tail", expires_at: expiresAt },
   });
 
-  await ctx.reply(ru.teacherReplyDelivered);
+  await ctx.reply(ru.bot.notifications.teacherReplyDelivered);
   return true;
 }
 
@@ -364,7 +364,7 @@ export async function handleTeacherReplyText(ctx: Context): Promise<boolean> {
     .maybeSingle();
   if (!teacher || teacher.role !== "teacher") return false;
   if (teacher.status === "suspended") {
-    await ctx.reply(ru.suspendedNotice);
+    await ctx.reply(ru.bot.access.suspendedNotice);
     return true;
   }
 
@@ -396,7 +396,7 @@ export async function handleTeacherReplyText(ctx: Context): Promise<boolean> {
       .eq("id", prompt.student_message_id)
       .single();
     if (!orig || orig.direction !== "in" || orig.status === "orphaned") {
-      await ctx.reply(ru.teacherReplyFailed);
+      await ctx.reply(ru.bot.notifications.teacherReplyFailed);
       return true;
     }
     original = orig;
@@ -410,7 +410,7 @@ export async function handleTeacherReplyText(ctx: Context): Promise<boolean> {
     .eq("teacher_id", teacher.id)
     .maybeSingle();
   if (!link) {
-    await ctx.reply(ru.teacherReplyFailed);
+    await ctx.reply(ru.bot.notifications.teacherReplyFailed);
     return true;
   }
 
@@ -425,7 +425,7 @@ export async function handleTeacherReplyText(ctx: Context): Promise<boolean> {
     const claimActive =
       !!claim && new Date(claim.expires_at).getTime() > Date.now() && claim.teacher_id === teacher.id;
     if (!claimActive) {
-      await ctx.reply(ru.teacherReplyFailed);
+      await ctx.reply(ru.bot.notifications.teacherReplyFailed);
       return true;
     }
   }
@@ -436,7 +436,7 @@ export async function handleTeacherReplyText(ctx: Context): Promise<boolean> {
     .eq("id", prompt.student_id)
     .single();
   if (!student) {
-    await ctx.reply(ru.teacherReplyFailed);
+    await ctx.reply(ru.bot.notifications.teacherReplyFailed);
     return true;
   }
 
@@ -460,7 +460,7 @@ export async function handleTeacherReplyText(ctx: Context): Promise<boolean> {
     sentMessageId = sent.message_id;
   } catch (e) {
     console.error("relay text to student failed", e);
-    await ctx.reply(ru.teacherReplyFailed);
+    await ctx.reply(ru.bot.notifications.teacherReplyFailed);
     return true;
   }
 
@@ -512,7 +512,7 @@ export async function handleTeacherReplyText(ctx: Context): Promise<boolean> {
     const studentHandle = student.display_handle ?? userHandle(student.tg_user_id).handle;
     await editAllNotificationsForMessage(
       original.id,
-      ru.teacherNotificationTaken(teacherHandle, studentHandle),
+      ru.bot.notifications.teacherNotificationTaken(teacherHandle, studentHandle),
     );
   }
 
@@ -536,6 +536,6 @@ export async function handleTeacherReplyText(ctx: Context): Promise<boolean> {
     meta: { kind: "text-reply-tail", expires_at: expiresAt },
   });
 
-  await ctx.reply(ru.teacherReplyDelivered);
+  await ctx.reply(ru.bot.notifications.teacherReplyDelivered);
   return true;
 }

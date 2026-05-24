@@ -42,7 +42,7 @@ export async function fanOutFeedbackToAdmins(args: {
 
   const bot = getBot();
   const snippet = args.text.slice(0, SNIPPET_MAX);
-  const text = ru.adminFeedbackPing(userLabel, snippet);
+  const text = ru.bot.notifications.adminFeedbackPing(userLabel, snippet);
   const url = `${serverEnv.APP_BASE_URL.replace(/\/$/, "")}/admin/feedback/${args.userId}`;
 
   for (const admin of admins) {

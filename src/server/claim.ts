@@ -156,8 +156,8 @@ export async function startReply(messageId: number, teacherId: number): Promise<
   const when = formatWhen(msg.created_at, teacher.tz);
   const promptText =
     decision.kind === "followup"
-      ? ru.teacherFollowupPrompt(studentHandle, dur, when)
-      : ru.teacherClaimPrompt(studentHandle, dur, when);
+      ? ru.bot.notifications.teacherFollowupPrompt(studentHandle, dur, when)
+      : ru.bot.notifications.teacherClaimPrompt(studentHandle, dur, when);
   const sent = await getBot().api.sendMessage(teacher.tg_chat_id, promptText);
 
   await sb.from("prompts").insert({
@@ -182,7 +182,7 @@ export async function startReply(messageId: number, teacherId: number): Promise<
     for (const m of pendingMsgs ?? []) {
       await editAllNotificationsForMessage(
         m.id,
-        ru.teacherNotificationTaken(teacherHandle, studentHandle),
+        ru.bot.notifications.teacherNotificationTaken(teacherHandle, studentHandle),
       );
     }
   }
@@ -296,7 +296,7 @@ export async function startInitiation(
   const studentHandle = handleFromRow(student);
   const sent = await getBot().api.sendMessage(
     teacher.tg_chat_id,
-    ru.teacherInitiatePrompt(studentHandle),
+    ru.bot.notifications.teacherInitiatePrompt(studentHandle),
   );
 
   await sb.from("prompts").insert({
@@ -321,7 +321,7 @@ export async function startInitiation(
     for (const m of pendingMsgs ?? []) {
       await editAllNotificationsForMessage(
         m.id,
-        ru.teacherNotificationTaken(teacherHandle, studentHandle),
+        ru.bot.notifications.teacherNotificationTaken(teacherHandle, studentHandle),
       );
     }
   }

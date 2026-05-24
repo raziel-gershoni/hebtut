@@ -446,7 +446,7 @@ export async function grantSubscriptionDays(input: {
     },
   });
 
-  await dmStudent(input.userId, ru.subscriptionGrantedDM(days, formatRu(newEnd)));
+  await dmStudent(input.userId, ru.bot.subscription.granted(days, formatRu(newEnd)));
   // Admin grants count as "user has access" so onboarding is closed —
   // cancels any pending survey/churn timers + flips state to done_paid.
   await markOnboardingDone(input.userId, "admin_grant");
@@ -493,7 +493,7 @@ export async function resetTrialForUser(input: {
     meta: { trial_ends_at: trialEnd.toISOString(), days: TRIAL_RESET_DAYS },
   });
 
-  await dmStudent(input.userId, ru.subscriptionResetDM);
+  await dmStudent(input.userId, ru.bot.subscription.reset);
   return { trialEnd };
 }
 
@@ -534,7 +534,7 @@ export async function lapseSubscription(input: {
     subjectId: input.userId,
   });
 
-  await dmStudent(input.userId, ru.subscriptionLapsedDM);
+  await dmStudent(input.userId, ru.bot.subscription.lapsed);
   return true;
 }
 

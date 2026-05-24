@@ -118,7 +118,7 @@ export async function POST(
   // Wake-up DM with a web_app button straight to /feedback.
   const url = `${serverEnv.APP_BASE_URL.replace(/\/$/, "")}/feedback`;
   try {
-    await getBot().api.sendMessage(target.tg_chat_id, ru.userFeedbackReplyPing, {
+    await getBot().api.sendMessage(target.tg_chat_id, ru.bot.notifications.userFeedbackReplyPing, {
       reply_markup: {
         inline_keyboard: [[{ text: "Открыть", web_app: { url } }]],
       },

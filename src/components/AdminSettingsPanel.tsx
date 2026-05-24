@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { ru } from "@/lib/i18n";
 
 interface Settings {
   quota_chat_notifications_enabled: boolean;
@@ -18,33 +19,10 @@ interface ToggleSpec {
 }
 
 const TOGGLES: readonly ToggleSpec[] = [
-  {
-    key: "quota_chat_notifications_enabled",
-    title: "Уведомления о лимите в чате",
-    on: "Бот пишет ученику об остатке и исчерпании лимита.",
-    off: "Бот молчит про лимит. Ученик видит остаток в мини-приложении.",
-  },
-  {
-    key: "billing_stars_enabled",
-    title: "Telegram Stars (оплата)",
-    // The "off" copy is the new safe default — manual billing only.
-    on: "Кнопка «Оплатить» открывает Telegram Stars. Перед включением убедись, что готов принимать оплату через Stars.",
-    off: "Оплата только вручную через админа. Кнопки «Оплатить» закрыты, инвойсы Stars не создаются.",
-  },
-  {
-    key: "display_anonymous_handles_enabled",
-    title: "Анонимные имена (псевдонимы)",
-    // OFF (default) = real names; ON = animal handles. So "on" describes
-    // the unusual choice and "off" describes the default behaviour.
-    on: "Везде показываем псевдонимы вида «Гордый Орёл» 🦅 и эмодзи-аватары вместо имён и фото.",
-    off: "В чатах и инбоксе показываем настоящее имя (как ученик указал в онбординге) и фото из Telegram.",
-  },
-  {
-    key: "media_uploads_teachers_enabled",
-    title: "Загрузка медиа учителями",
-    on: "Учителя могут загружать файлы в общую медиа-библиотеку. Удалить или изменить файл может только загрузивший или админ.",
-    off: "Загружать в библиотеку могут только админы. Учителя всё равно отправляют учащимся файлы из библиотеки.",
-  },
+  { key: "quota_chat_notifications_enabled", ...ru.admin.settings.toggles.quotaChatNotifications },
+  { key: "billing_stars_enabled", ...ru.admin.settings.toggles.billingStars },
+  { key: "display_anonymous_handles_enabled", ...ru.admin.settings.toggles.displayAnonymousHandles },
+  { key: "media_uploads_teachers_enabled", ...ru.admin.settings.toggles.mediaUploadsTeachers },
 ];
 
 export function AdminSettingsPanel({ jwt }: { jwt: string }) {
@@ -84,7 +62,7 @@ export function AdminSettingsPanel({ jwt }: { jwt: string }) {
       });
       if (!r.ok) {
         setSettings({ ...settings, [key]: !next }); // revert
-        setError("Не удалось сохранить — попробуй ещё раз");
+        setError(ru.admin.settings.saveError);
       }
       setBusyKey(null);
     },
@@ -93,7 +71,7 @@ export function AdminSettingsPanel({ jwt }: { jwt: string }) {
 
   return (
     <section className="mb-4 rounded-2xl bg-tg-bg-section p-4 space-y-4">
-      <h2 className="text-lg font-semibold tracking-tight">Настройки</h2>
+      <h2 className="text-lg font-semibold tracking-tight">{ru.admin.settings.sectionTitle}</h2>
       {TOGGLES.map((spec) => (
         <ToggleRow
           key={spec.key}
@@ -127,7 +105,7 @@ function ToggleRow({
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium">{spec.title}</div>
         <div className="text-xs text-tg-text-hint mt-0.5">
-          {enabled === null ? "Загрузка…" : enabled ? spec.on : spec.off}
+          {enabled === null ? ru.admin.settings.rowLoading : enabled ? spec.on : spec.off}
         </div>
       </div>
       <button
@@ -141,7 +119,7 @@ function ToggleRow({
             : "bg-tg-bg-secondary text-tg-text-hint ring-tg-text-hint/30"
         } disabled:opacity-50`}
       >
-        {enabled === null ? "…" : enabled ? "ВКЛ" : "ВЫКЛ"}
+        {enabled === null ? ru.admin.settings.buttonLoading : enabled ? ru.admin.settings.buttonOn : ru.admin.settings.buttonOff}
       </button>
     </div>
   );
