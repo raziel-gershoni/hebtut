@@ -1,5 +1,6 @@
 "use client";
 
+import { ru } from "@/lib/i18n";
 import { formatBytes } from "@/lib/media";
 
 export interface MediaLibraryListItem {
@@ -44,7 +45,7 @@ export function MediaPreview({ item, jwt, selected, onClick, onKebab }: Props) {
         onClick={onClick}
         className="block w-full text-left"
         aria-pressed={selected}
-        aria-label={`Выбрать ${title}`}
+        aria-label={ru.inbox.mediaPreview.selectAriaLabel(title)}
       >
         <div className="aspect-square w-full rounded-xl overflow-hidden bg-black/5 dark:bg-white/5 flex items-center justify-center">
           {item.kind === "photo" ? (
@@ -103,7 +104,7 @@ export function MediaPreview({ item, jwt, selected, onClick, onKebab }: Props) {
             e.stopPropagation();
             onKebab();
           }}
-          aria-label="Меню"
+          aria-label={ru.inbox.mediaPreview.menuAriaLabel}
           className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/40 text-white flex items-center justify-center text-base active:scale-95"
         >
           ⋯

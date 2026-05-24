@@ -8,6 +8,7 @@ import { PlaybackProvider } from "./PlaybackProvider";
 import { MediaPicker } from "./MediaPicker";
 import { speakerColor, type SpeakerColorClasses } from "@/lib/speaker-color";
 import { bgFromHandle } from "@/lib/handle";
+import { ru } from "@/lib/i18n";
 
 interface ClaimInfo {
   teacher_id: number;
@@ -123,7 +124,9 @@ export function ThreadView({
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
 
   const replyDisabledReason =
-    claim && claim.teacher_id !== myUserId ? `Берёт ${claim.teacher_handle}` : null;
+    claim && claim.teacher_id !== myUserId
+      ? ru.inbox.thread.takingByOtherFn(claim.teacher_handle)
+      : null;
 
   const canInitiate = role === "teacher" && !replyDisabledReason;
 
@@ -144,10 +147,10 @@ export function ThreadView({
       }
       setInitiateError(
         d.error === "taken-by-other"
-          ? "Другой тренер сейчас работает с этим учеником"
+          ? ru.inbox.thread.initiateErrors.takenByOther
           : d.error === "not-allowed"
-            ? "Связь с этим учеником утрачена"
-            : "Не удалось — попробуй ещё раз",
+            ? ru.inbox.thread.initiateErrors.notAllowed
+            : ru.inbox.thread.initiateErrors.generic,
       );
     } finally {
       setInitiateBusy(false);
@@ -176,7 +179,7 @@ export function ThreadView({
     [jwt, load],
   );
 
-  const studentDisplay = student?.handle ?? "Ученик";
+  const studentDisplay = student?.handle ?? ru.inbox.thread.studentFallbackName;
   // In names mode the server returns emoji=null and has_avatar tells us
   // whether to fetch the real TG photo. In anon mode emoji is set and we
   // render an emoji-on-color circle.
@@ -202,7 +205,7 @@ export function ThreadView({
     }
     if (msg.teacher_id === myUserId) {
       return {
-        name: "Ты",
+        name: ru.inbox.thread.selfName,
         avatarUrl: myHasAvatar
           ? `/api/avatar/${myUserId}?token=${encodeURIComponent(jwt)}`
           : undefined,
@@ -214,7 +217,7 @@ export function ThreadView({
         ? `/api/avatar/${t.id}?token=${encodeURIComponent(jwt)}`
         : undefined;
     return {
-      name: t?.handle ?? "Тренер",
+      name: t?.handle ?? ru.inbox.thread.teacherFallbackName,
       avatarUrl: teacherAvatarUrl,
       emoji: t?.emoji ?? undefined,
       bgClass: t && t.emoji ? bgFromHandle(t.handle) : undefined,
@@ -249,15 +252,15 @@ export function ThreadView({
         <Avatar size={48} name={studentDisplay} imageUrl={studentAvatarUrl} emoji={studentEmoji} bgClass={studentBg} />
         <div className="min-w-0 flex-1 leading-tight">
           <div className="font-semibold tracking-tight truncate">{studentDisplay}</div>
-          <div className="text-xs text-tg-text-hint">ученик</div>
+          <div className="text-xs text-tg-text-hint">{ru.inbox.thread.studentRoleLabel}</div>
         </div>
         {canInitiate && (
           <button
             type="button"
             disabled={initiateBusy}
             onClick={() => setMediaPickerOpen(true)}
-            aria-label="Прикрепить медиа из библиотеки"
-            title="Медиа-библиотека"
+            aria-label={ru.inbox.thread.attachMediaAriaLabel}
+            title={ru.inbox.thread.attachMediaTitle}
             className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full bg-tg-bg-secondary text-tg-text transition-transform active:scale-95 disabled:opacity-50"
           >
             <PaperclipIcon />
@@ -270,13 +273,13 @@ export function ThreadView({
             onClick={() => void startInitiate()}
             className="shrink-0 inline-flex items-center gap-1.5 px-3 h-9 rounded-full bg-tg-button text-tg-button-text text-xs font-semibold transition-transform active:scale-95 disabled:opacity-50"
           >
-            + Написать
+            {ru.inbox.thread.initiateButton}
           </button>
         )}
       </header>
       {claim && claim.teacher_id === myUserId && (
         <div className="text-xs text-tg-text-hint mb-2">
-          Активная сессия с этим учеником — отвечай в чате.
+          {ru.inbox.thread.activeSessionHint}
         </div>
       )}
       {initiateError && (
@@ -284,7 +287,7 @@ export function ThreadView({
       )}
       {messages.length === 0 ? (
         <div className="rounded-2xl bg-tg-bg-section p-6 text-center text-sm text-tg-text-hint">
-          Сообщений ещё нет.
+          {ru.inbox.thread.noMessages}
         </div>
       ) : (
         messages.map((m, i) => {

@@ -14,15 +14,16 @@ import { AdminTagsManager } from "@/components/AdminTagsManager";
 import { AdminOnboardingVideos } from "@/components/AdminOnboardingVideos";
 import { AdminVersionFooter } from "@/components/AdminVersionFooter";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { ru } from "@/lib/i18n";
 
 export default function AdminPage() {
   return (
-    <AppShell title="Админка" back="/">
+    <AppShell title={ru.admin.pages.pageTitle} back="/">
       {({ jwt, isAdmin }) => {
         if (!isAdmin) {
           return (
             <div className="rounded-2xl bg-tg-bg-section p-6 text-sm text-tg-text-hint">
-              Только для администраторов.
+              {ru.admin.pages.adminsOnly}
             </div>
           );
         }
@@ -83,34 +84,34 @@ function AdminBody({ jwt }: { jwt: string }) {
           href="/admin/feedback"
           className="inline-flex items-center gap-1 text-sm font-semibold text-tg-text-link"
         >
-          → Обратная связь
+          {ru.admin.pages.navFeedback}
         </Link>
         <Link
           href="/admin/audit"
           className="inline-flex items-center gap-1 text-sm font-semibold text-tg-text-link"
         >
-          → Журнал действий
+          {ru.admin.pages.navAudit}
         </Link>
       </div>
-      <CollapsibleSection id="users" title="Пользователи" defaultOpen>
+      <CollapsibleSection id="users" title={ru.admin.pages.sections.users} defaultOpen>
         <AdminUsersTable jwt={jwt} users={users} loaded={loaded} refetch={refetch} />
       </CollapsibleSection>
-      <CollapsibleSection id="connections" title="Связи">
+      <CollapsibleSection id="connections" title={ru.admin.pages.sections.connections}>
         <AdminConnectionsPanel jwt={jwt} users={users} links={links} refetch={refetch} />
       </CollapsibleSection>
-      <CollapsibleSection id="settings" title="Настройки">
+      <CollapsibleSection id="settings" title={ru.admin.pages.sections.settings}>
         <AdminSettingsPanel jwt={jwt} />
       </CollapsibleSection>
-      <CollapsibleSection id="onboarding-videos" title="Видео онбординга">
+      <CollapsibleSection id="onboarding-videos" title={ru.admin.pages.sections.onboardingVideos}>
         <AdminOnboardingVideos jwt={jwt} />
       </CollapsibleSection>
-      <CollapsibleSection id="tags" title="Теги медиа-библиотеки">
+      <CollapsibleSection id="tags" title={ru.admin.pages.sections.tags}>
         <AdminTagsManager jwt={jwt} />
       </CollapsibleSection>
-      <CollapsibleSection id="invites" title="Приглашения тренеров">
+      <CollapsibleSection id="invites" title={ru.admin.pages.sections.invites}>
         <TeacherInvites jwt={jwt} />
       </CollapsibleSection>
-      <CollapsibleSection id="banned" title="Заблокированные">
+      <CollapsibleSection id="banned" title={ru.admin.pages.sections.banned}>
         <BannedUsersPanel jwt={jwt} />
       </CollapsibleSection>
       <AdminVersionFooter />

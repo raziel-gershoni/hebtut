@@ -1,4 +1,5 @@
 "use client";
+import { ru } from "@/lib/i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Avatar } from "./Avatar";
 import { Spinner } from "./Spinner";
@@ -88,7 +89,7 @@ export function FeedbackChat({ jwt }: { jwt: string }) {
         setDraft("");
         await load();
       } else {
-        setError("Не удалось отправить — попробуй ещё раз");
+        setError(ru.inbox.feedbackChat.sendError);
       }
     } finally {
       setSending(false);
@@ -109,7 +110,7 @@ export function FeedbackChat({ jwt }: { jwt: string }) {
         )}
         {loaded && messages.length === 0 && (
           <div className="rounded-2xl bg-tg-bg-section p-6 text-center text-sm text-tg-text-hint">
-            Напиши админу, если что-то непонятно или нужна помощь. Ответ придёт сюда же.
+            {ru.inbox.feedbackChat.emptyState}
           </div>
         )}
         {messages.map((m) => {
@@ -126,7 +127,7 @@ export function FeedbackChat({ jwt }: { jwt: string }) {
               </div>
             );
           }
-          const handle = m.author?.handle ?? "Админ";
+          const handle = m.author?.handle ?? ru.inbox.feedbackChat.adminFallback;
           return (
             <div key={m.id} className="flex items-start gap-2">
               <div className="shrink-0 mt-1.5">
@@ -162,7 +163,7 @@ export function FeedbackChat({ jwt }: { jwt: string }) {
             }
           }}
           rows={1}
-          placeholder="Сообщение"
+          placeholder={ru.inbox.feedbackChat.messagePlaceholder}
           className="flex-1 min-w-0 px-3 py-2 rounded-2xl bg-tg-bg-secondary text-tg-text text-sm placeholder:text-tg-text-hint outline-none focus:ring-2 focus:ring-tg-button/40 resize-none max-h-32"
         />
         <button
@@ -170,7 +171,7 @@ export function FeedbackChat({ jwt }: { jwt: string }) {
           onClick={() => void send()}
           disabled={sending || draft.trim().length === 0}
           className="shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-full bg-tg-button text-tg-button-text font-semibold transition-transform active:scale-95 disabled:opacity-50"
-          aria-label="Отправить"
+          aria-label={ru.inbox.feedbackChat.sendAriaLabel}
         >
           {sending ? <Spinner size={14} /> : "↑"}
         </button>

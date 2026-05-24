@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { Spinner } from "./Spinner";
+import { ru } from "@/lib/i18n";
 
 interface InviteRow {
   id: number;
@@ -13,11 +14,7 @@ interface InviteRow {
   state: "active" | "consumed" | "revoked";
 }
 
-const STATE_LABEL: Record<InviteRow["state"], string> = {
-  active: "Активна",
-  consumed: "Использована",
-  revoked: "Отозвана",
-};
+const STATE_LABEL: Record<InviteRow["state"], string> = ru.admin.invites.stateLabels;
 
 const STATE_COLOR: Record<InviteRow["state"], string> = {
   active: "text-emerald-600 dark:text-emerald-400",
@@ -90,7 +87,7 @@ export function TeacherInvites({ jwt }: { jwt: string }) {
   return (
     <section className="mb-6">
       <header className="flex items-baseline justify-between gap-3 mb-3">
-        <h2 className="text-lg font-semibold tracking-tight">Приглашения тренеров</h2>
+        <h2 className="text-lg font-semibold tracking-tight">{ru.admin.invites.sectionTitle}</h2>
         <button
           type="button"
           onClick={() => void createInvite()}
@@ -98,13 +95,13 @@ export function TeacherInvites({ jwt }: { jwt: string }) {
           className="text-xs font-semibold tracking-tight text-tg-text-link disabled:opacity-50 inline-flex items-center gap-1.5"
         >
           {creating && <Spinner size={12} />}
-          <span>+ Создать ссылку</span>
+          <span>{ru.admin.invites.createButton}</span>
         </button>
       </header>
 
       {latest && (
         <div className="mb-3 rounded-2xl bg-tg-bg-section p-3 border border-emerald-500/40">
-          <div className="text-xs text-tg-text-hint mb-1">Новая ссылка готова — отправь будущему тренеру:</div>
+          <div className="text-xs text-tg-text-hint mb-1">{ru.admin.invites.newReadyHint}</div>
           <div className="flex items-center gap-2">
             <code className="flex-1 min-w-0 text-xs break-all bg-tg-bg-secondary rounded-lg px-2 py-1.5 font-mono">
               {latest.url}
@@ -114,7 +111,7 @@ export function TeacherInvites({ jwt }: { jwt: string }) {
               onClick={() => void copyLink(latest.url)}
               className="shrink-0 h-9 px-3 rounded-full bg-tg-button text-tg-button-text text-xs font-semibold transition-transform active:scale-95"
             >
-              {copied ? "✓" : "Копировать"}
+              {copied ? ru.admin.invites.copiedTick : ru.admin.invites.copyButton}
             </button>
           </div>
         </div>
@@ -130,7 +127,7 @@ export function TeacherInvites({ jwt }: { jwt: string }) {
 
       {loaded && invites.length === 0 && (
         <div className="rounded-2xl bg-tg-bg-section p-4 text-center text-sm text-tg-text-hint">
-          Пока нет ссылок. Создай первую.
+          {ru.admin.invites.emptyState}
         </div>
       )}
 
@@ -157,14 +154,14 @@ export function TeacherInvites({ jwt }: { jwt: string }) {
                     onClick={() => void copyLink(i.url)}
                     className="shrink-0 text-xs text-tg-text-link transition-opacity active:opacity-60"
                   >
-                    Копировать
+                    {ru.admin.invites.copyButton}
                   </button>
                   <button
                     type="button"
                     onClick={() => void revoke(i.id)}
                     className="shrink-0 text-xs text-tg-text-destructive transition-opacity active:opacity-60"
                   >
-                    Отозвать
+                    {ru.admin.invites.revokeButton}
                   </button>
                 </>
               )}

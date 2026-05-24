@@ -4,6 +4,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { Avatar } from "./Avatar";
 import { SubscriptionDialog, type SubscriptionInfo } from "./SubscriptionDialog";
 import { EditPreferredNameDialog } from "./EditPreferredNameDialog";
+import { ru } from "@/lib/i18n";
 
 export type AdminUser = {
   id: number;
@@ -22,12 +23,6 @@ export type AdminUser = {
   subscription: SubscriptionInfo | null;
 };
 
-const ROLE_LABEL: Record<AdminUser["role"], string> = {
-  pending: "Ожидает",
-  student: "Ученик",
-  teacher: "Тренер",
-};
-
 const ROLE_DEFS: Record<
   Exclude<AdminUser["role"], "pending">,
   { emoji: string; fillClass: string; label: string }
@@ -35,12 +30,12 @@ const ROLE_DEFS: Record<
   student: {
     emoji: "🎓",
     fillClass: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
-    label: "Ученик",
+    label: ru.admin.users.roleLabels.student,
   },
   teacher: {
     emoji: "📚",
     fillClass: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-    label: "Тренер",
+    label: ru.admin.users.roleLabels.teacher,
   },
 };
 
@@ -118,14 +113,14 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
         (u.tg_username ?? "").toLowerCase().includes(q) ||
         (u.display_handle ?? "").toLowerCase().includes(q) ||
         String(u.tg_user_id).includes(q) ||
-        ROLE_LABEL[u.role].toLowerCase().includes(q),
+        ru.admin.users.roleLabels[u.role].toLowerCase().includes(q),
     );
   }, [users, filter]);
 
   return (
     <section onClick={() => setOpenMenuId(null)}>
       <header className="flex items-baseline justify-between gap-3 mb-3">
-        <h2 className="text-lg font-semibold tracking-tight">Пользователи</h2>
+        <h2 className="text-lg font-semibold tracking-tight">{ru.admin.users.sectionTitle}</h2>
         <button
           type="button"
           onClick={(e) => {
@@ -133,7 +128,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
             void refetch();
           }}
           className="text-xs text-tg-text-link tracking-wider uppercase tabular-nums transition-opacity active:opacity-60"
-          aria-label="Обновить список"
+          aria-label={ru.admin.users.refreshLabel}
         >
           ↻ {users.length}
         </button>
@@ -142,17 +137,17 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
       <div className="mb-2 flex items-center gap-2 text-xs text-tg-text-hint flex-wrap">
         <span className="inline-flex items-center gap-1">
           <span aria-hidden>🎓</span>
-          <span>Ученик</span>
+          <span>{ru.admin.users.legendStudent}</span>
         </span>
         <span aria-hidden>·</span>
         <span className="inline-flex items-center gap-1">
           <span aria-hidden>📚</span>
-          <span>Тренер</span>
+          <span>{ru.admin.users.legendTeacher}</span>
         </span>
         <span aria-hidden>·</span>
         <span className="inline-flex items-center gap-1">
           <span aria-hidden>👑</span>
-          <span>Админ</span>
+          <span>{ru.admin.users.legendAdmin}</span>
         </span>
       </div>
 
@@ -160,7 +155,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
         type="search"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
-        placeholder="Поиск по имени, @username, псевдониму, ID или роли"
+        placeholder={ru.admin.users.searchPlaceholder}
         className="w-full mb-3 h-10 px-3 rounded-xl bg-tg-bg-secondary text-tg-text placeholder:text-tg-text-hint outline-none focus:ring-2 focus:ring-tg-button/40"
       />
 
@@ -174,7 +169,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
 
       {loaded && filtered.length === 0 && (
         <div className="rounded-2xl bg-tg-bg-section p-6 text-center text-sm text-tg-text-hint">
-          Никого не нашлось.
+          {ru.admin.users.empty}
         </div>
       )}
 
@@ -194,15 +189,15 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                 <span className="truncate">{u.preferred_name ?? u.name ?? "—"}</span>
                 {u.status === "suspended" && (
                   <span className="shrink-0 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold">
-                    На паузе
+                    {ru.admin.users.suspendedBadge}
                   </span>
                 )}
               </div>
               <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-tg-text-hint min-w-0 flex-wrap">
                 {u.preferred_name && u.name && (
                   <>
-                    <span className="truncate" title="Имя в Telegram">
-                      TG: {u.name}
+                    <span className="truncate" title={ru.admin.users.tgNameTitle}>
+                      {ru.admin.users.tgNamePrefix} {u.name}
                     </span>
                     <span aria-hidden>·</span>
                   </>
@@ -234,12 +229,12 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
             {(() => {
               const def = u.role !== "pending" ? ROLE_DEFS[u.role] : null;
               const nextRole: AdminUser["role"] = u.role === "teacher" ? "student" : "teacher";
-              const nextLabel = ROLE_LABEL[nextRole];
+              const nextLabel = ru.admin.users.roleLabels[nextRole];
               return (
                 <button
                   type="button"
-                  title={def ? `Сделать ${nextLabel.toLowerCase()}` : "Не назначено"}
-                  aria-label={def ? `Сделать ${nextLabel.toLowerCase()}` : "Роль не назначена"}
+                  title={def ? ru.admin.users.roleSwitchTitle(nextLabel.toLowerCase()) : ru.admin.users.roleSwitchUnassignedTitle}
+                  aria-label={def ? ru.admin.users.roleSwitchAriaLabel(nextLabel.toLowerCase()) : ru.admin.users.roleSwitchUnassignedAriaLabel}
                   disabled={!def}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -256,8 +251,8 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
             })()}
             <button
               type="button"
-              title={u.is_admin ? "Снять права админа" : "Сделать админом"}
-              aria-label={u.is_admin ? "Снять права админа" : "Сделать админом"}
+              title={u.is_admin ? ru.admin.users.adminTitleOn : ru.admin.users.adminTitleOff}
+              aria-label={u.is_admin ? ru.admin.users.adminTitleOn : ru.admin.users.adminTitleOff}
               aria-pressed={u.is_admin}
               onClick={(e) => {
                 e.stopPropagation();
@@ -276,7 +271,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
             <div className="relative shrink-0">
               <button
                 type="button"
-                aria-label="Действия"
+                aria-label={ru.admin.users.actionsAriaLabel}
                 onClick={(e) => {
                   e.stopPropagation();
                   setOpenMenuId(openMenuId === u.id ? null : u.id);
@@ -298,7 +293,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                     }}
                     className="w-full text-left px-3 py-2 hover:bg-tg-bg-secondary transition-colors"
                   >
-                    Изменить имя
+                    {ru.admin.users.menuEditName}
                   </button>
                   {u.role === "student" && (
                     <button
@@ -309,7 +304,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                       }}
                       className="w-full text-left px-3 py-2 hover:bg-tg-bg-secondary transition-colors"
                     >
-                      Подписка
+                      {ru.admin.users.menuSubscription}
                     </button>
                   )}
                   {u.role === "student" && (
@@ -325,7 +320,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                       }}
                       className="w-full text-left px-3 py-2 hover:bg-tg-bg-secondary transition-colors"
                     >
-                      Сбросить онбординг
+                      {ru.admin.users.menuResetOnboarding}
                     </button>
                   )}
                   <button
@@ -336,7 +331,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                     }}
                     className="w-full text-left px-3 py-2 hover:bg-tg-bg-secondary transition-colors"
                   >
-                    {u.status === "suspended" ? "Возобновить" : "Приостановить"}
+                    {u.status === "suspended" ? ru.admin.users.menuResume : ru.admin.users.menuSuspend}
                   </button>
                   <button
                     type="button"
@@ -346,7 +341,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                     }}
                     className="w-full text-left px-3 py-2 hover:bg-tg-bg-secondary transition-colors text-tg-text-destructive"
                   >
-                    Удалить
+                    {ru.admin.users.menuDelete}
                   </button>
                   <button
                     type="button"
@@ -356,7 +351,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                     }}
                     className="w-full text-left px-3 py-2 hover:bg-tg-bg-secondary transition-colors text-tg-text-destructive"
                   >
-                    Заблокировать навсегда
+                    {ru.admin.users.menuBanForever}
                   </button>
                 </div>
               )}
@@ -389,25 +384,25 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
         open={!!pending}
         title={
           pending?.kind === "admin"
-            ? "Снять права админа?"
+            ? ru.admin.users.confirmAdminOffTitle
             : pending?.kind === "delete"
               ? pending.ban
-                ? "Заблокировать навсегда?"
-                : "Удалить пользователя?"
+                ? ru.admin.users.confirmBanTitle
+                : ru.admin.users.confirmDeleteTitle
               : pending?.kind === "reset-onboarding"
-                ? "Сбросить онбординг?"
-                : "Подтвердить смену роли"
+                ? ru.admin.users.confirmResetOnboardingTitle
+                : ru.admin.users.confirmRoleTitle
         }
         body={
           pending?.kind === "admin"
-            ? "Без прав админа этот пользователь больше не сможет управлять пользователями и связями."
+            ? ru.admin.users.confirmAdminOffBody
             : pending?.kind === "delete"
               ? pending.ban
-                ? `${pending.name || "Пользователь"} не сможет зарегистрироваться заново. Все его сообщения будут удалены.`
-                : `${pending.name || "Пользователь"} будет удалён вместе с сообщениями. Он сможет зарегистрироваться заново.`
+                ? ru.admin.users.confirmBanBody(pending.name)
+                : ru.admin.users.confirmDeleteBody(pending.name)
               : pending?.kind === "reset-onboarding"
-                ? `${pending.name || "Ученик"} вернётся к экрану «Привет». При следующем /start бот снова покажет первое сообщение онбординга. Предпочитаемое имя и таймеры тоже очистятся.`
-                : "Это действие может разорвать существующие связи ученик↔тренер. Продолжить?"
+                ? ru.admin.users.confirmResetOnboardingBody(pending.name)
+                : ru.admin.users.confirmRoleBody
         }
         onCancel={() => setPending(null)}
         onConfirm={async () => {
@@ -448,17 +443,21 @@ function SubscriptionBadge({ sub }: { sub: SubscriptionInfo }) {
       new Date(iso).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
     switch (sub.status) {
       case "trial":
-        return `trial → ${fmt(sub.trial_ends_at)}`;
+        return ru.admin.users.subBadgeTrial(fmt(sub.trial_ends_at));
       case "active":
-        return sub.current_period_ends_at ? `до ${fmt(sub.current_period_ends_at)}` : "активна";
+        return sub.current_period_ends_at
+          ? ru.admin.users.subBadgeActiveUntil(fmt(sub.current_period_ends_at))
+          : ru.admin.users.subBadgeActive;
       case "frozen":
-        return sub.frozen_until ? `🧊 ${fmt(sub.frozen_until)}` : "🧊";
+        return sub.frozen_until
+          ? ru.admin.users.subBadgeFrozenUntil(fmt(sub.frozen_until))
+          : ru.admin.users.subBadgeFrozen;
       case "trial_expired":
-        return "trial ✕";
+        return ru.admin.users.subBadgeTrialExpired;
       case "lapsed":
-        return "закрыта";
+        return ru.admin.users.subBadgeLapsed;
       case "payment_failed":
-        return "оплата ✕";
+        return ru.admin.users.subBadgePaymentFailed;
     }
   })();
   return (

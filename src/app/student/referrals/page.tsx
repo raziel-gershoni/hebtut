@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { ru } from "@/lib/i18n";
 
 interface ReferralsData {
   token: string;
@@ -23,12 +24,12 @@ type StatusKind =
 
 export default function ReferralsPage() {
   return (
-    <AppShell title="Рефералы" back="/">
+    <AppShell title={ru.student.referrals.pageTitle} back="/">
       {({ jwt, role }) => {
         if (role !== "student") {
           return (
             <div className="rounded-2xl bg-tg-bg-section p-6 text-sm text-tg-text-hint">
-              Только для учеников.
+              {ru.student.referrals.studentsOnly}
             </div>
           );
         }
@@ -96,7 +97,7 @@ function Body({ jwt }: { jwt: string }) {
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
       // Fallback: select and prompt — covers older WebViews without clipboard API.
-      window.prompt("Скопируй ссылку вручную:", data.url);
+      window.prompt(ru.student.referrals.manualCopyPrompt, data.url);
     }
   }
 
@@ -104,8 +105,8 @@ function Body({ jwt }: { jwt: string }) {
     if (!data) return;
     if (typeof navigator.share === "function") {
       void navigator.share({
-        title: "Попробуй HebTut",
-        text: "Я тренируюсь говорить с тренером — попробуй и ты.",
+        title: ru.student.referrals.shareTitle,
+        text: ru.student.referrals.shareText,
         url: data.url,
       });
     } else {
@@ -126,10 +127,10 @@ function Body({ jwt }: { jwt: string }) {
     return (
       <div className="rounded-2xl bg-tg-bg-section p-5 space-y-2">
         <p className="text-xs uppercase tracking-widest text-tg-text-hint">
-          Рефералы недоступны
+          {ru.student.referrals.lockedHeader}
         </p>
         <p className="text-sm text-tg-text-subtitle">
-          Реферальная программа откроется, когда закончится пробный период.
+          {ru.student.referrals.lockedBody}
         </p>
       </div>
     );
@@ -148,18 +149,19 @@ function Body({ jwt }: { jwt: string }) {
     <div className="space-y-5">
       <section className="rounded-2xl bg-tg-bg-section p-5">
         <p className="text-xs uppercase tracking-widest text-tg-text-hint">
-          Приглашай друзей
+          {ru.student.referrals.inviteFriendsHeader}
         </p>
         <p className="mt-2 text-sm text-tg-text-subtitle">
-          Когда друг оплатит подписку, обоим прибавим{" "}
-          <span className="font-medium text-tg-text">+30 дней</span>. Можно
-          набрать до{" "}
-          <span className="font-medium text-tg-text">+90 дней бонуса</span>.
+          {ru.student.referrals.friendsBodyPrefix}{" "}
+          <span className="font-medium text-tg-text">{ru.student.referrals.bonusBold}</span>
+          {ru.student.referrals.bodyCapPrefix}{" "}
+          <span className="font-medium text-tg-text">{ru.student.referrals.bodyCapBold}</span>
+          {ru.student.referrals.bodyCapSuffix}
         </p>
 
         <div className="mt-4 rounded-2xl bg-tg-bg-secondary p-3">
           <div className="text-[11px] uppercase tracking-wider text-tg-text-hint">
-            Твоя ссылка
+            {ru.student.referrals.linkLabel}
           </div>
           <div className="mt-1 break-all text-sm font-mono">{data.url}</div>
         </div>
@@ -170,23 +172,23 @@ function Body({ jwt }: { jwt: string }) {
             onClick={() => void copyLink()}
             className="h-10 rounded-2xl bg-tg-bg-secondary text-sm font-semibold transition-transform active:scale-[0.99]"
           >
-            {copied ? "Скопировано ✓" : "Скопировать"}
+            {copied ? ru.student.referrals.copiedButton : ru.student.referrals.copyButton}
           </button>
           <button
             type="button"
             onClick={shareLink}
             className="h-10 rounded-2xl bg-tg-button text-tg-button-text text-sm font-semibold transition-transform active:scale-[0.99]"
           >
-            Поделиться
+            {ru.student.referrals.shareButton}
           </button>
         </div>
       </section>
 
       <section className="rounded-2xl bg-tg-bg-section p-5">
-        <p className="text-xs uppercase tracking-widest text-tg-text-hint">Статистика</p>
+        <p className="text-xs uppercase tracking-widest text-tg-text-hint">{ru.student.referrals.statsHeader}</p>
         <div className="mt-3 grid grid-cols-2 gap-3 text-center">
-          <Stat label="Пришли по ссылке" value={data.attributed_count} />
-          <Stat label="Оплатили" value={data.paid_count} />
+          <Stat label={ru.student.referrals.statAttributed} value={data.attributed_count} />
+          <Stat label={ru.student.referrals.statPaid} value={data.paid_count} />
         </div>
       </section>
     </div>

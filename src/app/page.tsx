@@ -3,12 +3,9 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { SubscriberSummary } from "@/components/SubscriberSummary";
 import { MiniAppMenu } from "@/components/MiniAppMenu";
+import { ru } from "@/lib/i18n";
 
-const ROLE_LABEL: Record<string, string> = {
-  pending: "ждём подтверждения",
-  student: "ученик",
-  teacher: "тренер",
-};
+const ROLE_LABEL: Record<string, string> = ru.student.home.roleLabels;
 
 export default function Home() {
   return (
@@ -22,26 +19,26 @@ export default function Home() {
               </p>
               {isAdmin && (
                 <span className="text-[10px] font-semibold tracking-widest px-1.5 py-0.5 rounded-full bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-400">
-                  АДМИН
+                  {ru.student.home.adminTag}
                 </span>
               )}
             </div>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-              Привет, {name ?? "пользователь"}!
+              {ru.student.home.greeting(name ?? ru.student.home.fallbackName)}
             </h1>
             {role === "pending" && !isAdmin && (
               <p className="mt-3 text-sm text-tg-text-subtitle">
-                Жди — администратор подключит тебя в ближайшее время.
+                {ru.student.home.pendingHint}
               </p>
             )}
             {role === "student" && (
               <p className="mt-3 text-sm text-tg-text-subtitle">
-                Запиши голосовое или круглое видео в чат с ботом — тренер ответит вам.
+                {ru.student.home.studentHint}
               </p>
             )}
             {isAdmin && role !== "teacher" && (
               <p className="mt-3 text-sm text-tg-text-subtitle">
-                Ты администратор. Если хочешь ещё и принимать ответы — назначь себе роль «teacher» в админке.
+                {ru.student.home.adminHint}
               </p>
             )}
           </section>
@@ -56,11 +53,11 @@ export default function Home() {
           {(role === "teacher" || isAdmin) && (
             <ActionCard
               href="/inbox"
-              title="Входящие"
+              title={ru.student.home.inboxTitle}
               subtitle={
                 role === "teacher"
-                  ? "Сообщения от твоих учеников"
-                  : "Просмотр всех диалогов (только чтение)"
+                  ? ru.student.home.inboxSubtitleTeacher
+                  : ru.student.home.inboxSubtitleAdmin
               }
               icon="📥"
             />
@@ -69,11 +66,11 @@ export default function Home() {
           {role !== "student" && (
             <ActionCard
               href={isAdmin ? "/admin/feedback" : "/feedback"}
-              title="Обратная связь"
+              title={ru.student.home.feedbackTitle}
               subtitle={
                 isAdmin
-                  ? "Сообщения от пользователей в админ-пул"
-                  : "Связаться с админом"
+                  ? ru.student.home.feedbackSubtitleAdmin
+                  : ru.student.home.feedbackSubtitleUser
               }
               icon="💬"
             />
@@ -82,8 +79,8 @@ export default function Home() {
           {isAdmin && (
             <ActionCard
               href="/admin"
-              title="Админка"
-              subtitle="Пользователи и связи ученик↔тренер"
+              title={ru.student.home.adminPanelTitle}
+              subtitle={ru.student.home.adminPanelSubtitle}
               icon="⚙️"
             />
           )}

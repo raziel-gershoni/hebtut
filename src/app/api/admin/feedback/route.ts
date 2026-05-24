@@ -1,3 +1,4 @@
+import { ru } from "@/lib/i18n";
 import type { NextRequest } from "next/server";
 import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
@@ -89,7 +90,7 @@ export async function GET(req: NextRequest) {
       for (const c of claimRows) {
         claimByUser.set(c.user_id, {
           admin_id: c.admin_id,
-          admin_handle: adminHandle.get(c.admin_id) ?? "Админ",
+          admin_handle: adminHandle.get(c.admin_id) ?? ru.bot.labels.adminFallback,
           is_self: c.admin_id === user.id,
         });
       }

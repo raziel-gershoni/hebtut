@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { ru } from "@/lib/i18n";
 
 interface WindowData {
   start: string | null;
@@ -10,12 +11,12 @@ interface WindowData {
 
 export default function ResponseWindowPage() {
   return (
-    <AppShell title="Время ответа" back="/">
+    <AppShell title={ru.student.responseWindow.pageTitle} back="/">
       {({ jwt, role }) => {
         if (role !== "student") {
           return (
             <div className="rounded-2xl bg-tg-bg-section p-6 text-sm text-tg-text-hint">
-              Только для учеников.
+              {ru.student.responseWindow.studentsOnly}
             </div>
           );
         }
@@ -62,7 +63,7 @@ function Body({ jwt }: { jwt: string }) {
     });
     setBusy(false);
     if (!r.ok) {
-      setError("Не получилось сохранить — попробуй ещё раз.");
+      setError(ru.student.responseWindow.saveError);
       return;
     }
     await load();
@@ -82,7 +83,7 @@ function Body({ jwt }: { jwt: string }) {
     });
     setBusy(false);
     if (!r.ok) {
-      setError("Не получилось сбросить — попробуй ещё раз.");
+      setError(ru.student.responseWindow.clearError);
       return;
     }
     await load();
@@ -102,15 +103,14 @@ function Body({ jwt }: { jwt: string }) {
     <div className="space-y-5">
       <section className="rounded-2xl bg-tg-bg-section p-5 space-y-2">
         <p className="text-xs uppercase tracking-widest text-tg-text-hint">
-          Когда тренеру можно начинать диалог
+          {ru.student.responseWindow.whenHeader}
         </p>
         <p className="text-sm text-tg-text-subtitle">
-          Если тренер пишет первым — сообщение придёт только в выбранное время.
-          На твои голосовые тренер отвечает сразу, без задержек.
+          {ru.student.responseWindow.whenBody}
         </p>
         {isSet && (
           <p className="text-sm text-tg-text">
-            Сейчас: {data.start} — {data.end} ({data.tz})
+            {ru.student.responseWindow.currentLine(data.start!, data.end!, data.tz)}
           </p>
         )}
       </section>
@@ -122,7 +122,7 @@ function Body({ jwt }: { jwt: string }) {
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="text-xs uppercase tracking-wider text-tg-text-hint">
-              С
+              {ru.student.responseWindow.startLabel}
             </span>
             <input
               type="time"
@@ -133,7 +133,7 @@ function Body({ jwt }: { jwt: string }) {
           </label>
           <label className="block">
             <span className="text-xs uppercase tracking-wider text-tg-text-hint">
-              До
+              {ru.student.responseWindow.endLabel}
             </span>
             <input
               type="time"
@@ -149,7 +149,7 @@ function Body({ jwt }: { jwt: string }) {
           onClick={() => void save()}
           className="w-full h-10 rounded-2xl bg-tg-button text-tg-button-text text-sm font-semibold transition-transform active:scale-[0.99] disabled:opacity-50"
         >
-          {busy ? "Сохраняем…" : "Сохранить"}
+          {busy ? ru.student.responseWindow.savingButton : ru.student.responseWindow.saveButton}
         </button>
         {isSet && (
           <button
@@ -158,7 +158,7 @@ function Body({ jwt }: { jwt: string }) {
             onClick={() => void clearWindow()}
             className="w-full h-10 rounded-2xl bg-tg-bg-secondary text-tg-text text-sm font-semibold transition-transform active:scale-[0.99] disabled:opacity-50"
           >
-            Получать в любое время
+            {ru.student.responseWindow.clearButton}
           </button>
         )}
       </section>

@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { formatDuration } from "@/lib/i18n";
+import { formatDuration, isSingularDay, pluralDay, ru } from "@/lib/i18n";
 
 type ApiStatus =
   | { kind: "trial"; daysLeft: number; endsAtIso: string }
@@ -119,31 +119,32 @@ function StatusStrip({ status }: { status: ApiStatus }) {
 function stripText(s: ApiStatus): string | null {
   switch (s.kind) {
     case "trial":
-      // Verb agreement must match the noun's plural class — "21 день остался"
-      // (masc sing), "22 дня осталось" (paucal), "5 дней осталось" (genitive
-      // plural). The previous code hard-coded `=== 1` which broke at 21 / 31.
-      return `Пробный период • ${s.daysLeft} ${pluralDay(s.daysLeft)} ${
-        isSingularDay(s.daysLeft) ? "остался" : "осталось"
-      }`;
+      return ru.student.summary.strip.trial(
+        s.daysLeft,
+        pluralDay(s.daysLeft),
+        isSingularDay(s.daysLeft) ? ru.student.summary.verbRemaining : ru.student.summary.verbRemainingPlural,
+      );
     case "trial_ending":
       return s.daysLeft === 0
-        ? "Пробный период заканчивается сегодня"
-        : "Пробный период заканчивается завтра";
+        ? ru.student.summary.strip.trialEndsTodayShort
+        : ru.student.summary.strip.trialEndsTomorrowShort;
     case "active":
       return null;
     case "renewing_soon":
       return s.renewsInDays === 0
-        ? "Продление сегодня"
-        : `Продление через ${s.renewsInDays} ${pluralDay(s.renewsInDays)}`;
+        ? ru.student.summary.strip.renewingToday
+        : ru.student.summary.strip.renewingInDays(s.renewsInDays, pluralDay(s.renewsInDays));
     case "trial_expired":
-      return "Пробный период закончился";
+      return ru.student.summary.strip.trialExpired;
     case "lapsed":
-      return "Доступ закрыт";
+      return ru.student.summary.strip.lapsed;
     case "payment_failed":
-      return "Не удалось списать оплату";
+      return ru.student.summary.strip.paymentFailed;
     case "frozen": {
       const d = new Date(s.untilIso);
-      return `Заморозка до ${d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}`;
+      return ru.student.summary.strip.frozenUntil(
+        d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" }),
+      );
     }
   }
 }
@@ -154,21 +155,6 @@ function stripTone(s: ApiStatus): "grey" | "amber" | "red" {
     return "red";
   }
   return "grey";
-}
-
-function pluralDay(n: number): string {
-  // Russian pluralization for "день/дня/дней". n%100 in [11..14] → "дней".
-  const n100 = n % 100;
-  const n10 = n % 10;
-  if (n100 >= 11 && n100 <= 14) return "дней";
-  if (n10 === 1) return "день";
-  if (n10 >= 2 && n10 <= 4) return "дня";
-  return "дней";
-}
-
-/** True for n where Russian uses the masculine-singular form ("1 день остался" / "21 день остался"). */
-function isSingularDay(n: number): boolean {
-  return n % 10 === 1 && n % 100 !== 11;
 }
 
 /* -------------------------------------------------------------------------
@@ -190,27 +176,26 @@ function MainLine({
   if (locked) {
     return (
       <p className="text-tg-text-destructive">
-        Практика с тренером остановлена
+        {ru.student.summary.practiceStopped}
       </p>
     );
   }
   if (status.kind === "frozen") {
-    return <p className="text-tg-text-subtitle">Доступ к практике на паузе</p>;
+    return <p className="text-tg-text-subtitle">{ru.student.summary.practiceFrozen}</p>;
   }
   if (practice.used_seconds < 60) {
     return (
       <p className="text-tg-text">
-        Сегодня доступно {formatDuration(practice.daily_quota_seconds)} практики
+        {ru.student.summary.todayAvailable(formatDuration(practice.daily_quota_seconds))}
       </p>
     );
   }
   if (practice.remaining_seconds <= 0) {
-    return <p className="text-tg-text">Практика на сегодня закрыта 💪</p>;
+    return <p className="text-tg-text">{ru.student.summary.todayClosed}</p>;
   }
   return (
     <p className="text-tg-text">
-      Осталось <span className="tabular-nums">{formatDuration(practice.remaining_seconds)}</span>{" "}
-      практики сегодня
+      {ru.student.summary.remainingToday(formatDuration(practice.remaining_seconds))}
     </p>
   );
 }
@@ -244,7 +229,7 @@ function ProgressBar({
 function StreakChip({ days }: { days: number }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
-      🔥 {days} {pluralDay(days)} подряд
+      {ru.student.summary.streakChip(days, pluralDay(days))}
     </span>
   );
 }
@@ -280,13 +265,15 @@ function PayCTA({
         href="/feedback"
         className="w-full inline-flex items-center justify-center h-10 rounded-2xl bg-tg-button text-tg-button-text text-sm font-semibold tracking-tight transition-transform active:scale-[0.99]"
       >
-        Связаться с админом
+        {ru.student.summary.contactAdmin}
       </Link>
     );
   }
 
   const label =
-    status.kind === "payment_failed" ? "Обновить оплату" : "Оплатить — 30 дней";
+    status.kind === "payment_failed"
+      ? ru.student.summary.updatePayment
+      : ru.student.summary.pay30Days;
 
   async function pay() {
     if (busy) return;
@@ -302,7 +289,7 @@ function PayCTA({
         body: "{}",
       });
       if (!r.ok) {
-        window.alert("Не удалось открыть оплату. Попробуй ещё раз.");
+        window.alert(ru.student.summary.payOpenError);
         return;
       }
       const { url } = (await r.json()) as { url: string };
@@ -325,7 +312,7 @@ function PayCTA({
       onClick={() => void pay()}
       className="w-full inline-flex items-center justify-center h-10 rounded-2xl bg-tg-button text-tg-button-text text-sm font-semibold tracking-tight transition-transform active:scale-[0.99] disabled:opacity-60"
     >
-      {busy ? "Открываем…" : label}
+      {busy ? ru.student.summary.opening : label}
     </button>
   );
 }

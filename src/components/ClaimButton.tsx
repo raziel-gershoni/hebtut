@@ -1,4 +1,5 @@
 "use client";
+import { ru } from "@/lib/i18n";
 import { useState } from "react";
 import { Spinner } from "./Spinner";
 
@@ -36,7 +37,7 @@ export function ClaimButton({
         }
       }}
     >
-      {busy ? <Spinner /> : "Ответить"}
+      {busy ? <Spinner /> : ru.inbox.claim.replyButton}
     </button>
   );
 }

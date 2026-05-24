@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { Avatar } from "./Avatar";
 import { type AdminUser } from "./AdminUsersTable";
+import { ru } from "@/lib/i18n";
 
 const PAGE_SIZE = 50;
 
@@ -70,7 +71,7 @@ export function SearchableUserChecklist({
           // tap 'show more' to see the matching person?" confusion.
           setVisibleCount(PAGE_SIZE);
         }}
-        placeholder="🔍 поиск"
+        placeholder={ru.admin.userChecklist.searchPlaceholder}
         className="w-full mb-2 h-9 px-3 rounded-lg bg-tg-bg-secondary text-sm text-tg-text placeholder:text-tg-text-hint outline-none focus:ring-2 focus:ring-tg-button/40"
       />
       {filtered.length === 0 ? (
@@ -118,7 +119,7 @@ export function SearchableUserChecklist({
                     }
                   />
                   <span className="min-w-0 flex-1 text-sm leading-tight">
-                    <span className="truncate block">{u.name ?? `ID ${u.id}`}</span>
+                    <span className="truncate block">{u.name ?? ru.admin.userChecklist.fallbackName(u.id)}</span>
                     {u.display_handle && (
                       <span className="text-[11px] text-tg-text-hint truncate block">
                         {u.display_emoji} {u.display_handle}
@@ -137,7 +138,7 @@ export function SearchableUserChecklist({
           onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
           className="mt-2 w-full text-xs text-tg-text-link tracking-wider"
         >
-          показать ещё ({hiddenCount})
+          {ru.admin.userChecklist.showMore(hiddenCount)}
         </button>
       )}
     </div>

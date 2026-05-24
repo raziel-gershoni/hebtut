@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Spinner } from "./Spinner";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { ru } from "@/lib/i18n";
 
 const MAX_NAME_LENGTH = 50;
 
@@ -66,7 +67,7 @@ export function EditPreferredNameDialog({
     });
     setBusy(false);
     if (!r.ok) {
-      setError("Не получилось — попробуй ещё раз.");
+      setError(ru.admin.editName.saveError);
       return false;
     }
     await onSaved();
@@ -82,28 +83,27 @@ export function EditPreferredNameDialog({
     <>
       <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 animate-fade-in">
         <div className="bg-tg-bg-section text-tg-text w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 shadow-2xl animate-slide-up space-y-3">
-          <h2 className="font-semibold tracking-tight">Имя пользователя</h2>
+          <h2 className="font-semibold tracking-tight">{ru.admin.editName.dialogTitle}</h2>
 
           <div className="rounded-xl bg-tg-bg-secondary p-3 text-xs">
-            <span className="text-tg-text-hint">Telegram: </span>
+            <span className="text-tg-text-hint">{ru.admin.editName.tgLabel} </span>
             <span className="font-medium text-tg-text">{tgName ?? "—"}</span>
           </div>
 
           <label className="block">
             <span className="block text-xs uppercase tracking-wider text-tg-text-hint mb-1">
-              Предпочитаемое имя
+              {ru.admin.editName.preferredLabel}
             </span>
             <input
               type="text"
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              placeholder={tgName ?? "Имя"}
+              placeholder={tgName ?? ru.admin.editName.inputPlaceholderFallback}
               maxLength={MAX_NAME_LENGTH}
               className="w-full h-10 px-3 rounded-xl bg-tg-bg-secondary text-tg-text outline-none focus:ring-2 focus:ring-tg-button/40"
             />
             <span className="block text-[11px] text-tg-text-hint mt-1">
-              Это имя видят другие тренеры в чатах. Если пусто — покажем имя
-              из Telegram.
+              {ru.admin.editName.helpText}
             </span>
           </label>
 
@@ -117,7 +117,7 @@ export function EditPreferredNameDialog({
                 onClick={() => setConfirmingReset(true)}
                 className="h-10 px-4 rounded-full bg-tg-bg-secondary text-tg-text-destructive text-sm font-medium transition-transform active:scale-95 disabled:opacity-50"
               >
-                Сбросить
+                {ru.admin.editName.resetButton}
               </button>
             )}
             <button
@@ -126,7 +126,7 @@ export function EditPreferredNameDialog({
               onClick={onClose}
               className="h-10 px-4 rounded-full bg-tg-bg-secondary text-tg-text text-sm font-medium transition-transform active:scale-95 disabled:opacity-50"
             >
-              Отмена
+              {ru.admin.editName.cancelButton}
             </button>
             <button
               type="button"
@@ -135,7 +135,7 @@ export function EditPreferredNameDialog({
               aria-busy={busy}
               className="h-10 px-4 rounded-full bg-tg-button text-tg-button-text text-sm font-medium transition-transform active:scale-95 disabled:opacity-50 inline-flex items-center justify-center min-w-[6rem]"
             >
-              {busy ? <Spinner /> : "Сохранить"}
+              {busy ? <Spinner /> : ru.admin.editName.saveButton}
             </button>
           </div>
         </div>
@@ -143,8 +143,8 @@ export function EditPreferredNameDialog({
 
       <ConfirmDialog
         open={confirmingReset}
-        title="Сбросить предпочитаемое имя?"
-        body="Везде вернётся имя из Telegram. Это действие можно отменить, заново вписав имя."
+        title={ru.admin.editName.resetConfirmTitle}
+        body={ru.admin.editName.resetConfirmBody}
         onCancel={() => setConfirmingReset(false)}
         onConfirm={async () => {
           const ok = await patch(null);

@@ -110,7 +110,7 @@ async function handler(req: NextRequest): Promise<Response> {
       const studentHandle =
         student?.display_handle ?? userHandle(student?.tg_user_id ?? 0).handle;
       for (const m of pendingMsgs ?? []) {
-        const kindLabel = m.kind === "voice" ? "голосовое" : "круглое видео";
+        const kindLabel = m.kind === "voice" ? ru.bot.labels.voiceLower : ru.bot.labels.videoNoteLower;
         await editAllNotificationsForMessage(
           m.id,
           ru.bot.notifications.teacherNotificationActionable(studentHandle, kindLabel, formatDuration(m.duration)),

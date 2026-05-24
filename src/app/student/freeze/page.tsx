@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { ru } from "@/lib/i18n";
 
 interface FreezeData {
   remaining_days: number;
@@ -12,12 +13,12 @@ interface FreezeData {
 
 export default function FreezePage() {
   return (
-    <AppShell title="Заморозка" back="/">
+    <AppShell title={ru.student.freeze.pageTitle} back="/">
       {({ jwt, role }) => {
         if (role !== "student") {
           return (
             <div className="rounded-2xl bg-tg-bg-section p-6 text-sm text-tg-text-hint">
-              Только для учеников.
+              {ru.student.freeze.studentsOnly}
             </div>
           );
         }
@@ -64,10 +65,10 @@ function Body({ jwt }: { jwt: string }) {
       const body = (await r.json().catch(() => ({}))) as { error?: string };
       setError(
         body.error === "not_active"
-          ? "Заморозка доступна только при активной подписке."
+          ? ru.student.freeze.errorNotActive
           : body.error === "budget_exceeded"
-            ? "На этот месяц лимит уже исчерпан."
-            : "Не получилось — попробуй позже.",
+            ? ru.student.freeze.errorBudgetExceeded
+            : ru.student.freeze.errorGeneric,
       );
       return;
     }
@@ -91,24 +92,20 @@ function Body({ jwt }: { jwt: string }) {
     return (
       <div className="rounded-2xl bg-tg-bg-section p-5 space-y-2">
         <p className="text-xs uppercase tracking-widest text-tg-text-hint">
-          Заморозка недоступна
+          {ru.student.freeze.lockedHeader}
         </p>
         {data.status === "frozen" ? (
           <>
             <p className="text-sm text-tg-text-subtitle">
-              Подписка уже на паузе до{" "}
-              <span className="font-medium text-tg-text tabular-nums">
-                {formatDate(data.frozen_until_iso)}
-              </span>
-              .
+              {ru.student.freeze.lockedFrozen(formatDate(data.frozen_until_iso))}
             </p>
             <p className="text-sm text-tg-text-subtitle">
-              Новая заморозка станет доступна, когда текущая закончится.
+              {ru.student.freeze.lockedFrozenHint}
             </p>
           </>
         ) : (
           <p className="text-sm text-tg-text-subtitle">
-            Заморозка доступна только при активной подписке.
+            {ru.student.freeze.lockedNonActive}
           </p>
         )}
       </div>
@@ -120,25 +117,26 @@ function Body({ jwt }: { jwt: string }) {
   return (
     <div className="space-y-5">
       <section className="rounded-2xl bg-tg-bg-section p-5 space-y-2">
-        <p className="text-xs uppercase tracking-widest text-tg-text-hint">Как работает</p>
-        <p className="text-sm text-tg-text-subtitle">
-          Можно заморозить доступ до {data.budget_days} дней в месяц.
+        <p className="text-xs uppercase tracking-widest text-tg-text-hint">
+          {ru.student.freeze.howItWorksHeader}
         </p>
         <p className="text-sm text-tg-text-subtitle">
-          Это продлит подписку на время паузы.
+          {ru.student.freeze.budgetLine(data.budget_days)}
         </p>
         <p className="text-sm text-tg-text-subtitle">
-          Заморозка действует со следующего дня после активации.
+          {ru.student.freeze.extendsLine}
+        </p>
+        <p className="text-sm text-tg-text-subtitle">
+          {ru.student.freeze.effectsNextDayLine}
         </p>
       </section>
 
       <section className="rounded-2xl bg-tg-bg-section p-5 space-y-3">
         <p className="text-xs uppercase tracking-widest text-tg-text-hint">
-          Сколько дней заморозить
+          {ru.student.freeze.pickerHeader}
         </p>
         <p className="text-sm text-tg-text-subtitle">
-          На этот месяц доступно: <span className="tabular-nums">{data.remaining_days}</span> из{" "}
-          <span className="tabular-nums">{data.budget_days}</span>.
+          {ru.student.freeze.budgetSummary(data.remaining_days, data.budget_days)}
         </p>
         <div className="grid grid-cols-3 gap-2">
           {[1, 2, 3].map((n) => {
@@ -156,7 +154,7 @@ function Body({ jwt }: { jwt: string }) {
                     : "bg-tg-bg-secondary text-tg-text"
                 } disabled:opacity-40`}
               >
-                {n} {n === 1 ? "день" : "дня"}
+                {n} {n === 1 ? ru.student.freeze.oneDay : ru.student.freeze.twoDays}
               </button>
             );
           })}
@@ -168,7 +166,7 @@ function Body({ jwt }: { jwt: string }) {
           onClick={() => void activate()}
           className="w-full h-10 rounded-2xl bg-tg-button text-tg-button-text text-sm font-semibold transition-transform active:scale-[0.99] disabled:opacity-50"
         >
-          {busy ? "Включаем…" : "Заморозить со следующего дня"}
+          {busy ? ru.student.freeze.activatingButton : ru.student.freeze.activateButton}
         </button>
       </section>
     </div>

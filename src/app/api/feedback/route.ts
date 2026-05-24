@@ -1,3 +1,4 @@
+import { ru } from "@/lib/i18n";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { authFromRequest } from "@/lib/auth-server";
@@ -66,7 +67,7 @@ export async function GET(req: NextRequest) {
     created_at: m.created_at,
     author:
       m.direction === "out" && m.author_id != null
-        ? { handle: handlesById.get(m.author_id) ?? "Админ" }
+        ? { handle: handlesById.get(m.author_id) ?? ru.bot.labels.adminFallback }
         : null,
   }));
 

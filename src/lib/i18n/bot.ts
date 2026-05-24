@@ -188,6 +188,16 @@ const onboarding = {
   staleButton: "Кнопка устарела",
 };
 
+const labels = {
+  studentFallback: "Ученик",
+  adminFallback: "Админ",
+  voiceLower: "голосовое",
+  videoNoteLower: "круглое видео",
+  voiceUpper: "Голосовое",
+  videoNoteUpper: "Круглое видео",
+  openInline: "Открыть",
+};
+
 const notifications = {
   teacherReplyMissingContext:
     "Чтобы ответить ученику, открой мини-приложение, нажми «Ответить» рядом с его сообщением, и потом свайпни по подсказке.",
@@ -223,4 +233,5 @@ export const bot = {
   subscription,
   onboarding,
   notifications,
+  labels,
 };

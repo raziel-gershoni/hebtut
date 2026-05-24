@@ -1,4 +1,5 @@
 "use client";
+import { ru } from "@/lib/i18n";
 import type { ReactNode } from "react";
 import { useInitDataAuth } from "@/hooks/useInitDataAuth";
 import { useTelegramBackButton } from "@/hooks/useTelegramBackButton";
@@ -19,11 +20,7 @@ interface AppShellProps {
   children: (ctx: AppCtx) => ReactNode;
 }
 
-const ROLE_LABEL: Record<string, string> = {
-  pending: "ожидание",
-  student: "ученик",
-  teacher: "тренер",
-};
+const ROLE_LABEL: Record<string, string> = ru.inbox.appShellRoleLabels;
 
 export function AppShell({ title, back, children }: AppShellProps) {
   const status = useInitDataAuth();

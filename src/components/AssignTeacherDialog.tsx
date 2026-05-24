@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { Spinner } from "./Spinner";
+import { ru } from "@/lib/i18n";
 
 interface Teacher {
   id: number;
@@ -56,7 +57,7 @@ export function AssignTeacherDialog({
       headers: { Authorization: `Bearer ${jwt}` },
     });
     if (!r.ok) {
-      setError("не удалось загрузить тренеров");
+      setError(ru.inbox.assignTeacher.loadError);
       return;
     }
     const d = (await r.json()) as { users: AdminUserPayload[] };
@@ -103,12 +104,12 @@ export function AssignTeacherDialog({
       );
       const failed = results.filter((r) => !r.ok);
       if (failed.length > 0) {
-        setError(`не удалось привязать ${failed.length}/${results.length}`);
+        setError(ru.inbox.assignTeacher.partialError(failed.length, results.length));
         // Still call onSaved so the partial result reflects in the inbox.
       }
       onSaved();
     } catch {
-      setError("сеть недоступна");
+      setError(ru.inbox.assignTeacher.networkError);
     } finally {
       setBusy(false);
     }
@@ -117,9 +118,9 @@ export function AssignTeacherDialog({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 animate-fade-in">
       <div className="bg-tg-bg-section text-tg-text w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 shadow-2xl animate-slide-up max-h-[80vh] flex flex-col">
-        <h2 className="font-semibold tracking-tight mb-1">Назначить тренера</h2>
+        <h2 className="font-semibold tracking-tight mb-1">{ru.inbox.assignTeacher.dialogTitle}</h2>
         <div className="text-sm text-tg-text-subtitle mb-4">
-          Ученик: <span className="font-medium">{studentLabel}</span>
+          {ru.inbox.assignTeacher.studentLabel} <span className="font-medium">{studentLabel}</span>
         </div>
 
         <div className="flex-1 overflow-y-auto -mx-1 px-1">
@@ -127,7 +128,7 @@ export function AssignTeacherDialog({
             <div className="py-8 text-center"><Spinner /></div>
           ) : teachers.length === 0 ? (
             <div className="text-sm text-tg-text-hint italic py-4">
-              В системе пока нет тренеров.
+              {ru.inbox.assignTeacher.noTeachers}
             </div>
           ) : (
             <ul className="space-y-1">
@@ -137,7 +138,7 @@ export function AssignTeacherDialog({
                   t.preferred_name ??
                   t.name ??
                   t.display_handle ??
-                  `teacher ${t.id}`;
+                  ru.inbox.assignTeacher.fallbackName(t.id);
                 return (
                   <li key={t.id}>
                     <label
@@ -171,7 +172,7 @@ export function AssignTeacherDialog({
             onClick={onClose}
             className="min-h-10 h-10 px-4 rounded-full bg-tg-bg-secondary text-tg-text text-sm font-medium transition-transform active:scale-95 disabled:opacity-50"
           >
-            Закрыть
+            {ru.inbox.assignTeacher.closeButton}
           </button>
           <button
             type="button"
@@ -180,7 +181,7 @@ export function AssignTeacherDialog({
             aria-busy={busy}
             className="min-h-10 h-10 px-4 rounded-full bg-tg-button text-tg-button-text text-sm font-medium transition-transform active:scale-95 disabled:opacity-50 inline-flex items-center justify-center min-w-[7rem]"
           >
-            {busy ? <Spinner /> : `Назначить (${picked.size})`}
+            {busy ? <Spinner /> : ru.inbox.assignTeacher.assignButton(picked.size)}
           </button>
         </div>
       </div>

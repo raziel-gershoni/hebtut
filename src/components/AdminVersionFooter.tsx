@@ -1,6 +1,7 @@
 "use client";
 
 import { BUILD_INFO, commitUrl } from "@/lib/build-info";
+import { ru } from "@/lib/i18n";
 
 /**
  * Tiny footer at the bottom of /admin showing the running git SHA, branch,
@@ -12,7 +13,7 @@ export function AdminVersionFooter() {
   if (!BUILD_INFO.sha) {
     return (
       <div className="mt-6 mb-2 text-[10px] text-tg-text-hint text-center opacity-60">
-        версия не определена
+        {ru.admin.versionFooter.unknown}
       </div>
     );
   }
@@ -51,7 +52,7 @@ export function AdminVersionFooter() {
       )}
       {builtAtLabel && (
         <div title={builtAt?.toISOString() ?? undefined}>
-          собрано {builtAtLabel}
+          {ru.admin.versionFooter.builtPrefix} {builtAtLabel}
         </div>
       )}
     </div>

@@ -1,3 +1,4 @@
+import { ru } from "@/lib/i18n";
 import type { NextRequest } from "next/server";
 import { addDays, parseISO } from "date-fns";
 import { fromZonedTime } from "date-fns-tz";
@@ -90,7 +91,7 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   return Response.json(
     {
-      name: row?.name ?? "Ученик",
+      name: row?.name ?? ru.bot.labels.studentFallback,
       status: toApiStatus(sub.derived),
       practice: {
         used_seconds: used,

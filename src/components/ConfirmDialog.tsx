@@ -1,6 +1,7 @@
 "use client";
 import { useState, type ReactNode } from "react";
 import { Spinner } from "./Spinner";
+import { ru } from "@/lib/i18n";
 
 export function ConfirmDialog({
   open,
@@ -40,7 +41,7 @@ export function ConfirmDialog({
             onClick={onCancel}
             className="min-h-10 h-10 px-4 rounded-full bg-tg-bg-secondary text-tg-text text-sm font-medium transition-transform active:scale-95 disabled:opacity-50"
           >
-            Отмена
+            {ru.common.cancel}
           </button>
           <button
             type="button"
@@ -49,7 +50,7 @@ export function ConfirmDialog({
             aria-busy={busy}
             className="min-h-10 h-10 px-4 rounded-full bg-tg-text-destructive text-white text-sm font-medium transition-transform active:scale-95 disabled:opacity-70 inline-flex items-center justify-center min-w-[7rem]"
           >
-            {busy ? <Spinner /> : "Подтвердить"}
+            {busy ? <Spinner /> : ru.common.confirm}
           </button>
         </div>
       </div>

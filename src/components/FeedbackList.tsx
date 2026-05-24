@@ -1,4 +1,5 @@
 "use client";
+import { ru } from "@/lib/i18n";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Avatar } from "./Avatar";
@@ -101,7 +102,7 @@ export function FeedbackList({ jwt }: { jwt: string }) {
                 </div>
                 <div className="mt-0.5 flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-sm text-tg-text-hint">
-                    {fromMe && "Ты: "}
+                    {fromMe && ru.inbox.feedbackList.youPrefix}
                     {c.last_message.text_content}
                   </span>
                   {c.unread_count > 0 && (
@@ -127,7 +128,7 @@ export function FeedbackList({ jwt }: { jwt: string }) {
                       c.claim.is_self ? "text-emerald-600 dark:text-emerald-400" : "text-tg-text-hint"
                     }`}
                   >
-                    {c.claim.is_self ? "Берёшь ты" : `Берёт ${c.claim.admin_handle}`}
+                    {c.claim.is_self ? ru.inbox.feedbackList.takingBySelf : ru.inbox.feedbackList.takingByOtherFn(c.claim.admin_handle)}
                   </div>
                 )}
               </div>

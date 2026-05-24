@@ -1,4 +1,5 @@
 "use client";
+import { ru } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { Spinner } from "./Spinner";
 import { TagPicker } from "./TagPicker";
@@ -53,7 +54,7 @@ export function EditMediaItemDialog({ open, jwt, item, onClose, onSaved }: Props
     });
     setBusy(false);
     if (!r.ok) {
-      setError(r.status === 403 ? "только загрузивший или админ" : "не удалось сохранить");
+      setError(r.status === 403 ? ru.inbox.mediaItem.editForbidden : ru.inbox.mediaItem.editError);
       return;
     }
     await onSaved();
@@ -119,7 +120,7 @@ export function EditMediaItemDialog({ open, jwt, item, onClose, onSaved }: Props
             onChange={(e) => setDescription(e.target.value)}
             maxLength={DESC_MAX}
             rows={3}
-            placeholder="Короткое описание для тренеров"
+            placeholder={ru.inbox.mediaItem.descriptionPlaceholder}
             className="w-full px-3 py-2 rounded-xl bg-tg-bg-secondary text-tg-text outline-none focus:ring-2 focus:ring-tg-button/40 resize-y"
           />
         </label>
@@ -140,7 +141,7 @@ export function EditMediaItemDialog({ open, jwt, item, onClose, onSaved }: Props
             onClick={onClose}
             className="h-10 px-4 rounded-full bg-tg-bg-secondary text-tg-text text-sm font-medium transition-transform active:scale-95 disabled:opacity-50"
           >
-            Отмена
+            {ru.common.cancel}
           </button>
           <button
             type="button"
@@ -149,7 +150,7 @@ export function EditMediaItemDialog({ open, jwt, item, onClose, onSaved }: Props
             aria-busy={busy}
             className="h-10 px-4 rounded-full bg-tg-button text-tg-button-text text-sm font-medium transition-transform active:scale-95 disabled:opacity-50 inline-flex items-center justify-center min-w-[6rem]"
           >
-            {busy ? <Spinner /> : "Сохранить"}
+            {busy ? <Spinner /> : ru.inbox.mediaItem.saveButton}
           </button>
         </div>
       </div>

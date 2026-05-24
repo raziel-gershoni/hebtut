@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ru } from "@/lib/i18n";
 
 interface MenuItem {
   href: string;
@@ -12,26 +13,26 @@ interface MenuItem {
 const ITEMS: MenuItem[] = [
   {
     href: "/feedback",
-    title: "Поддержка",
-    subtitle: "Связаться с админом или ответить на видео-просьбу",
+    title: ru.student.menu.items.feedback.title,
+    subtitle: ru.student.menu.items.feedback.subtitle,
     icon: "💬",
   },
   {
     href: "/student/referrals",
-    title: "Рефералы",
-    subtitle: "Пригласи друга — оба получите +30 дней",
+    title: ru.student.menu.items.referrals.title,
+    subtitle: ru.student.menu.items.referrals.subtitle,
     icon: "🎁",
   },
   {
     href: "/student/freeze",
-    title: "Заморозка",
-    subtitle: "Поставить практику на паузу до 3 дней в месяц",
+    title: ru.student.menu.items.freeze.title,
+    subtitle: ru.student.menu.items.freeze.subtitle,
     icon: "❄️",
   },
   {
     href: "/student/response-window",
-    title: "Время ответа",
-    subtitle: "Когда тренеру можно начинать диалог",
+    title: ru.student.menu.items.responseWindow.title,
+    subtitle: ru.student.menu.items.responseWindow.subtitle,
     icon: "🕒",
   },
 ];

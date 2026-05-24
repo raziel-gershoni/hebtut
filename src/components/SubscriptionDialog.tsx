@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Spinner } from "./Spinner";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { ru } from "@/lib/i18n";
 
 export interface SubscriptionInfo {
   status:
@@ -59,7 +60,7 @@ export function SubscriptionDialog({
     });
     setBusy(false);
     if (!r.ok) {
-      setError("Не получилось — попробуй ещё раз.");
+      setError(ru.admin.subscription.patchError);
       return false;
     }
     await onChanged();
@@ -74,7 +75,7 @@ export function SubscriptionDialog({
   async function grantCustom() {
     const days = Number(customDays);
     if (!Number.isInteger(days) || days < 1 || days > 3650) {
-      setError("Введи целое число от 1 до 3650.");
+      setError(ru.admin.subscription.customRangeError);
       return;
     }
     await grant(days);
@@ -84,14 +85,14 @@ export function SubscriptionDialog({
     <>
       <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 animate-fade-in">
         <div className="bg-tg-bg-section text-tg-text w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 shadow-2xl animate-slide-up">
-          <h2 className="font-semibold tracking-tight mb-1">Подписка</h2>
+          <h2 className="font-semibold tracking-tight mb-1">{ru.admin.subscription.dialogTitle}</h2>
           <p className="text-xs text-tg-text-hint mb-3 truncate">{userName}</p>
 
           <CurrentState subscription={subscription} />
 
           <div className="mt-4 space-y-3">
             <p className="text-xs uppercase tracking-widest text-tg-text-hint">
-              Активировать
+              {ru.admin.subscription.activateHeader}
             </p>
             <div className="grid grid-cols-3 gap-2">
               {QUICK_GRANTS.map((days) => (
@@ -102,7 +103,9 @@ export function SubscriptionDialog({
                   onClick={() => void grant(days)}
                   className="h-11 rounded-xl bg-tg-bg-secondary text-tg-text text-sm font-semibold tabular-nums transition-transform active:scale-95 disabled:opacity-50"
                 >
-                  +{days === 365 ? "1 год" : `${days} дней`}
+                  {days === 365
+                    ? ru.admin.subscription.quickGrantYear
+                    : ru.admin.subscription.quickGrantDays(days)}
                 </button>
               ))}
             </div>
@@ -115,7 +118,7 @@ export function SubscriptionDialog({
                   max={3650}
                   value={customDays}
                   onChange={(e) => setCustomDays(e.target.value)}
-                  placeholder="дней"
+                  placeholder={ru.admin.subscription.customDaysPlaceholder}
                   className="flex-1 h-11 px-3 rounded-xl bg-tg-bg-secondary text-tg-text tabular-nums outline-none focus:ring-2 focus:ring-tg-button/40"
                 />
                 <button
@@ -124,7 +127,7 @@ export function SubscriptionDialog({
                   onClick={() => void grantCustom()}
                   className="h-11 px-4 rounded-xl bg-tg-button text-tg-button-text text-sm font-semibold transition-transform active:scale-95 disabled:opacity-50 inline-flex items-center justify-center min-w-[6rem]"
                 >
-                  {busy ? <Spinner /> : "Активировать"}
+                  {busy ? <Spinner /> : ru.admin.subscription.activateButton}
                 </button>
               </div>
             ) : (
@@ -133,20 +136,20 @@ export function SubscriptionDialog({
                 onClick={() => setShowCustom(true)}
                 className="text-xs text-tg-text-link"
               >
-                + другое количество дней
+                {ru.admin.subscription.showCustomLink}
               </button>
             )}
           </div>
 
           <div className="mt-5 pt-4 border-t border-tg-text-hint/15 space-y-2">
-            <p className="text-xs uppercase tracking-widest text-tg-text-hint">Опасные действия</p>
+            <p className="text-xs uppercase tracking-widest text-tg-text-hint">{ru.admin.subscription.dangerHeader}</p>
             <button
               type="button"
               disabled={busy}
               onClick={() => setConfirming("reset_trial")}
               className="w-full h-10 rounded-xl bg-tg-bg-secondary text-tg-text text-sm font-medium transition-transform active:scale-95 disabled:opacity-50"
             >
-              Сбросить на пробный период (3 дня)
+              {ru.admin.subscription.resetTrialButton}
             </button>
             <button
               type="button"
@@ -154,7 +157,7 @@ export function SubscriptionDialog({
               onClick={() => setConfirming("lapse")}
               className="w-full h-10 rounded-xl bg-tg-text-destructive/10 text-tg-text-destructive text-sm font-medium transition-transform active:scale-95 disabled:opacity-50"
             >
-              Закрыть подписку
+              {ru.admin.subscription.lapseButton}
             </button>
           </div>
 
@@ -167,7 +170,7 @@ export function SubscriptionDialog({
               onClick={onClose}
               className="h-10 px-4 rounded-full bg-tg-bg-secondary text-tg-text text-sm font-medium transition-transform active:scale-95 disabled:opacity-50"
             >
-              Закрыть
+              {ru.admin.subscription.closeButton}
             </button>
           </div>
         </div>
@@ -175,8 +178,8 @@ export function SubscriptionDialog({
 
       <ConfirmDialog
         open={confirming === "reset_trial"}
-        title="Сбросить на пробный период?"
-        body="Подписка вернётся на 3 дня пробного периода. Активный платный период обнулится — вернуть его можно только повторной активацией."
+        title={ru.admin.subscription.resetConfirmTitle}
+        body={ru.admin.subscription.resetConfirmBody}
         onCancel={() => setConfirming(null)}
         onConfirm={async () => {
           await patch({ action: "reset_trial" });
@@ -186,8 +189,8 @@ export function SubscriptionDialog({
       />
       <ConfirmDialog
         open={confirming === "lapse"}
-        title="Закрыть подписку?"
-        body="Подписка закроется немедленно. На следующее голосовое ученик получит сообщение 'Доступ закрыт'."
+        title={ru.admin.subscription.lapseConfirmTitle}
+        body={ru.admin.subscription.lapseConfirmBody}
         onCancel={() => setConfirming(null)}
         onConfirm={async () => {
           await patch({ action: "lapse" });
@@ -203,19 +206,19 @@ function CurrentState({ subscription }: { subscription: SubscriptionInfo | null 
   if (!subscription) {
     return (
       <div className="rounded-xl bg-tg-bg-secondary p-3 text-sm text-tg-text-hint">
-        Нет данных о подписке.
+        {ru.admin.subscription.noData}
       </div>
     );
   }
   const { status } = subscription;
   return (
     <div className="rounded-xl bg-tg-bg-secondary p-3 text-sm">
-      <span className="text-tg-text-hint">Сейчас: </span>
+      <span className="text-tg-text-hint">{ru.admin.subscription.currentPrefix} </span>
       <span className="font-medium">{summary(subscription)}</span>
       <div className="mt-1 text-xs text-tg-text-hint">{detail(subscription)}</div>
       {status === "frozen" && subscription.frozen_until && (
         <div className="mt-1 text-xs text-tg-text-hint">
-          Заморозка до {fmtDate(subscription.frozen_until)}
+          {ru.admin.subscription.frozenUntil(fmtDate(subscription.frozen_until))}
         </div>
       )}
     </div>
@@ -225,40 +228,40 @@ function CurrentState({ subscription }: { subscription: SubscriptionInfo | null 
 function summary(s: SubscriptionInfo): string {
   switch (s.status) {
     case "trial":
-      return "Пробный период";
+      return ru.admin.subscription.summary.trial;
     case "active":
-      return "Активна";
+      return ru.admin.subscription.summary.active;
     case "trial_expired":
-      return "Пробный закончился";
+      return ru.admin.subscription.summary.trialExpired;
     case "lapsed":
-      return "Закрыта";
+      return ru.admin.subscription.summary.lapsed;
     case "payment_failed":
-      return "Платёж не прошёл";
+      return ru.admin.subscription.summary.paymentFailed;
     case "frozen":
-      return "Заморожена";
+      return ru.admin.subscription.summary.frozen;
   }
 }
 
 function detail(s: SubscriptionInfo): string {
   switch (s.status) {
     case "trial":
-      return `до ${fmtDate(s.trial_ends_at)}`;
+      return ru.admin.subscription.detail.trialUntil(fmtDate(s.trial_ends_at));
     case "active":
       return s.current_period_ends_at
-        ? `до ${fmtDate(s.current_period_ends_at)}`
-        : "период не задан";
+        ? ru.admin.subscription.detail.activeUntil(fmtDate(s.current_period_ends_at))
+        : ru.admin.subscription.detail.activeNoPeriod;
     case "trial_expired":
-      return `пробный закончился ${fmtDate(s.trial_ends_at)}`;
+      return ru.admin.subscription.detail.trialExpiredOn(fmtDate(s.trial_ends_at));
     case "lapsed":
       return s.current_period_ends_at
-        ? `закрылась ${fmtDate(s.current_period_ends_at)}`
-        : "доступ закрыт";
+        ? ru.admin.subscription.detail.lapsedOn(fmtDate(s.current_period_ends_at))
+        : ru.admin.subscription.detail.lapsedNoPeriod;
     case "payment_failed":
-      return "оплата требует обновления";
+      return ru.admin.subscription.detail.paymentFailed;
     case "frozen":
       return s.current_period_ends_at
-        ? `период до ${fmtDate(s.current_period_ends_at)}`
-        : "период не задан";
+        ? ru.admin.subscription.detail.frozenPeriodUntil(fmtDate(s.current_period_ends_at))
+        : ru.admin.subscription.detail.frozenNoPeriod;
   }
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { ru } from "@/lib/i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Spinner } from "./Spinner";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -27,10 +28,10 @@ interface Props {
 type KindFilter = "all" | "photo" | "video" | "audio";
 
 const KIND_LABELS: Record<KindFilter, string> = {
-  all: "Все",
-  photo: "Фото",
-  video: "Видео",
-  audio: "Аудио",
+  all: ru.inbox.mediaPicker.kindAll,
+  photo: ru.inbox.mediaPicker.kindPhoto,
+  video: ru.inbox.mediaPicker.kindVideo,
+  audio: ru.inbox.mediaPicker.kindAudio,
 };
 
 const ACCEPT = ALLOWED_MIME_TYPES.join(",");
@@ -67,7 +68,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
       headers: { Authorization: `Bearer ${jwt}` },
     });
     if (!r.ok) {
-      setError("Не удалось загрузить библиотеку");
+      setError(ru.inbox.mediaPicker.loadError);
       return;
     }
     const d = (await r.json()) as { items: MediaLibraryListItem[]; can_upload: boolean };
@@ -134,18 +135,18 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
     e.target.value = "";
     if (!f) return;
     if (!ALLOWED_MIME_TYPES.includes(f.type)) {
-      setUploadError("Неподдерживаемый формат файла");
+      setUploadError(ru.inbox.mediaPicker.unsupportedFormat);
       return;
     }
     if (f.size <= 0) {
-      setUploadError("Пустой файл");
+      setUploadError(ru.inbox.mediaPicker.emptyFile);
       return;
     }
     const kind = MIME_TO_KIND[f.type] ?? null;
     // Videos over the limit get compressed at upload time. Photos and
     // audio still hard-fail because there's no compression path for them.
     if (f.size > MAX_BYTES && !isCompressibleVideo(f.type, kind)) {
-      setUploadError(`Файл больше ${formatBytes(MAX_BYTES)}`);
+      setUploadError(ru.inbox.mediaPicker.fileTooLarge(formatBytes(MAX_BYTES)));
       return;
     }
     setUploadStaging(f);
@@ -178,14 +179,14 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
       } catch (e) {
         setUploadBusy(false);
         setCompressing(null);
-        setUploadError(`не удалось сжать видео: ${(e as Error).message}`);
+        setUploadError(ru.inbox.mediaPicker.compressError((e as Error).message));
         return;
       }
       setCompressing(null);
       if (fileToSend.size > MAX_BYTES) {
         setUploadBusy(false);
         setUploadError(
-          `после сжатия файл всё ещё ${formatBytes(fileToSend.size)} — попробуй обрезать клип`,
+          ru.inbox.mediaPicker.stillTooLarge(formatBytes(fileToSend.size)),
         );
         return;
       }
@@ -213,10 +214,10 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
         setUploadBusy(false);
         setUploadError(
           urlRes.status === 403
-            ? "загрузка отключена администратором"
+            ? ru.inbox.mediaPicker.uploadsDisabled
             : urlRes.status === 415
-              ? "неподдерживаемый формат файла"
-              : `не удалось получить путь для загрузки: ${urlRes.status}`,
+              ? ru.inbox.mediaPicker.unsupportedMime
+              : ru.inbox.mediaPicker.presignFailed(urlRes.status),
         );
         return;
       }
@@ -235,7 +236,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
     } catch (e) {
       setUploadBusy(false);
       setUploading(null);
-      setUploadError(`не удалось загрузить в хранилище: ${(e as Error).message}`);
+      setUploadError(ru.inbox.mediaPicker.storageUploadFailed((e as Error).message));
       return;
     }
     setUploading(null);
@@ -263,8 +264,8 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
       const body = await r.text().catch(() => "");
       setUploadError(
         body.startsWith("uploaded object missing")
-          ? "загрузка в хранилище не дошла — попробуй ещё раз"
-          : `не удалось зарегистрировать загрузку: ${body || r.statusText}`,
+          ? ru.inbox.mediaPicker.storageMissed
+          : ru.inbox.mediaPicker.registerFailed(body || r.statusText),
       );
       return;
     }
@@ -289,7 +290,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
     });
     setSendBusy(false);
     if (!r.ok) {
-      setError(r.status === 403 ? "нет доступа к ученику" : "не удалось отправить");
+      setError(r.status === 403 ? ru.inbox.mediaPicker.sendNoAccess : ru.inbox.mediaPicker.sendError);
       return;
     }
     await onSent();
@@ -306,7 +307,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
     });
     setPendingDelete(null);
     if (!r.ok) {
-      setError(r.status === 403 ? "только загрузивший или админ" : "не удалось удалить");
+      setError(r.status === 403 ? ru.inbox.mediaPicker.deleteForbidden : ru.inbox.mediaPicker.deleteError);
       return;
     }
     if (selectedId === id) setSelectedId(null);
@@ -324,7 +325,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
             <button
               type="button"
               onClick={onClose}
-              aria-label="Закрыть"
+              aria-label={ru.inbox.mediaPicker.closeAriaLabel}
               className="w-9 h-9 rounded-full bg-tg-bg-secondary text-tg-text inline-flex items-center justify-center active:scale-95"
             >
               ×
@@ -336,7 +337,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Поиск по названию или файлу"
+              placeholder={ru.inbox.mediaPicker.searchPlaceholder}
               className="w-full h-9 px-3 rounded-full bg-tg-bg-secondary text-xs text-tg-text outline-none focus:ring-2 focus:ring-tg-button/40"
             />
             <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1 no-scrollbar">
@@ -392,7 +393,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
               <div className="py-10 flex justify-center"><Spinner /></div>
             ) : visible.length === 0 ? (
               <div className="py-10 text-center text-sm text-tg-text-hint">
-                {items.length === 0 ? "Библиотека пуста" : "Ничего не найдено"}
+                {items.length === 0 ? ru.inbox.mediaPicker.emptyLibrary : ru.inbox.mediaPicker.nothingFound}
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -454,7 +455,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
               aria-busy={sendBusy}
               className="h-10 px-5 rounded-full bg-tg-button text-tg-button-text text-sm font-medium transition-transform active:scale-95 disabled:opacity-50 inline-flex items-center justify-center min-w-[7rem]"
             >
-              {sendBusy ? <Spinner /> : "Отправить"}
+              {sendBusy ? <Spinner /> : ru.inbox.mediaPicker.sendButton}
             </button>
           </div>
 
@@ -502,7 +503,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Удалить материал?"
+        title={ru.inbox.mediaPicker.deleteConfirmTitle}
         body={
           pendingDelete ? (
             <>
@@ -618,7 +619,7 @@ function UploadConfirmDialog({
             onChange={(e) => onDescriptionChange(e.target.value)}
             maxLength={500}
             rows={3}
-            placeholder="Короткое описание для тренеров"
+            placeholder={ru.inbox.mediaItem.descriptionPlaceholder}
             className="w-full px-3 py-2 rounded-xl bg-tg-bg-secondary text-tg-text outline-none focus:ring-2 focus:ring-tg-button/40 resize-y"
           />
         </label>
@@ -643,7 +644,7 @@ function UploadConfirmDialog({
             aria-busy={busy}
             className="h-10 px-4 rounded-full bg-tg-button text-tg-button-text text-sm font-medium transition-transform active:scale-95 disabled:opacity-50 inline-flex items-center justify-center min-w-[6rem]"
           >
-            {busy ? <Spinner /> : "Загрузить"}
+            {busy ? <Spinner /> : ru.inbox.mediaPicker.uploadButton}
           </button>
         </div>
       </div>

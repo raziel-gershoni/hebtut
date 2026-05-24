@@ -13,6 +13,7 @@ import {
 } from "@/lib/video-compress";
 import { tusUpload } from "@/lib/direct-upload";
 import { publicEnv } from "@/lib/env";
+import { ru } from "@/lib/i18n";
 import type { OnboardingVideoStep } from "@/types/database";
 
 const BUCKET = "media-library";
@@ -46,20 +47,7 @@ const VIDEO_MIMES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 const SLOT_META: Record<
   OnboardingVideoStep,
   { title: string; when: string }
-> = {
-  video1: {
-    title: "Видео 1",
-    when: "После кнопки «Привет» — первый блок онбординга.",
-  },
-  video2: {
-    title: "Видео 2",
-    when: "После видео 1 — перед вопросом про имя.",
-  },
-  video3: {
-    title: "Видео 3",
-    when: "Через ~5 минут после первого ответа тренера — мини-объяснялка.",
-  },
-};
+> = ru.admin.onboardingVideos.slotMeta;
 
 const STEPS: readonly OnboardingVideoStep[] = ["video1", "video2", "video3"];
 
@@ -87,7 +75,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
       headers: { Authorization: `Bearer ${jwt}` },
     });
     if (!r.ok) {
-      setError("не удалось загрузить");
+      setError(ru.admin.onboardingVideos.loadFailed);
       return;
     }
     const d = (await r.json()) as { slots: Slot[] };
@@ -135,7 +123,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
         setBusy(null);
         setUploadingStep(null);
         setCompressing(null);
-        setError(`не удалось подготовить видео: ${(e as Error).message}`);
+        setError(ru.admin.onboardingVideos.prepFailed((e as Error).message));
         return;
       }
     }
@@ -143,9 +131,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
     if (fileToSend.size > MAX_BYTES) {
       setBusy(null);
       setUploadingStep(null);
-      setError(
-        `после сжатия файл всё ещё ${formatBytes(fileToSend.size)} — попробуй обрезать клип`,
-      );
+      setError(ru.admin.onboardingVideos.stillTooLarge(formatBytes(fileToSend.size)));
       return;
     }
     let bucket: string;
@@ -171,8 +157,8 @@ export function AdminOnboardingVideos({ jwt }: Props) {
         setUploadingStep(null);
         setError(
           urlRes.status === 415
-            ? "только mp4 / mov / webm"
-            : `не удалось получить путь для загрузки: ${urlRes.status}`,
+            ? ru.admin.onboardingVideos.unsupportedMime
+            : ru.admin.onboardingVideos.presignFailed(urlRes.status),
         );
         return;
       }
@@ -192,7 +178,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
       setBusy(null);
       setUploadingStep(null);
       setUploading(null);
-      setError(`не удалось загрузить файл в хранилище: ${(e as Error).message}`);
+      setError(ru.admin.onboardingVideos.uploadFailed((e as Error).message));
       return;
     }
     setUploading(null);
@@ -217,8 +203,8 @@ export function AdminOnboardingVideos({ jwt }: Props) {
       const body = await r.text().catch(() => "");
       setError(
         body.startsWith("max clips")
-          ? `больше ${MAX_CLIPS_PER_STEP} клипов на шаг нельзя`
-          : `не удалось зарегистрировать загрузку: ${body || r.statusText}`,
+          ? ru.admin.onboardingVideos.capReached(MAX_CLIPS_PER_STEP)
+          : ru.admin.onboardingVideos.registerFailed(body || r.statusText),
       );
       return;
     }
@@ -237,7 +223,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
     });
     setBusy(null);
     if (!r.ok) {
-      setError("не удалось удалить");
+      setError(ru.admin.onboardingVideos.deleteFailed);
       return;
     }
     await load();
@@ -256,7 +242,7 @@ export function AdminOnboardingVideos({ jwt }: Props) {
     });
     setBusy(null);
     if (!r.ok) {
-      setError("не удалось переместить");
+      setError(ru.admin.onboardingVideos.moveFailed);
       return;
     }
     await load();
@@ -264,15 +250,9 @@ export function AdminOnboardingVideos({ jwt }: Props) {
 
   return (
     <section className="mb-4 rounded-2xl bg-tg-bg-section p-4 space-y-3">
-      <h2 className="text-lg font-semibold tracking-tight">Видео онбординга</h2>
+      <h2 className="text-lg font-semibold tracking-tight">{ru.admin.onboardingVideos.sectionTitle}</h2>
       <p className="text-xs text-tg-text-hint">
-        Бот отправляет ученику как круглое видео-сообщение (TG video_note).
-        Каждый файл автоматически обрезается по центру в квадрат 640×640 и
-        до 60 секунд. Можно загрузить до {MAX_CLIPS_PER_STEP} клипов в один
-        шаг — бот пришлёт первый сразу, остальные подтянутся через
-        фоновый воркер с интервалом &lt; 1 минуты (создаётся ощущение, что
-        видео записываются в реальном времени). Кодирование в браузере
-        занимает несколько минут на файл ради максимального качества.
+        {ru.admin.onboardingVideos.description(MAX_CLIPS_PER_STEP)}
       </p>
       {error && <div className="text-xs text-tg-text-destructive">{error}</div>}
       {slots === null ? (
@@ -302,8 +282,8 @@ export function AdminOnboardingVideos({ jwt }: Props) {
       )}
       <ConfirmDialog
         open={pendingDelete !== null}
-        title={pendingDelete ? `Удалить клип #${pendingDelete.position}?` : ""}
-        body="Если это был единственный клип в шаге, бот снова будет показывать текст-заглушку, пока не загрузишь новое."
+        title={pendingDelete ? ru.admin.onboardingVideos.deleteConfirmTitle(pendingDelete.position) : ""}
+        body={ru.admin.onboardingVideos.deleteConfirmBody}
         onCancel={() => setPendingDelete(null)}
         onConfirm={performDelete}
       />
@@ -367,7 +347,7 @@ function StepSection({
 
       {clips.length === 0 ? (
         <div className="text-xs text-tg-text-hint italic">
-          Не загружено — пока используется текст-заглушка.
+          {ru.admin.onboardingVideos.emptyStep}
         </div>
       ) : (
         <ol className="space-y-2">
@@ -404,7 +384,7 @@ function StepSection({
           disabled={atCap || anyBusy}
           className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-tg-button text-tg-button-text text-xs font-semibold transition-transform active:scale-95 disabled:opacity-50"
         >
-          {addingToThisStep ? <Spinner size={12} /> : "+ Добавить клип"}
+          {addingToThisStep ? <Spinner size={12} /> : ru.admin.onboardingVideos.addClipButton}
         </button>
       </div>
 
@@ -471,7 +451,7 @@ function ClipCard({
             onClick={() => onMove("up")}
             disabled={isFirst || busy || disabledByOther}
             className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-tg-bg-secondary text-tg-text text-sm transition-transform active:scale-95 disabled:opacity-30"
-            aria-label="Переместить вверх"
+            aria-label={ru.admin.onboardingVideos.moveUpAriaLabel}
           >
             ↑
           </button>
@@ -480,7 +460,7 @@ function ClipCard({
             onClick={() => onMove("down")}
             disabled={isLast || busy || disabledByOther}
             className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-tg-bg-secondary text-tg-text text-sm transition-transform active:scale-95 disabled:opacity-30"
-            aria-label="Переместить вниз"
+            aria-label={ru.admin.onboardingVideos.moveDownAriaLabel}
           >
             ↓
           </button>
@@ -510,7 +490,7 @@ function ClipCard({
       />
       {videoError && (
         <div className="text-[11px] text-tg-text-destructive">
-          видео не загружается: {videoError}
+          {ru.admin.onboardingVideos.videoLoadFailedPrefix} {videoError}
         </div>
       )}
 
@@ -525,7 +505,7 @@ function ClipCard({
           rel="noreferrer"
           className="text-tg-text-link shrink-0"
         >
-          открыть
+          {ru.admin.onboardingVideos.openInBrowser}
         </a>
       </div>
 
@@ -542,7 +522,7 @@ function ClipCard({
           disabled={busy || disabledByOther}
           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-tg-button text-tg-button-text text-xs font-semibold transition-transform active:scale-95 disabled:opacity-50"
         >
-          {busy ? <Spinner size={12} /> : "Заменить"}
+          {busy ? <Spinner size={12} /> : ru.admin.onboardingVideos.replaceButton}
         </button>
         <button
           type="button"
@@ -550,7 +530,7 @@ function ClipCard({
           disabled={busy || disabledByOther}
           className="inline-flex items-center h-8 px-3 rounded-full bg-tg-bg-section text-tg-text-destructive text-xs font-semibold transition-transform active:scale-95 disabled:opacity-50"
         >
-          Удалить
+          {ru.admin.onboardingVideos.deleteClipButton}
         </button>
       </div>
 
@@ -582,7 +562,7 @@ function ProgressBars({
       {compressing && (
         <div className="space-y-1 pt-1">
           <div className="flex items-center justify-between text-xs text-tg-text">
-            <span>Сжимаем видео ({compressing.preset})…</span>
+            <span>{ru.admin.onboardingVideos.compressingLabel(compressing.preset)}</span>
             <span className="tabular-nums">{compressPct}%</span>
           </div>
           <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
@@ -596,9 +576,7 @@ function ProgressBars({
       {uploading && (
         <div className="space-y-1 pt-1">
           <div className="flex items-center justify-between text-xs text-tg-text">
-            <span>
-              Загружаем… {formatBytes(uploading.loaded)} / {formatBytes(uploading.total)}
-            </span>
+            <span>{ru.admin.onboardingVideos.uploadingLabel(formatBytes(uploading.loaded), formatBytes(uploading.total))}</span>
             <span className="tabular-nums">{uploadPct}%</span>
           </div>
           <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
@@ -619,15 +597,15 @@ function validateFile(
 ): boolean {
   if (!f) return false;
   if (!VIDEO_MIMES.has(f.type)) {
-    setError("только mp4 / mov / webm");
+    setError(ru.admin.onboardingVideos.unsupportedMime);
     return false;
   }
   if (f.size <= 0) {
-    setError("пустой файл");
+    setError(ru.admin.onboardingVideos.fileEmpty);
     return false;
   }
   if (f.size > 4 * 1024 * 1024 * 1024) {
-    setError(`файл больше ${formatBytes(4 * 1024 * 1024 * 1024)}`);
+    setError(ru.admin.onboardingVideos.fileTooLarge(formatBytes(4 * 1024 * 1024 * 1024)));
     return false;
   }
   return true;

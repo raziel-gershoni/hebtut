@@ -1,4 +1,5 @@
 "use client";
+import { ru } from "@/lib/i18n";
 import { useCallback, useEffect, useState } from "react";
 import { Avatar } from "./Avatar";
 import { Spinner } from "./Spinner";
@@ -64,10 +65,10 @@ export function StudentPicker({ jwt, onClose }: StudentPickerProps) {
       }
       setError(
         d.error === "taken-by-other"
-          ? "Другой тренер сейчас работает с этим учеником"
+          ? ru.inbox.studentPicker.errorTakenByOther
           : d.error === "not-allowed"
-            ? "Связь с этим учеником утрачена"
-            : "Не удалось — попробуй ещё раз",
+            ? ru.inbox.studentPicker.errorNotAllowed
+            : ru.inbox.studentPicker.errorGeneric,
       );
     } finally {
       setBusyId(null);
@@ -84,10 +85,10 @@ export function StudentPicker({ jwt, onClose }: StudentPickerProps) {
         className="bg-tg-bg-section text-tg-text w-full sm:max-w-sm max-h-[80vh] rounded-t-2xl sm:rounded-2xl shadow-2xl animate-slide-up flex flex-col"
       >
         <header className="px-5 py-3 border-b border-tg-text-hint/15 flex items-center justify-between shrink-0">
-          <h2 className="font-semibold tracking-tight">Кому написать?</h2>
+          <h2 className="font-semibold tracking-tight">{ru.inbox.studentPicker.title}</h2>
           <button
             type="button"
-            aria-label="Закрыть"
+            aria-label={ru.inbox.studentPicker.closeAriaLabel}
             onClick={onClose}
             className="h-8 w-8 inline-flex items-center justify-center rounded-full text-tg-text-hint hover:text-tg-text transition-colors"
           >

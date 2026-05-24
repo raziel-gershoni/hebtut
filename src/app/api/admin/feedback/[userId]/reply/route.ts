@@ -120,7 +120,7 @@ export async function POST(
   try {
     await getBot().api.sendMessage(target.tg_chat_id, ru.bot.notifications.userFeedbackReplyPing, {
       reply_markup: {
-        inline_keyboard: [[{ text: "Открыть", web_app: { url } }]],
+        inline_keyboard: [[{ text: ru.bot.labels.openInline, web_app: { url } }]],
       },
     });
   } catch (e) {

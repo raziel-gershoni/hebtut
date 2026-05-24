@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRealtimeAudit } from "@/hooks/useRealtimeAudit";
+import { ru } from "@/lib/i18n";
 
 interface ActorRef {
   id: number;
@@ -18,28 +19,31 @@ interface AuditEvent {
   meta: Record<string, unknown>;
 }
 
-const ACTION_DEFS: Record<string, { label: string; tone: string; group: string }> = {
-  "claim.refresh": { label: "Сессия", tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", group: "Сессии" },
-  "claim.expire": { label: "Истекла сессия", tone: "bg-tg-bg-secondary text-tg-text-hint", group: "Сессии" },
-  "message.in": { label: "От ученика", tone: "bg-sky-500/15 text-sky-700 dark:text-sky-400", group: "Сообщения" },
-  "message.out": { label: "От тренера", tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", group: "Сообщения" },
-  "admin.role_change": { label: "Смена роли", tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: "Админ" },
-  "admin.is_admin_change": { label: "Права админа", tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: "Админ" },
-  "admin.status_change": { label: "Статус", tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: "Админ" },
-  "admin.user_delete": { label: "Удалён", tone: "bg-rose-500/15 text-rose-700 dark:text-rose-400", group: "Админ" },
-  "admin.user_ban": { label: "Забанен", tone: "bg-rose-500/15 text-rose-700 dark:text-rose-400", group: "Админ" },
-  "admin.user_unban": { label: "Разбанен", tone: "bg-sky-500/15 text-sky-700 dark:text-sky-400", group: "Админ" },
-  "admin.invite_create": { label: "Создал ссылку", tone: "bg-sky-500/15 text-sky-700 dark:text-sky-400", group: "Приглашения" },
-  "admin.invite_revoke": { label: "Отозвал ссылку", tone: "bg-tg-bg-secondary text-tg-text-hint", group: "Приглашения" },
-  "admin.link_create": { label: "Связал", tone: "bg-sky-500/15 text-sky-700 dark:text-sky-400", group: "Связи" },
-  "admin.link_delete": { label: "Разорвал связь", tone: "bg-tg-bg-secondary text-tg-text-hint", group: "Связи" },
-  "invite.consume": { label: "Активировал ссылку", tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", group: "Приглашения" },
-  "signup.student": { label: "Регистрация ученика", tone: "bg-sky-500/15 text-sky-700 dark:text-sky-400", group: "Регистрация" },
-  "signup.teacher": { label: "Регистрация тренера", tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", group: "Регистрация" },
-  "feedback.in": { label: "Обратная связь", tone: "bg-sky-500/15 text-sky-700 dark:text-sky-400", group: "Связь" },
-  "feedback.out": { label: "Ответ админа", tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: "Связь" },
-  "feedback.claim_refresh": { label: "Берёт обратную связь", tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", group: "Связь" },
-  "feedback.claim_expire": { label: "Истёк клейм связи", tone: "bg-tg-bg-secondary text-tg-text-hint", group: "Связь" },
+type ActionDef = { label: string; tone: string; group: string };
+const A = ru.admin.audit.actions;
+const G = ru.admin.audit.groups;
+const ACTION_DEFS: Record<string, ActionDef> = {
+  "claim.refresh": { label: A["claim.refresh"], tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", group: G.sessions },
+  "claim.expire": { label: A["claim.expire"], tone: "bg-tg-bg-secondary text-tg-text-hint", group: G.sessions },
+  "message.in": { label: A["message.in"], tone: "bg-sky-500/15 text-sky-700 dark:text-sky-400", group: G.messages },
+  "message.out": { label: A["message.out"], tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", group: G.messages },
+  "admin.role_change": { label: A["admin.role_change"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.admin },
+  "admin.is_admin_change": { label: A["admin.is_admin_change"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.admin },
+  "admin.status_change": { label: A["admin.status_change"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.admin },
+  "admin.user_delete": { label: A["admin.user_delete"], tone: "bg-rose-500/15 text-rose-700 dark:text-rose-400", group: G.admin },
+  "admin.user_ban": { label: A["admin.user_ban"], tone: "bg-rose-500/15 text-rose-700 dark:text-rose-400", group: G.admin },
+  "admin.user_unban": { label: A["admin.user_unban"], tone: "bg-sky-500/15 text-sky-700 dark:text-sky-400", group: G.admin },
+  "admin.invite_create": { label: A["admin.invite_create"], tone: "bg-sky-500/15 text-sky-700 dark:text-sky-400", group: G.invites },
+  "admin.invite_revoke": { label: A["admin.invite_revoke"], tone: "bg-tg-bg-secondary text-tg-text-hint", group: G.invites },
+  "admin.link_create": { label: A["admin.link_create"], tone: "bg-sky-500/15 text-sky-700 dark:text-sky-400", group: G.links },
+  "admin.link_delete": { label: A["admin.link_delete"], tone: "bg-tg-bg-secondary text-tg-text-hint", group: G.links },
+  "invite.consume": { label: A["invite.consume"], tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", group: G.invites },
+  "signup.student": { label: A["signup.student"], tone: "bg-sky-500/15 text-sky-700 dark:text-sky-400", group: G.registration },
+  "signup.teacher": { label: A["signup.teacher"], tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", group: G.registration },
+  "feedback.in": { label: A["feedback.in"], tone: "bg-sky-500/15 text-sky-700 dark:text-sky-400", group: G.feedback },
+  "feedback.out": { label: A["feedback.out"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.feedback },
+  "feedback.claim_refresh": { label: A["feedback.claim_refresh"], tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", group: G.feedback },
+  "feedback.claim_expire": { label: A["feedback.claim_expire"], tone: "bg-tg-bg-secondary text-tg-text-hint", group: G.feedback },
 };
 
 const ACTION_OPTIONS = Object.entries(ACTION_DEFS).map(([value, def]) => ({
@@ -49,10 +53,10 @@ const ACTION_OPTIONS = Object.entries(ACTION_DEFS).map(([value, def]) => ({
 }));
 
 const RANGE_OPTIONS = [
-  { value: "1h", label: "За час" },
-  { value: "24h", label: "За 24 часа" },
-  { value: "7d", label: "За неделю" },
-  { value: "30d", label: "За 30 дней" },
+  { value: "1h", label: ru.admin.audit.rangeOptions["1h"] },
+  { value: "24h", label: ru.admin.audit.rangeOptions["24h"] },
+  { value: "7d", label: ru.admin.audit.rangeOptions["7d"] },
+  { value: "30d", label: ru.admin.audit.rangeOptions["30d"] },
 ];
 
 function rangeToSinceIso(range: string): string {
@@ -206,14 +210,14 @@ export function AuditLog({ jwt }: { jwt: string }) {
     <section>
       <div className="sticky top-0 z-10 bg-tg-bg pb-3 mb-3 -mx-3 px-3 border-b border-tg-text-hint/15">
         <header className="flex items-baseline justify-between gap-3 mb-2 pt-1">
-          <h2 className="text-lg font-semibold tracking-tight">Журнал действий</h2>
+          <h2 className="text-lg font-semibold tracking-tight">{ru.admin.audit.sectionTitle}</h2>
           {filtersActive && (
             <button
               type="button"
               onClick={clearAllFilters}
               className="text-xs text-tg-text-link"
             >
-              Сбросить
+              {ru.admin.audit.resetFilters}
             </button>
           )}
         </header>
@@ -264,14 +268,14 @@ export function AuditLog({ jwt }: { jwt: string }) {
         <div className="flex gap-2">
           <input
             type="number"
-            placeholder="Кто (user.id)"
+            placeholder={ru.admin.audit.actorPlaceholder}
             value={actorFilter}
             onChange={(e) => setActorFilter(e.target.value)}
             className="flex-1 min-w-0 h-9 px-3 rounded-xl bg-tg-bg-secondary text-tg-text text-sm placeholder:text-tg-text-hint outline-none focus:ring-2 focus:ring-tg-button/40"
           />
           <input
             type="number"
-            placeholder="Объект (subject_id)"
+            placeholder={ru.admin.audit.subjectPlaceholder}
             value={subjectIdFilter}
             onChange={(e) => setSubjectIdFilter(e.target.value)}
             className="flex-1 min-w-0 h-9 px-3 rounded-xl bg-tg-bg-secondary text-tg-text text-sm placeholder:text-tg-text-hint outline-none focus:ring-2 focus:ring-tg-button/40"
@@ -289,7 +293,7 @@ export function AuditLog({ jwt }: { jwt: string }) {
 
       {loaded && events.length === 0 && (
         <div className="rounded-2xl bg-tg-bg-section p-6 text-center text-sm text-tg-text-hint">
-          Ничего не найдено по этим фильтрам.
+          {ru.admin.audit.empty}
         </div>
       )}
 
@@ -298,7 +302,7 @@ export function AuditLog({ jwt }: { jwt: string }) {
           const def = ACTION_DEFS[e.action] ?? {
             label: e.action,
             tone: "bg-tg-bg-secondary text-tg-text-hint",
-            group: "?",
+            group: ru.admin.audit.groups.unknown,
           };
           const summary = metaSummary(e.action, e.meta);
           const expanded = expandedId === e.id;
@@ -322,7 +326,7 @@ export function AuditLog({ jwt }: { jwt: string }) {
                 </span>
                 <span className="min-w-0 flex-1 text-xs text-tg-text leading-snug pt-0.5">
                   <span className="font-medium">
-                    {e.actor ? e.actor.name ?? e.actor.display_handle ?? `#${e.actor.id}` : "system"}
+                    {e.actor ? e.actor.name ?? e.actor.display_handle ?? `#${e.actor.id}` : ru.admin.audit.systemActor}
                   </span>
                   {e.subject_type && e.subject_id != null && (
                     <span className="text-tg-text-hint"> · {e.subject_type}#{e.subject_id}</span>
@@ -348,7 +352,7 @@ export function AuditLog({ jwt }: { jwt: string }) {
             disabled={loadingMore}
             className="inline-flex items-center gap-1.5 px-4 h-9 rounded-full bg-tg-bg-secondary text-tg-text text-sm font-medium disabled:opacity-50"
           >
-            {loadingMore ? "..." : "Загрузить ещё"}
+            {loadingMore ? ru.admin.audit.loadingMore : ru.admin.audit.loadMore}
           </button>
         </div>
       )}

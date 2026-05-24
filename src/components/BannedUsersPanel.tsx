@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { ru } from "@/lib/i18n";
 
 interface BanRow {
   tg_user_id: number;
@@ -41,7 +42,7 @@ export function BannedUsersPanel({ jwt }: { jwt: string }) {
 
   return (
     <section className="mt-6">
-      <h2 className="text-lg font-semibold tracking-tight mb-3">Заблокированные</h2>
+      <h2 className="text-lg font-semibold tracking-tight mb-3">{ru.admin.bannedUsers.sectionTitle}</h2>
       <ul className="space-y-1.5">
         {rows.map((r) => (
           <li
@@ -50,7 +51,7 @@ export function BannedUsersPanel({ jwt }: { jwt: string }) {
           >
             <div className="min-w-0 flex-1 leading-tight">
               <div className="text-sm font-medium truncate">
-                {r.name_snapshot ?? `user ${r.tg_user_id}`}
+                {r.name_snapshot ?? ru.admin.bannedUsers.unknownNamePrefix(r.tg_user_id)}
               </div>
               <div className="text-[11px] text-tg-text-hint tabular-nums truncate">
                 {r.tg_user_id} · {new Date(r.banned_at).toLocaleString("ru-RU")}
@@ -62,7 +63,7 @@ export function BannedUsersPanel({ jwt }: { jwt: string }) {
               onClick={() => void unban(r.tg_user_id)}
               className="shrink-0 text-xs text-tg-text-link transition-opacity active:opacity-60"
             >
-              Разблокировать
+              {ru.admin.bannedUsers.unbanButton}
             </button>
           </li>
         ))}

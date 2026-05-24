@@ -1,4 +1,5 @@
 "use client";
+import { ru } from "@/lib/i18n";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { differenceInCalendarDays } from "date-fns";
 import { Avatar } from "./Avatar";
@@ -160,11 +161,11 @@ export function FeedbackThread({
         const d = (await r.json().catch(() => ({}))) as {
           holder?: { handle?: string };
         };
-        const h = d.holder?.handle ?? "другой админ";
-        setError(`Сейчас отвечает ${h} — попробуй позже`);
+        const h = d.holder?.handle ?? ru.inbox.feedbackThread.fallbackHandler;
+        setError(ru.inbox.feedbackThread.takenByOtherFn(h));
         await load();
       } else {
-        setError("Не удалось отправить — попробуй ещё раз");
+        setError(ru.inbox.feedbackThread.sendError);
       }
     } finally {
       setSending(false);
@@ -175,7 +176,7 @@ export function FeedbackThread({
     user?.has_avatar && jwt
       ? `/api/avatar/${user.id}?token=${encodeURIComponent(jwt)}`
       : undefined;
-  const name = user?.name ?? "—";
+  const name = user?.name ?? ru.inbox.feedbackThread.fallbackName;
 
   return (
     <div className="flex flex-col h-[calc(100vh-7rem)] sm:h-[70vh]">
@@ -206,7 +207,7 @@ export function FeedbackThread({
         )}
         {loaded && messages.length === 0 && (
           <div className="rounded-2xl bg-tg-bg-section p-6 text-center text-sm text-tg-text-hint">
-            Сообщений нет.
+            {ru.inbox.feedbackThread.noMessages}
           </div>
         )}
         {messages.map((m, i) => {
@@ -274,7 +275,7 @@ export function FeedbackThread({
             }
           }}
           rows={1}
-          placeholder={claim && !claim.is_self ? `Берёт ${claim.admin_handle}` : "Ответ"}
+          placeholder={claim && !claim.is_self ? ru.inbox.feedbackThread.takenByPlaceholderFn(claim.admin_handle) : ru.inbox.feedbackThread.draftPlaceholder}
           disabled={!!(claim && !claim.is_self)}
           className="flex-1 min-w-0 px-3 py-2 rounded-2xl bg-tg-bg-secondary text-tg-text text-sm placeholder:text-tg-text-hint outline-none focus:ring-2 focus:ring-tg-button/40 resize-none max-h-32 disabled:opacity-50"
         />
@@ -283,7 +284,7 @@ export function FeedbackThread({
           onClick={() => void send()}
           disabled={sending || draft.trim().length === 0 || !!(claim && !claim.is_self)}
           className="shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-full bg-tg-button text-tg-button-text font-semibold transition-transform active:scale-95 disabled:opacity-50"
-          aria-label="Отправить"
+          aria-label={ru.inbox.feedbackThread.sendAriaLabel}
         >
           {sending ? <Spinner size={14} /> : "↑"}
         </button>

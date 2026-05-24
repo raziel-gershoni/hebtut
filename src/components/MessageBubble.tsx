@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { formatDuration } from "@/lib/i18n";
+import { formatDuration, ru } from "@/lib/i18n";
 import { Spinner } from "./Spinner";
 import { Avatar } from "./Avatar";
 import type { SpeakerColorClasses } from "@/lib/speaker-color";
@@ -98,14 +98,14 @@ export function MessageBubble({
     try {
       const r = await onReply(msg.id);
       if (r.ok) {
-        setFeedback("✓ Свайпни по приглашению в чате");
+        setFeedback(ru.inbox.message.replyFeedbackOk);
         // Mirror the inbox claim flow — close the Mini App so the prompt
         // landing in the teacher's TG chat is visible.
         window.Telegram?.WebApp?.close?.();
       } else if (r.reason === "taken-by-other") {
-        setFeedback("Берёт другой тренер");
+        setFeedback(ru.inbox.message.replyFeedbackTakenByOther);
       } else {
-        setFeedback(`Ошибка: ${r.reason ?? "неизвестная"}`);
+        setFeedback(ru.inbox.message.replyFeedbackError(r.reason ?? ru.inbox.message.replyFeedbackUnknownReason));
       }
     } finally {
       setBusy(false);
@@ -144,7 +144,7 @@ export function MessageBubble({
             type="button"
             onClick={() => scrollToMessage(replyTo.id)}
             className={`w-full text-left mb-2 rounded-xl px-2.5 py-1.5 text-xs border-l-[3px] transition-transform active:scale-[0.99] flex items-center gap-1.5 ${replyToSpeakerColors.replyBg} ${replyToSpeakerColors.border}`}
-            aria-label="Перейти к исходному сообщению"
+            aria-label={ru.inbox.message.jumpToOriginalAriaLabel}
           >
             <span
               className={`font-semibold truncate min-w-0 ${replyToSpeakerColors.name}`}
@@ -277,7 +277,7 @@ function VoicePlayer({
       <button
         type="button"
         onClick={toggle}
-        aria-label={playing ? "Пауза" : "Воспроизвести"}
+        aria-label={playing ? ru.inbox.message.pauseAriaLabel : ru.inbox.message.playAriaLabel}
         className="shrink-0 w-10 h-10 rounded-full bg-tg-button text-tg-button-text flex items-center justify-center transition-transform active:scale-95"
       >
         {playing ? <PauseIcon /> : <PlayIcon />}
@@ -297,8 +297,8 @@ function VoicePlayer({
           e.stopPropagation();
           cycle();
         }}
-        aria-label={`Скорость воспроизведения: ${formatSpeed(speed)}`}
-        title="Скорость воспроизведения — нажми, чтобы изменить"
+        aria-label={ru.inbox.message.speedAriaLabel(formatSpeed(speed))}
+        title={ru.inbox.message.speedTitle}
         className={`shrink-0 inline-flex items-center justify-center min-w-[2.75rem] h-7 px-2.5 rounded-full text-xs font-semibold tabular-nums tracking-tight transition-all duration-150 active:scale-95 ${
           speed !== 1
             ? "bg-tg-text-accent text-white shadow-sm shadow-tg-text-accent/30 ring-1 ring-tg-text-accent/40"
@@ -398,7 +398,7 @@ function VideoNote({
       {playing && (
         <button
           type="button"
-          aria-label="Закрыть"
+          aria-label={ru.inbox.message.closeAriaLabel}
           onClick={toggle}
           className="fixed inset-0 z-40 bg-black/75 animate-fade-in cursor-default"
         />
@@ -407,7 +407,7 @@ function VideoNote({
         <button
           type="button"
           onClick={toggle}
-          aria-label={playing ? "Пауза" : "Воспроизвести"}
+          aria-label={playing ? ru.inbox.message.pauseAriaLabel : ru.inbox.message.playAriaLabel}
           className={buttonClass}
         >
         <div className="absolute inset-0 rounded-full overflow-hidden bg-black">
@@ -475,8 +475,8 @@ function VideoNote({
               e.stopPropagation();
               cycle();
             }}
-            aria-label={`Скорость воспроизведения: ${formatSpeed(speed)}`}
-            title="Скорость воспроизведения — нажми, чтобы изменить"
+            aria-label={ru.inbox.message.speedAriaLabel(formatSpeed(speed))}
+            title={ru.inbox.message.speedTitle}
             className={`inline-flex items-center justify-center min-w-[2.5rem] h-6 px-2 rounded-full text-[11px] font-semibold tabular-nums tracking-tight transition-all duration-150 active:scale-95 ${
               speed !== 1
                 ? "bg-tg-text-accent text-white shadow-sm shadow-tg-text-accent/30 ring-1 ring-tg-text-accent/40"
@@ -512,7 +512,7 @@ function LibraryMediaBlock({
 }) {
   const previewUrl = `/api/admin/media/${libraryId}/preview?token=${encodeURIComponent(jwt)}`;
   const [lightbox, setLightbox] = useState(false);
-  const title = lib?.title?.trim() || lib?.original_filename || "Файл";
+  const title = lib?.title?.trim() || lib?.original_filename || ru.inbox.message.fileFallback;
   const description = lib?.description?.trim() ?? null;
   const filename = lib?.original_filename ?? null;
   const sizeLabel = lib ? formatBytesShort(lib.bytes) : null;
@@ -525,7 +525,7 @@ function LibraryMediaBlock({
             type="button"
             onClick={() => setLightbox(true)}
             className="block w-full rounded-xl overflow-hidden bg-black/5 dark:bg-white/5 active:opacity-90 transition-opacity"
-            aria-label="Открыть изображение"
+            aria-label={ru.inbox.message.openImageAriaLabel}
           >
             <img
               src={previewUrl}
@@ -539,7 +539,7 @@ function LibraryMediaBlock({
               type="button"
               onClick={() => setLightbox(false)}
               className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center animate-fade-in p-4 cursor-zoom-out"
-              aria-label="Закрыть"
+              aria-label={ru.inbox.message.closeAriaLabel}
             >
               <img
                 src={previewUrl}

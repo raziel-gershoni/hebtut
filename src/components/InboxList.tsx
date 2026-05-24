@@ -5,7 +5,7 @@ import { Avatar } from "./Avatar";
 import { StudentPicker } from "./StudentPicker";
 import { AssignTeacherDialog } from "./AssignTeacherDialog";
 import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
-import { formatDuration } from "@/lib/i18n";
+import { formatDuration, ru } from "@/lib/i18n";
 import { bgFromHandle } from "@/lib/handle";
 import { PAUSE_INACTIVITY_MS } from "@/lib/time";
 
@@ -122,7 +122,7 @@ export function InboxList({
             onClick={() => setPickerOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 h-9 rounded-full bg-tg-button text-tg-button-text text-sm font-semibold transition-transform active:scale-95"
           >
-            + Написать ученику
+            {ru.inbox.row.newClaimAction}
           </button>
         </div>
       )}
@@ -135,7 +135,7 @@ export function InboxList({
         </ul>
       ) : chats.length === 0 ? (
         <div className="rounded-2xl bg-tg-bg-section p-6 text-center text-sm text-tg-text-hint">
-          Пока ничего нет. Сюда придут сообщения от твоих учеников.
+          {ru.inbox.inboxPage.empty}
         </div>
       ) : (
         <ul className="space-y-1">
@@ -233,8 +233,8 @@ function ChatRow({
             <span
               aria-label={
                 dot === "red"
-                  ? "ждёт ответа"
-                  : "ученик давно не отвечает"
+                  ? ru.inbox.row.unansweredAria
+                  : ru.inbox.row.studentInactiveAria
               }
               className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-tg-bg-primary ${
                 dot === "red" ? "bg-red-500" : "bg-orange-500"
@@ -255,7 +255,7 @@ function ChatRow({
                 }}
                 className="shrink-0 inline-flex items-center h-5 px-2 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-semibold uppercase tracking-wide transition-opacity active:opacity-70"
               >
-                без тренера
+                {ru.inbox.row.noTeacherBadge}
               </button>
             )}
             {time && (
@@ -276,7 +276,7 @@ function ChatRow({
           </div>
           {heldByOther && (
             <div className="mt-0.5 text-[11px] text-tg-text-hint">
-              Берёт {chat.claim!.teacher_handle}
+              {ru.inbox.thread.takingByOtherFn(chat.claim!.teacher_handle)}
             </div>
           )}
         </div>
@@ -287,12 +287,12 @@ function ChatRow({
 
 function Preview({ chat, myUserId }: { chat: Chat; myUserId: number }) {
   const m = chat.last_message;
-  if (!m) return <span>Пока пусто</span>;
+  if (!m) return <span>{ru.inbox.row.preview.empty}</span>;
   // "Ты:" only when the LAST out-message was sent by the viewer. With
   // multi-teacher threads, a peer's reply must not be misattributed.
   const prefix =
-    m.direction === "out" && m.teacher_id === myUserId ? "Ты: " : "";
-  const tail = chat.has_unanswered ? " · ждёт ответа" : "";
+    m.direction === "out" && m.teacher_id === myUserId ? ru.inbox.row.preview.youPrefix : "";
+  const tail = chat.has_unanswered ? ru.inbox.row.preview.awaitsReply : "";
   if (m.kind === "text") {
     // Text-message preview: show a short snippet, truncated. The CSS truncate
     // on the parent already clips visually; we trim here too for safety.
@@ -339,7 +339,7 @@ function formatChatTimestamp(iso: string): string {
     d.getFullYear() === yesterday.getFullYear() &&
     d.getMonth() === yesterday.getMonth() &&
     d.getDate() === yesterday.getDate();
-  if (wasYesterday) return "Вчера";
+  if (wasYesterday) return ru.inbox.dateSeparator.yesterday;
 
   const diffMs = now.getTime() - d.getTime();
   const SEVEN_DAYS = 7 * 24 * 3600 * 1000;

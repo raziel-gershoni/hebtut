@@ -1,5 +1,6 @@
 "use client";
 
+import { ru } from "@/lib/i18n";
 import { useEffect, useMemo, useState } from "react";
 
 export interface TagOption {
@@ -71,7 +72,7 @@ export function TagPicker({ jwt, valueIds, onChange, disabled, refreshKey }: Pro
           type="text"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder="Поиск тегов…"
+          placeholder={ru.inbox.tagPicker.searchPlaceholder}
           className="w-full h-8 px-3 rounded-full bg-tg-bg-secondary text-xs text-tg-text outline-none focus:ring-2 focus:ring-tg-button/40"
         />
       )}

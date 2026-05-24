@@ -1,5 +1,6 @@
 import { differenceInCalendarYears, format, isToday, isYesterday } from "date-fns";
-import { ru } from "date-fns/locale";
+import { ru as ruLocale } from "date-fns/locale";
+import { ru } from "@/lib/i18n";
 
 /**
  * Centered day-divider pill rendered between messages in a thread when
@@ -12,12 +13,12 @@ import { ru } from "date-fns/locale";
 export function DateSeparator({ at }: { at: Date }) {
   const now = new Date();
   let label: string;
-  if (isToday(at)) label = "Сегодня";
-  else if (isYesterday(at)) label = "Вчера";
+  if (isToday(at)) label = ru.inbox.dateSeparator.today;
+  else if (isYesterday(at)) label = ru.inbox.dateSeparator.yesterday;
   else if (differenceInCalendarYears(now, at) === 0) {
-    label = format(at, "d MMMM", { locale: ru });
+    label = format(at, "d MMMM", { locale: ruLocale });
   } else {
-    label = format(at, "d MMMM yyyy", { locale: ru });
+    label = format(at, "d MMMM yyyy", { locale: ruLocale });
   }
   return (
     <div className="flex justify-center my-3">
