@@ -10,13 +10,26 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+// Accept both UI input ("HH:MM") and the round-tripped DB format
+// ("HH:MM:SS"). The page used to silently fail on the second save because
+// load() populated the inputs with the DB-formatted string and the
+// previous stricter regex rejected it.
+const TIME_RE = /^\d{1,2}:\d{2}(?::\d{2})?$/;
 const Body = z.union([
   z.object({
-    start: z.string().regex(/^\d{1,2}:\d{2}$/),
-    end: z.string().regex(/^\d{1,2}:\d{2}$/),
+    start: z.string().regex(TIME_RE),
+    end: z.string().regex(TIME_RE),
   }),
   z.object({ clear: z.literal(true) }),
 ]);
+
+function stripSeconds(value: string | null): string | null {
+  if (!value) return value;
+  // Postgres `time` serializes as "HH:MM:SS"; the UI's <input type="time">
+  // expects "HH:MM". Slicing to the first colon-pair handles both shapes.
+  const m = /^(\d{1,2}:\d{2})/.exec(value);
+  return m ? m[1]! : value;
+}
 
 export async function GET(req: NextRequest): Promise<Response> {
   const user = await authFromRequest(req);
@@ -31,8 +44,8 @@ export async function GET(req: NextRequest): Promise<Response> {
     .maybeSingle();
   return Response.json(
     {
-      start: row?.response_window_start ?? null,
-      end: row?.response_window_end ?? null,
+      start: stripSeconds(row?.response_window_start ?? null),
+      end: stripSeconds(row?.response_window_end ?? null),
       tz: row?.response_window_tz ?? "Asia/Jerusalem",
     },
     { headers: noStoreHeaders },

@@ -66,3 +66,24 @@ describe("nextWindowOpen — degenerate / unset", () => {
     expect(nextWindowOpen(new Date(), "09:00", "09:00", TZ)).toBeNull();
   });
 });
+
+// Regression — Postgres serializes `time` columns as "HH:MM:SS", and that
+// shape used to silently fail the parser, which made every saved window
+// behave like "always-on" once it round-tripped through the DB. Behaviour
+// must match the bare "HH:MM" form exactly.
+describe("nextWindowOpen — accepts the HH:MM:SS shape from Postgres", () => {
+  it("matches HH:MM behaviour inside same-day window", () => {
+    const now = jerusalemUtc("2026-05-09T12:00");
+    expect(nextWindowOpen(now, "09:00:00", "21:00:00", TZ)).toBeNull();
+  });
+  it("matches HH:MM behaviour outside same-day window", () => {
+    const now = jerusalemUtc("2026-05-09T06:00");
+    const next = nextWindowOpen(now, "09:00:00", "21:00:00", TZ);
+    expect(next).not.toBeNull();
+    expect(next!.getTime()).toBe(jerusalemUtc("2026-05-09T09:00").getTime());
+  });
+  it("accepts mixed shapes on start and end", () => {
+    const now = jerusalemUtc("2026-05-09T22:00");
+    expect(nextWindowOpen(now, "21:00", "09:00:00", TZ)).toBeNull();
+  });
+});

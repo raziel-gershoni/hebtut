@@ -30,6 +30,7 @@ function Body({ jwt }: { jwt: string }) {
   const [start, setStart] = useState("09:00");
   const [end, setEnd] = useState("21:00");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/student/response-window", {
@@ -49,7 +50,8 @@ function Body({ jwt }: { jwt: string }) {
 
   async function save() {
     setBusy(true);
-    await fetch("/api/student/response-window", {
+    setError(null);
+    const r = await fetch("/api/student/response-window", {
       method: "PATCH",
       cache: "no-store",
       headers: {
@@ -59,12 +61,17 @@ function Body({ jwt }: { jwt: string }) {
       body: JSON.stringify({ start, end }),
     });
     setBusy(false);
+    if (!r.ok) {
+      setError("Не получилось сохранить — попробуй ещё раз.");
+      return;
+    }
     await load();
   }
 
   async function clearWindow() {
     setBusy(true);
-    await fetch("/api/student/response-window", {
+    setError(null);
+    const r = await fetch("/api/student/response-window", {
       method: "PATCH",
       cache: "no-store",
       headers: {
@@ -74,6 +81,10 @@ function Body({ jwt }: { jwt: string }) {
       body: JSON.stringify({ clear: true }),
     });
     setBusy(false);
+    if (!r.ok) {
+      setError("Не получилось сбросить — попробуй ещё раз.");
+      return;
+    }
     await load();
   }
 
@@ -105,6 +116,9 @@ function Body({ jwt }: { jwt: string }) {
       </section>
 
       <section className="rounded-2xl bg-tg-bg-section p-5 space-y-4">
+        {error && (
+          <div className="text-xs text-tg-text-destructive">{error}</div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="text-xs uppercase tracking-wider text-tg-text-hint">

@@ -25,10 +25,15 @@ export function nextWindowOpen(
   tz: string,
 ): Date | null {
   if (!windowStart || !windowEnd) return null;
-  if (windowStart === windowEnd) return null;
+  // Strip the optional seconds Postgres includes when serializing `time`
+  // columns so downstream string-concat sees a clean "HH:MM" suffix.
+  const start = normalizeHHMM(windowStart);
+  const end = normalizeHHMM(windowEnd);
+  if (start == null || end == null) return null;
+  if (start === end) return null;
 
-  const startMin = parseHHMM(windowStart);
-  const endMin = parseHHMM(windowEnd);
+  const startMin = parseHHMM(start);
+  const endMin = parseHHMM(end);
   if (startMin == null || endMin == null) return null;
 
   const nowMin = currentMinuteOfDay(now, tz);
@@ -39,18 +44,36 @@ export function nextWindowOpen(
   if (inside) return null;
 
   // Compute today's start in tz; if it's already past, roll to tomorrow.
+  // `start` here is the normalized "HH:MM" form (no seconds), so the suffix
+  // concatenation below is safe regardless of the input shape.
   const todayLocal = localDateInTz(now, tz);
   const todayStartUtc = fromZonedTime(
-    `${todayLocal}T${windowStart.padStart(5, "0")}:00`,
+    `${todayLocal}T${start.padStart(5, "0")}:00`,
     tz,
   );
   if (todayStartUtc.getTime() > now.getTime()) return todayStartUtc;
   const tomorrowLocal = localDateInTz(addDays(parseISO(todayLocal), 1), tz);
-  return fromZonedTime(`${tomorrowLocal}T${windowStart.padStart(5, "0")}:00`, tz);
+  return fromZonedTime(`${tomorrowLocal}T${start.padStart(5, "0")}:00`, tz);
+}
+
+/**
+ * Trim the trailing `:SS` Postgres tacks on when it serializes `time`
+ * columns. Returns `null` if the input doesn't look like HH:MM at all so
+ * malformed values fail fast instead of being silently let through.
+ */
+function normalizeHHMM(s: string): string | null {
+  const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(s);
+  if (!m) return null;
+  return `${m[1]}:${m[2]}`;
 }
 
 function parseHHMM(s: string): number | null {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(s);
+  // Accepts "HH:MM" (UI/form input) AND "HH:MM:SS" (the format Postgres
+  // returns for the `time` column via Supabase). Without the optional
+  // seconds, every value loaded from the DB silently failed to parse and
+  // the bot treated configured windows as "always open" — a real outage,
+  // not just a UI gripe.
+  const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(s);
   if (!m) return null;
   const h = Number(m[1]);
   const mm = Number(m[2]);
