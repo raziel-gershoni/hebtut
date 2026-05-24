@@ -16,8 +16,6 @@ const {
   VERCEL_GIT_COMMIT_SHA,
   VERCEL_GIT_COMMIT_REF,
   VERCEL_GIT_COMMIT_MESSAGE,
-  VERCEL_GIT_REPO_OWNER,
-  VERCEL_GIT_REPO_SLUG,
 } = process.env;
 
 async function main() {
@@ -84,11 +82,6 @@ function buildMessage() {
   if (VERCEL_GIT_COMMIT_MESSAGE) {
     const subject = VERCEL_GIT_COMMIT_MESSAGE.split("\n")[0].trim();
     if (subject) lines.push(subject);
-  }
-  if (VERCEL_GIT_COMMIT_SHA && VERCEL_GIT_REPO_OWNER && VERCEL_GIT_REPO_SLUG) {
-    lines.push(
-      `https://github.com/${VERCEL_GIT_REPO_OWNER}/${VERCEL_GIT_REPO_SLUG}/commit/${VERCEL_GIT_COMMIT_SHA}`,
-    );
   }
   return lines.join("\n");
 }
