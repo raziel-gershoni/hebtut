@@ -124,6 +124,7 @@ export interface Database {
           reply_to_id: number | null;
           tg_message_id_in_student_chat: number | null;
           media_library_id: number | null;
+          transcript_text: string | null;
           created_at: string;
         };
         Insert: {
@@ -143,6 +144,7 @@ export interface Database {
           reply_to_id?: number | null;
           tg_message_id_in_student_chat?: number | null;
           media_library_id?: number | null;
+          transcript_text?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;

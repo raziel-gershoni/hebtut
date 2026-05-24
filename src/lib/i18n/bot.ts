@@ -198,6 +198,12 @@ const labels = {
   openInline: "Открыть",
 };
 
+const transcripts = {
+  // Sent (threaded as reply to the audio) when Gemini Flash transcription
+  // failed or timed out. Audio itself was already delivered.
+  failureNotice: "Не удалось расшифровать запись.",
+};
+
 const notifications = {
   teacherReplyMissingContext:
     "Чтобы ответить ученику, открой мини-приложение, нажми «Ответить» рядом с его сообщением, и потом свайпни по подсказке.",
@@ -234,4 +240,5 @@ export const bot = {
   onboarding,
   notifications,
   labels,
+  transcripts,
 };

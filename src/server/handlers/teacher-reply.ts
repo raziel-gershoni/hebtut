@@ -11,6 +11,7 @@ import { nextWindowOpen } from "@/server/response-window";
 import { formatInTimeZone } from "date-fns-tz";
 import { addMinutes } from "date-fns";
 import { advanceOnboarding, scheduleTimer } from "@/server/onboarding";
+import { transcribeTgAudio } from "@/server/transcribe";
 
 export interface ReplyContext {
   replyToMessageId: number;
@@ -256,6 +257,24 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
       reply_to_id: original?.id ?? null,
     },
   });
+
+  // Auto-transcript: every voice / video_note the teacher just delivered
+  // gets a follow-up text message with a Russian/Hebrew transcript,
+  // threaded as a TG reply to the audio bubble. Best-effort: audio is
+  // already in the student's chat; if Gemini hiccups we send a small
+  // failure notice (also threaded) so the missing transcript doesn't
+  // read like bot brokenness. See src/server/transcribe.ts for the
+  // 25-second AbortController timeout that keeps this within the
+  // webhook's 60-second budget.
+  if (outRow?.id != null) {
+    await transcribeAndDeliverFor(
+      outRow.id,
+      student.tg_chat_id,
+      sentMessageId,
+      newFileId,
+      kind,
+    );
+  }
 
   // Onboarding Step 8: 5 minutes after the FIRST teacher reply lands, the
   // bot DMs a brief meta-explainer ("вот так это и работает…"). Detect by
@@ -538,4 +557,65 @@ export async function handleTeacherReplyText(ctx: Context): Promise<boolean> {
 
   await ctx.reply(ru.bot.notifications.teacherReplyDelivered);
   return true;
+}
+
+/**
+ * Best-effort transcription + delivery of the follow-up text message to the
+ * student. Audio bubble is already in the student's chat by the time this
+ * runs; whatever happens here is graceful-degrade.
+ *
+ * On success: persist the transcript on the `messages` row and DM the
+ * student a text message threaded as a reply to the audio.
+ *
+ * On Gemini failure / timeout: send a small "Не удалось расшифровать запись"
+ * message (also threaded) so the absence isn't perceived as bot brokenness.
+ *
+ * On TG send failure (post-transcription): swallow with a warn — the
+ * student already has the audio.
+ */
+async function transcribeAndDeliverFor(
+  messageId: number,
+  studentChatId: number,
+  audioTgMessageId: number | null,
+  fileId: string,
+  kind: "voice" | "video_note",
+): Promise<void> {
+  const replyParams =
+    audioTgMessageId != null
+      ? {
+          reply_parameters: {
+            message_id: audioTgMessageId,
+            allow_sending_without_reply: true,
+          },
+        }
+      : {};
+  try {
+    const text = await transcribeTgAudio(fileId, kind);
+    if (text) {
+      const sb = getServiceRoleClient();
+      await sb
+        .from("messages")
+        .update({ transcript_text: text })
+        .eq("id", messageId);
+      await getBot().api.sendMessage(studentChatId, text, replyParams);
+    } else {
+      await getBot()
+        .api.sendMessage(
+          studentChatId,
+          ru.bot.transcripts.failureNotice,
+          replyParams,
+        )
+        .catch((e) =>
+          console.warn(
+            "[transcribe] failure-notice send failed",
+            (e as Error).message,
+          ),
+        );
+    }
+  } catch (e) {
+    console.warn(
+      "[transcribe] post-deliver failed",
+      (e as Error).message,
+    );
+  }
 }

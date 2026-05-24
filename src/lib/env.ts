@@ -65,6 +65,11 @@ const ServerSchema = z.object({
   MONTHLY_SUBSCRIPTION_STARS: z.coerce.number().int().positive().default(100),
   DEFAULT_TZ: z.string().default("Asia/Jerusalem"),
   CRON_SECRET: z.string().min(8),
+  // Google AI Studio (Gemini API) key. Used by src/server/transcribe.ts to
+  // auto-transcribe teacher voice / video_note replies. Paid-tier key only
+  // — the free tier trains on submitted content, which we don't want for
+  // student/teacher audio.
+  GEMINI_API_KEY: z.string().min(1),
 });
 
 const PublicSchema = z.object({
