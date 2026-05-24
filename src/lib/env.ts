@@ -69,7 +69,13 @@ const ServerSchema = z.object({
   // auto-transcribe teacher voice / video_note replies. Paid-tier key only
   // — the free tier trains on submitted content, which we don't want for
   // student/teacher audio.
-  GEMINI_API_KEY: z.string().min(1),
+  //
+  // OPTIONAL: when unset, transcription gracefully returns null and the
+  // student gets the "could not transcribe" follow-up message. We don't
+  // hard-require because zod validates the whole env on first serverEnv
+  // access — a missing key here would otherwise break unrelated routes
+  // (cron, webhooks, etc.).
+  GEMINI_API_KEY: z.string().min(1).optional(),
 });
 
 const PublicSchema = z.object({

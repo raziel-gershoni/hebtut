@@ -19,6 +19,14 @@ export async function transcribeTgAudio(
   fileId: string,
   kind: "voice" | "video_note",
 ): Promise<string | null> {
+  // Env is optional (see src/lib/env.ts). When unset, behave like a
+  // transcription failure so the caller's failure-notice path fires.
+  const apiKey = serverEnv.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn("[transcribe] skipped — GEMINI_API_KEY not set");
+    return null;
+  }
+
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
   try {
@@ -49,7 +57,7 @@ export async function transcribeTgAudio(
     };
 
     const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${serverEnv.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         signal: ac.signal,
