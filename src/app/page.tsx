@@ -46,13 +46,10 @@ export default function Home() {
             </section>
           )}
 
-          {role === "student" && (
-            <>
-              <SubscriberSummary jwt={jwt} />
-              <MiniAppMenu jwt={jwt} />
-            </>
-          )}
-
+          {/* Admin / teacher action cards. Rendered above the student
+              block so a student-who-is-admin lands on their admin tools
+              first; pure students see nothing here, pure admins see no
+              student block below. */}
           {(role === "teacher" || isAdmin) && (
             <ActionCard
               href="/inbox"
@@ -66,15 +63,19 @@ export default function Home() {
             />
           )}
 
-          {role !== "student" && (
+          {isAdmin && (
             <ActionCard
-              href={isAdmin ? "/admin/feedback" : "/feedback"}
+              href="/admin/feedback"
               title={ru.student.home.feedbackTitle}
-              subtitle={
-                isAdmin
-                  ? ru.student.home.feedbackSubtitleAdmin
-                  : ru.student.home.feedbackSubtitleUser
-              }
+              subtitle={ru.student.home.feedbackSubtitleAdmin}
+              icon="💬"
+            />
+          )}
+          {role !== "student" && !isAdmin && (
+            <ActionCard
+              href="/feedback"
+              title={ru.student.home.feedbackTitle}
+              subtitle={ru.student.home.feedbackSubtitleUser}
               icon="💬"
             />
           )}
@@ -86,6 +87,13 @@ export default function Home() {
               subtitle={ru.student.home.adminPanelSubtitle}
               icon="⚙️"
             />
+          )}
+
+          {role === "student" && (
+            <>
+              <SubscriberSummary jwt={jwt} />
+              <MiniAppMenu jwt={jwt} />
+            </>
           )}
         </div>
       )}
