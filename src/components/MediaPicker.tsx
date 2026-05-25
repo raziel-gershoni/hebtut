@@ -20,9 +20,14 @@ import { tusUpload } from "@/lib/direct-upload";
 interface Props {
   open: boolean;
   jwt: string;
-  studentId: number;
+  /**
+   * When null, the picker runs in "browse + upload + edit + delete" mode
+   * — no Send button, no selection submit. Used by the admin panel.
+   */
+  studentId: number | null;
   onClose: () => void;
-  onSent: () => Promise<void>;
+  /** Only invoked after a successful send. Omitted in browse mode. */
+  onSent?: () => Promise<void>;
 }
 
 type KindFilter = "all" | "photo" | "video" | "audio";
@@ -277,6 +282,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
 
   async function performSend() {
     if (!selectedId) return;
+    if (studentId == null) return;
     setSendBusy(true);
     setError(null);
     const r = await fetch(`/api/admin/media/${selectedId}/send`, {
@@ -293,7 +299,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
       setError(r.status === 403 ? ru.inbox.mediaPicker.sendNoAccess : ru.inbox.mediaPicker.sendError);
       return;
     }
-    await onSent();
+    await onSent?.();
     onClose();
   }
 
@@ -448,15 +454,17 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
                 </span>
               )}
             </div>
-            <button
-              type="button"
-              disabled={selectedId === null || sendBusy || uploadBusy}
-              onClick={() => void performSend()}
-              aria-busy={sendBusy}
-              className="h-10 px-5 rounded-full bg-tg-button text-tg-button-text text-sm font-medium transition-transform active:scale-95 disabled:opacity-50 inline-flex items-center justify-center min-w-[7rem]"
-            >
-              {sendBusy ? <Spinner /> : ru.inbox.mediaPicker.sendButton}
-            </button>
+            {studentId != null && (
+              <button
+                type="button"
+                disabled={selectedId === null || sendBusy || uploadBusy}
+                onClick={() => void performSend()}
+                aria-busy={sendBusy}
+                className="h-10 px-5 rounded-full bg-tg-button text-tg-button-text text-sm font-medium transition-transform active:scale-95 disabled:opacity-50 inline-flex items-center justify-center min-w-[7rem]"
+              >
+                {sendBusy ? <Spinner /> : ru.inbox.mediaPicker.sendButton}
+              </button>
+            )}
           </div>
 
           <input

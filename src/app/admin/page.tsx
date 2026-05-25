@@ -11,6 +11,7 @@ import { TeacherInvites } from "@/components/TeacherInvites";
 import { BannedUsersPanel } from "@/components/BannedUsersPanel";
 import { AdminSettingsPanel } from "@/components/AdminSettingsPanel";
 import { AdminTagsManager } from "@/components/AdminTagsManager";
+import { AdminMediaLibrarySection } from "@/components/AdminMediaLibrarySection";
 import { AdminOnboardingVideos } from "@/components/AdminOnboardingVideos";
 import { AdminVersionFooter } from "@/components/AdminVersionFooter";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -107,6 +108,9 @@ function AdminBody({ jwt }: { jwt: string }) {
       </CollapsibleSection>
       <CollapsibleSection id="tags" title={ru.admin.pages.sections.tags}>
         <AdminTagsManager jwt={jwt} />
+      </CollapsibleSection>
+      <CollapsibleSection id="media-library" title={ru.admin.pages.sections.mediaLibrary}>
+        <AdminMediaLibrarySection jwt={jwt} />
       </CollapsibleSection>
       <CollapsibleSection id="invites" title={ru.admin.pages.sections.invites}>
         <TeacherInvites jwt={jwt} />

@@ -356,6 +356,7 @@ const pages = {
     settings: "Настройки",
     onboardingVideos: "Видео онбординга",
     tags: "Теги медиа-библиотеки",
+    mediaLibrary: "Медиа-библиотека",
     invites: "Приглашения тренеров",
     banned: "Заблокированные",
   },
@@ -364,6 +365,10 @@ const pages = {
   // /admin/audit
   auditPageTitle: "Журнал",
   invalidUserId: "Неверный идентификатор пользователя.",
+};
+
+const mediaLibrary = {
+  openButton: "Открыть медиа-библиотеку",
 };
 
 export const admin = {
@@ -380,4 +385,5 @@ export const admin = {
   editName,
   userChecklist,
   pages,
+  mediaLibrary,
 };
