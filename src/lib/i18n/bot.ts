@@ -202,12 +202,19 @@ const transcripts = {
   // Sent (threaded as reply to the audio) when Gemini Flash transcription
   // failed or timed out. Audio itself was already delivered.
   failureNotice: "Не удалось расшифровать запись.",
+  // Prefix for the fallback "edit" message when TG refuses an
+  // editMessageText call (e.g. 48h cap) and we send a fresh threaded
+  // correction instead.
+  correctionPrefix: "📝 Поправка: ",
 };
 
 const notifications = {
   teacherReplyMissingContext:
     "Чтобы ответить ученику, открой мини-приложение, нажми «Ответить» рядом с его сообщением, и потом свайпни по подсказке.",
   teacherReplyDelivered: "✅ Ответ отправлен ученику.",
+  teacherReplyDeliveredWithTranscript: (transcript: string) =>
+    `✅ Ответ отправлен ученику.\n\n📝 Расшифровка:\n${transcript}`,
+  editTranscriptButton: "Изменить расшифровку",
   teacherReplyScheduled: (time: string) =>
     `✅ Запланировано. Ученик получит сообщение в ${time} — он попросил приходить только в это время.`,
   teacherReplyFailed: "Не удалось отправить ответ. Попробуй ещё раз через мини-приложение.",

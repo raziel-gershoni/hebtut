@@ -15,6 +15,7 @@ export type ThreadMsg = {
   status?: string;
   reply_to_id?: number | null;
   created_at: string;
+  teacher_id?: number | null;
   text_content?: string | null;
   media_library_id?: number | null;
   media_library?: {
@@ -24,6 +25,8 @@ export type ThreadMsg = {
     bytes: number;
     kind: "photo" | "video" | "audio";
   } | null;
+  transcript_text?: string | null;
+  transcript_tg_message_id?: number | null;
 };
 
 export interface Speaker {
@@ -48,6 +51,12 @@ interface MessageBubbleProps {
   replyToSpeakerColors?: SpeakerColorClasses | null;
   onReply?: (messageId: number) => Promise<{ ok: boolean; reason?: string }>;
   replyDisabledReason?: string | null;
+  /**
+   * When provided, the bubble renders a ✎ next to the transcript that
+   * calls this with the message id. ThreadView gates by viewer-can-edit
+   * and only passes the callback for editable rows.
+   */
+  onEditTranscript?: (messageId: number) => void;
 }
 
 function scrollToMessage(id: number) {
@@ -71,6 +80,7 @@ export function MessageBubble({
   replyToSpeakerColors,
   onReply,
   replyDisabledReason,
+  onEditTranscript,
 }: MessageBubbleProps) {
   const isIn = msg.direction === "in";
   const align = isIn ? "justify-start" : "justify-end";
@@ -178,6 +188,25 @@ export function MessageBubble({
           // does we don't want a black hole — fall through to a stub.
           <p className="text-xs text-tg-text-hint italic">медиа недоступно</p>
         )}
+
+        {msg.direction === "out" &&
+          (msg.kind === "voice" || msg.kind === "video_note") &&
+          msg.transcript_text && (
+            <div className="mt-2 text-[12px] text-tg-text-hint italic leading-snug whitespace-pre-wrap break-words">
+              {msg.transcript_text}
+              {onEditTranscript && (
+                <button
+                  type="button"
+                  onClick={() => onEditTranscript(msg.id)}
+                  aria-label={ru.inbox.message.editTranscriptAria}
+                  title={ru.inbox.message.editTranscriptAria}
+                  className="ml-1.5 inline-flex items-center text-tg-text-link not-italic align-baseline"
+                >
+                  ✎
+                </button>
+              )}
+            </div>
+          )}
 
         {isIn && onReply && (
           <div className="mt-2 flex items-center gap-3">

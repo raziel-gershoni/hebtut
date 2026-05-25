@@ -82,6 +82,13 @@ const message = {
   closeAriaLabel: "Закрыть",
   openImageAriaLabel: "Открыть изображение",
   fileFallback: "Файл",
+  editTranscriptAria: "Изменить расшифровку",
+  transcriptDialogTitle: "Расшифровка",
+  transcriptDialogHint:
+    "Если бот расслышал не точно — поправь текст. Ученику в Telegram придёт исправление.",
+  transcriptSaveButton: "Сохранить",
+  transcriptCancelButton: "Отмена",
+  transcriptSaveError: "Не получилось сохранить — попробуй ещё раз.",
 };
 
 const mediaPicker = {

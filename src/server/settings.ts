@@ -69,6 +69,16 @@ export function getMediaUploadsTeachersEnabled(): Promise<boolean> {
   return getBoolSetting("media_uploads_teachers_enabled");
 }
 
+/**
+ * Auto-transcript of teacher voice / video replies. Default ON via the
+ * row inserted in migration 20260524000004 — the helper itself stays
+ * absent-equals-false like the others, so a missing row in a freshly
+ * provisioned dev env behaves "off" (safer than a hidden feature firing).
+ */
+export function getTranscriptsEnabled(): Promise<boolean> {
+  return getBoolSetting("transcripts_enabled");
+}
+
 export function invalidateSettingsCache(): void {
   cache.clear();
 }

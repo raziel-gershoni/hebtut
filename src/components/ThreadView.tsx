@@ -6,6 +6,7 @@ import { Avatar } from "./Avatar";
 import { DateSeparator } from "./DateSeparator";
 import { PlaybackProvider } from "./PlaybackProvider";
 import { MediaPicker } from "./MediaPicker";
+import { EditTranscriptDialog } from "./EditTranscriptDialog";
 import { speakerColor, type SpeakerColorClasses } from "@/lib/speaker-color";
 import { bgFromHandle } from "@/lib/handle";
 import { ru } from "@/lib/i18n";
@@ -58,7 +59,9 @@ export function ThreadView({
   const [initiateBusy, setInitiateBusy] = useState(false);
   const [initiateError, setInitiateError] = useState<string | null>(null);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [editingTranscriptMessageId, setEditingTranscriptMessageId] = useState<number | null>(null);
   const initialScrollDoneRef = useRef(false);
+  const isAdmin = role === "admin";
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/threads/${studentId}`, {
@@ -120,6 +123,54 @@ export function ThreadView({
       window.removeEventListener("focus", onVisibility);
     };
   }, [load]);
+
+  // Honor ?edit_transcript=<id> deep-link (used by the teacher-side TG
+  // ack's «Изменить расшифровку» button). Auto-open the edit dialog once
+  // the thread has loaded and the target row is editable. Clear the param
+  // on close so a refresh doesn't keep re-opening it.
+  useEffect(() => {
+    if (!loaded || editingTranscriptMessageId != null) return;
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("edit_transcript");
+    if (!raw) return;
+    const id = Number(raw);
+    if (!Number.isFinite(id)) return;
+    const target = messages.find((m) => m.id === id);
+    if (!target?.transcript_text) return;
+    const canEdit = isAdmin || target.teacher_id === myUserId;
+    if (canEdit) setEditingTranscriptMessageId(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, messages]);
+
+  const closeEditDialog = useCallback(() => {
+    setEditingTranscriptMessageId(null);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("edit_transcript")) {
+      url.searchParams.delete("edit_transcript");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
+
+  const onEditTranscriptFor = useCallback(
+    (msg: ApiMessage): ((messageId: number) => void) | undefined => {
+      if (msg.direction !== "out") return undefined;
+      if (!msg.transcript_text) return undefined;
+      const canEdit = isAdmin || msg.teacher_id === myUserId;
+      if (!canEdit) return undefined;
+      return (id) => setEditingTranscriptMessageId(id);
+    },
+    [isAdmin, myUserId],
+  );
+
+  const editingTranscriptMsg = useMemo(
+    () =>
+      editingTranscriptMessageId != null
+        ? messages.find((m) => m.id === editingTranscriptMessageId) ?? null
+        : null,
+    [editingTranscriptMessageId, messages],
+  );
 
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
 
@@ -309,6 +360,7 @@ export function ThreadView({
                 replyToSpeakerColors={replyToMsg ? colorFor(replyToMsg) : null}
                 onReply={onReply}
                 replyDisabledReason={replyDisabledReason}
+                onEditTranscript={onEditTranscriptFor(m)}
               />
             </Fragment>
           );
@@ -325,6 +377,19 @@ export function ThreadView({
         await load();
       }}
     />
+    {editingTranscriptMsg?.transcript_text && (
+      <EditTranscriptDialog
+        open={true}
+        jwt={jwt}
+        messageId={editingTranscriptMsg.id}
+        currentText={editingTranscriptMsg.transcript_text}
+        onClose={closeEditDialog}
+        onSaved={async () => {
+          closeEditDialog();
+          await load();
+        }}
+      />
+    )}
     </PlaybackProvider>
   );
 }

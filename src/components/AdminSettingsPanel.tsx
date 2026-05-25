@@ -7,6 +7,7 @@ interface Settings {
   billing_stars_enabled: boolean;
   display_anonymous_handles_enabled: boolean;
   media_uploads_teachers_enabled: boolean;
+  transcripts_enabled: boolean;
 }
 
 type ToggleKey = keyof Settings;
@@ -23,6 +24,7 @@ const TOGGLES: readonly ToggleSpec[] = [
   { key: "billing_stars_enabled", ...ru.admin.settings.toggles.billingStars },
   { key: "display_anonymous_handles_enabled", ...ru.admin.settings.toggles.displayAnonymousHandles },
   { key: "media_uploads_teachers_enabled", ...ru.admin.settings.toggles.mediaUploadsTeachers },
+  { key: "transcripts_enabled", ...ru.admin.settings.toggles.transcripts },
 ];
 
 export function AdminSettingsPanel({ jwt }: { jwt: string }) {

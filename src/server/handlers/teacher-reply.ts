@@ -12,6 +12,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { addMinutes } from "date-fns";
 import { advanceOnboarding, scheduleTimer } from "@/server/onboarding";
 import { transcribeTgAudio } from "@/server/transcribe";
+import { getTranscriptsEnabled } from "@/server/settings";
 
 export interface ReplyContext {
   replyToMessageId: number;
@@ -258,24 +259,6 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     },
   });
 
-  // Auto-transcript: every voice / video_note the teacher just delivered
-  // gets a follow-up text message with a Russian/Hebrew transcript,
-  // threaded as a TG reply to the audio bubble. Best-effort: audio is
-  // already in the student's chat; if Gemini hiccups we send a small
-  // failure notice (also threaded) so the missing transcript doesn't
-  // read like bot brokenness. See src/server/transcribe.ts for the
-  // 25-second AbortController timeout that keeps this within the
-  // webhook's 60-second budget.
-  if (outRow?.id != null) {
-    await transcribeAndDeliverFor(
-      outRow.id,
-      student.tg_chat_id,
-      sentMessageId,
-      newFileId,
-      kind,
-    );
-  }
-
   // Onboarding Step 8: 5 minutes after the FIRST teacher reply lands, the
   // bot DMs a brief meta-explainer ("вот так это и работает…"). Detect by
   // checking whether the student has any earlier outbound row — if not,
@@ -345,7 +328,43 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     meta: { kind: "reply-tail", expires_at: expiresAt },
   });
 
-  await ctx.reply(ru.bot.notifications.teacherReplyDelivered);
+  // Auto-transcript: deferred until just before the teacher-side ack so
+  // the ack can echo the transcript back to the teacher with an inline
+  // edit-link (web_app deep-link → Mini App opens with the dialog ready).
+  // Best-effort: audio is already in the student's chat by now. Gated by
+  // the admin `transcripts_enabled` toggle and the GEMINI_API_KEY env;
+  // either off → returns null and we fall back to the plain ack.
+  const transcriptText =
+    outRow?.id != null
+      ? await transcribeAndDeliverFor(
+          outRow.id,
+          student.tg_chat_id,
+          sentMessageId,
+          newFileId,
+          kind,
+        )
+      : null;
+
+  if (transcriptText && outRow?.id != null) {
+    const editUrl = `${serverEnv.APP_BASE_URL.replace(/\/$/, "")}/students/${prompt.student_id}?edit_transcript=${outRow.id}`;
+    await ctx.reply(
+      ru.bot.notifications.teacherReplyDeliveredWithTranscript(transcriptText),
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: ru.bot.notifications.editTranscriptButton,
+                web_app: { url: editUrl },
+              },
+            ],
+          ],
+        },
+      },
+    );
+  } else {
+    await ctx.reply(ru.bot.notifications.teacherReplyDelivered);
+  }
   return true;
 }
 
@@ -560,18 +579,25 @@ export async function handleTeacherReplyText(ctx: Context): Promise<boolean> {
 }
 
 /**
- * Best-effort transcription + delivery of the follow-up text message to the
- * student. Audio bubble is already in the student's chat by the time this
- * runs; whatever happens here is graceful-degrade.
+ * Best-effort transcription + delivery of the follow-up text message to
+ * the student. Audio bubble is already in the student's chat by the time
+ * this runs; whatever happens here is graceful-degrade. The teacher-side
+ * ack composer consumes the returned text to echo it back with an edit
+ * affordance.
  *
- * On success: persist the transcript on the `messages` row and DM the
- * student a text message threaded as a reply to the audio.
+ * Returns:
+ *  - the transcript string on success (also persisted + delivered to the student),
+ *  - null when the admin toggle is off, the env key is missing, Gemini
+ *    failed/timed out, or anything threw.
  *
- * On Gemini failure / timeout: send a small "Не удалось расшифровать запись"
- * message (also threaded) so the absence isn't perceived as bot brokenness.
- *
- * On TG send failure (post-transcription): swallow with a warn — the
- * student already has the audio.
+ * Behaviour by outcome:
+ *  - Toggle off: skip entirely. No transcript, no failure notice, no
+ *    Gemini call (cheap path).
+ *  - Success: persist {transcript_text, transcript_tg_message_id} and DM
+ *    the student threaded as a reply to the audio.
+ *  - Gemini hiccup: DM the student a short "could not transcribe" notice
+ *    (also threaded) so the absence doesn't read like bot brokenness.
+ *  - Post-deliver throw: swallow with a warn — the student has the audio.
  */
 async function transcribeAndDeliverFor(
   messageId: number,
@@ -579,7 +605,8 @@ async function transcribeAndDeliverFor(
   audioTgMessageId: number | null,
   fileId: string,
   kind: "voice" | "video_note",
-): Promise<void> {
+): Promise<string | null> {
+  if (!(await getTranscriptsEnabled())) return null;
   const replyParams =
     audioTgMessageId != null
       ? {
@@ -592,30 +619,35 @@ async function transcribeAndDeliverFor(
   try {
     const text = await transcribeTgAudio(fileId, kind);
     if (text) {
+      const sent = await getBot().api.sendMessage(studentChatId, text, replyParams);
       const sb = getServiceRoleClient();
       await sb
         .from("messages")
-        .update({ transcript_text: text })
+        .update({
+          transcript_text: text,
+          transcript_tg_message_id: sent.message_id,
+        })
         .eq("id", messageId);
-      await getBot().api.sendMessage(studentChatId, text, replyParams);
-    } else {
-      await getBot()
-        .api.sendMessage(
-          studentChatId,
-          ru.bot.transcripts.failureNotice,
-          replyParams,
-        )
-        .catch((e) =>
-          console.warn(
-            "[transcribe] failure-notice send failed",
-            (e as Error).message,
-          ),
-        );
+      return text;
     }
+    await getBot()
+      .api.sendMessage(
+        studentChatId,
+        ru.bot.transcripts.failureNotice,
+        replyParams,
+      )
+      .catch((e) =>
+        console.warn(
+          "[transcribe] failure-notice send failed",
+          (e as Error).message,
+        ),
+      );
+    return null;
   } catch (e) {
     console.warn(
       "[transcribe] post-deliver failed",
       (e as Error).message,
     );
+    return null;
   }
 }
