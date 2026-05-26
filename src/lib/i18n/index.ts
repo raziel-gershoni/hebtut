@@ -18,7 +18,7 @@ import { bot } from "./bot";
 import { admin } from "./admin";
 import { student } from "./student";
 import { inbox } from "./inbox";
-import { common, isSingularDay, pluralDay, pluralLink } from "./common";
+import { common, isSingularDay, pluralDay, pluralLink, pluralMinute } from "./common";
 
 export const ru = {
   bot,
@@ -28,7 +28,7 @@ export const ru = {
   common,
 };
 
-export { isSingularDay, pluralDay, pluralLink };
+export { isSingularDay, pluralDay, pluralLink, pluralMinute };
 
 /**
  * Not strictly i18n — it's a helper that turns seconds into "M:SS". Kept
@@ -40,4 +40,20 @@ export function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Long-form Russian duration for the student summary card. Designed to
+ * read like speech, not a timer ("5 минут", "1 мин 46 сек", "30 сек").
+ * Use this where the value isn't a media-element elapsed counter; the
+ * M:SS `formatDuration` stays for voice/video bubble labels (TG
+ * convention).
+ */
+export function formatPracticeTime(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  if (m === 0) return `${s} сек`;
+  if (r === 0) return `${m} ${pluralMinute(m)}`;
+  return `${m} мин ${r} сек`;
 }

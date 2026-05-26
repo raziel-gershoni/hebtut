@@ -3,6 +3,8 @@ import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { userHandle } from "@/lib/handle";
+import { resolveDisplay } from "@/server/display";
+import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +30,7 @@ export async function GET(
     return new Response("bad id", { status: 400, headers: noStoreHeaders });
 
   const sb = getServiceRoleClient();
+  const anonMode = await getDisplayAnonymousHandlesEnabled();
   const { data: targetUser, error: uErr } = await sb
     .from("users")
     .select(
@@ -54,21 +57,18 @@ export async function GET(
         .map((m) => m.author_id as number),
     ),
   );
-  const authorsById = new Map<
-    number,
-    { id: number; name: string | null; handle: string }
-  >();
+  const authorsById = new Map<number, { id: number; handle: string }>();
   if (authorIds.length > 0) {
     const { data: authors } = await sb
       .from("users")
-      .select("id, name, display_handle, tg_user_id")
+      .select("id, name, preferred_name, display_handle, display_emoji, tg_user_id, avatar_file_id")
       .in("id", authorIds);
     for (const a of authors ?? []) {
-      authorsById.set(a.id, {
-        id: a.id,
-        name: a.name,
-        handle: a.display_handle ?? userHandle(a.tg_user_id).handle,
-      });
+      // Same resolver as /api/threads — respects the global names-vs-handles
+      // toggle so an admin's bubble shows their real (or preferred) name in
+      // names mode, not the animal handle.
+      const d = resolveDisplay(a, anonMode);
+      authorsById.set(a.id, { id: a.id, handle: d.handle });
     }
   }
 

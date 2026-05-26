@@ -248,7 +248,17 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
     await ctx.reply(reply);
     await fanOutToTeachers(inserted.id);
   } else {
-    await ctx.reply(ru.bot.access.unassignedAck);
+    // Send the "got it, hooking a coach up" ack only once per student.
+    // Admin fan-out still fires every time so each new message reaches
+    // the admin pool even after the first ack has been sent.
+    if (!sub?.raw.unassigned_ack_sent_at) {
+      await ctx.reply(ru.bot.access.unassignedAck);
+      const ackIso = new Date().toISOString();
+      await sb
+        .from("subscriptions")
+        .update({ unassigned_ack_sent_at: ackIso, updated_at: ackIso })
+        .eq("user_id", user.id);
+    }
     await fanOutUnassignedToAdmins(inserted.id);
   }
 

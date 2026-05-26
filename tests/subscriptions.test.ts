@@ -39,6 +39,7 @@ function row(overrides: Partial<SubscriptionRow>): SubscriptionRow {
     onboarding_last_active_at: null,
     onboarding_day1_limit_msg_sent_at: null,
     onboarding_last_pause_nudge_at: null,
+    unassigned_ack_sent_at: null,
     created_at: "2026-05-08T12:00:00Z",
     updated_at: "2026-05-08T12:00:00Z",
     ...overrides,

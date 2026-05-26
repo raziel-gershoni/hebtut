@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { formatDuration, isSingularDay, pluralDay, ru } from "@/lib/i18n";
+import { formatPracticeTime, isSingularDay, pluralDay, ru } from "@/lib/i18n";
 
 type ApiStatus =
   | { kind: "trial"; daysLeft: number; endsAtIso: string }
@@ -63,17 +63,14 @@ export function SubscriberSummary({ jwt }: { jwt: string }) {
       <StatusStrip status={data.status} />
       <div className="text-lg font-semibold tracking-tight">{data.name}</div>
       <MainLine status={data.status} practice={data.practice} />
-      <ProgressBar
-        used={data.practice.used_seconds}
-        quota={data.practice.daily_quota_seconds}
-        status={data.status}
-      />
-      {(data.streak_days > 0 || data.motivation.text) && (
+      {/* TODO(streak): re-enable the <StreakChip days={data.streak_days} />
+          render here once product decides the threshold (day-2+?
+          day-3+? never?). Hidden for now because a one-day streak just
+          confirms today and reads like pressure. The motivation chip
+          stays — it's the rhythm signal. */}
+      {data.motivation.text && (
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          {data.streak_days > 0 && <StreakChip days={data.streak_days} />}
-          {data.motivation.text && (
-            <span className="text-sm text-tg-text-subtitle">{data.motivation.text}</span>
-          )}
+          <span className="text-sm text-tg-text-subtitle">{data.motivation.text}</span>
         </div>
       )}
       <PayCTA status={data.status} jwt={jwt} starsEnabled={data.billing.stars_enabled} />
@@ -87,7 +84,6 @@ function SkeletonCard() {
       <div className="h-3 w-32 rounded bg-tg-bg-secondary" />
       <div className="h-6 w-40 rounded bg-tg-bg-secondary" />
       <div className="h-4 w-3/4 rounded bg-tg-bg-secondary" />
-      <div className="h-1.5 w-full rounded-full bg-tg-bg-secondary" />
     </section>
   );
 }
@@ -183,46 +179,16 @@ function MainLine({
   if (status.kind === "frozen") {
     return <p className="text-tg-text-subtitle">{ru.student.summary.practiceFrozen}</p>;
   }
-  if (practice.used_seconds < 60) {
-    return (
-      <p className="text-tg-text">
-        {ru.student.summary.todayAvailable(formatDuration(practice.daily_quota_seconds))}
-      </p>
-    );
-  }
   if (practice.remaining_seconds <= 0) {
     return <p className="text-tg-text">{ru.student.summary.todayClosed}</p>;
   }
+  // Two states only: «доступно X» (with X = remaining time, in natural
+  // language) and «закрыта 💪». The old «осталось X» variant was a
+  // countdown — pulled to remove the timer/pressure vibe.
   return (
     <p className="text-tg-text">
-      {ru.student.summary.remainingToday(formatDuration(practice.remaining_seconds))}
+      {ru.student.summary.todayAvailable(formatPracticeTime(practice.remaining_seconds))}
     </p>
-  );
-}
-
-function ProgressBar({
-  used,
-  quota,
-  status,
-}: {
-  used: number;
-  quota: number;
-  status: ApiStatus;
-}) {
-  const pct = Math.min(100, Math.round((used / Math.max(1, quota)) * 100));
-  const locked =
-    status.kind === "trial_expired" ||
-    status.kind === "lapsed" ||
-    status.kind === "payment_failed";
-  // Locked / frozen → muted bar that doesn't fill, since the quota concept is paused.
-  const bar = locked || status.kind === "frozen" ? "bg-tg-text-hint/40" : "bg-tg-text-accent";
-  return (
-    <div className="h-1.5 w-full rounded-full bg-tg-bg-secondary overflow-hidden">
-      <div
-        className={`h-full rounded-full ${bar} transition-all duration-300`}
-        style={{ width: `${locked ? 100 : pct}%` }}
-      />
-    </div>
   );
 }
 

@@ -97,7 +97,7 @@ export function FeedbackChat({ jwt }: { jwt: string }) {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-7rem)] sm:h-[70vh]">
+    <div className="flex flex-col h-[calc(100dvh-7rem)] sm:h-[70vh]">
       <div
         ref={scrollRef}
         className="flex-1 min-h-0 overflow-y-auto space-y-2 mb-3 pr-1"
@@ -152,7 +152,7 @@ export function FeedbackChat({ jwt }: { jwt: string }) {
 
       {error && <div className="mb-2 text-xs text-tg-text-destructive">{error}</div>}
 
-      <div className="flex items-end gap-2 shrink-0">
+      <div className="flex items-end gap-2 shrink-0 pb-[env(safe-area-inset-bottom)]">
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}

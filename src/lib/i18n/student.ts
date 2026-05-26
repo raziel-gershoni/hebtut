@@ -44,7 +44,6 @@ const summary = {
   practiceFrozen: "Доступ к практике на паузе",
   todayAvailable: (dur: string) => `Сегодня доступно ${dur} практики`,
   todayClosed: "Практика на сегодня закрыта 💪",
-  remainingToday: (dur: string) => `Осталось ${dur} практики сегодня`,
   // Streak
   streakChip: (n: number, word: string) => `🔥 ${n} ${word} подряд`,
   // PayCTA

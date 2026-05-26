@@ -120,26 +120,26 @@ function Body({ jwt }: { jwt: string }) {
           <div className="text-xs text-tg-text-destructive">{error}</div>
         )}
         <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-xs uppercase tracking-wider text-tg-text-hint">
+          <label className="block min-w-0">
+            <span className="block text-center text-xs uppercase tracking-wider text-tg-text-hint">
               {ru.student.responseWindow.startLabel}
             </span>
             <input
               type="time"
               value={start}
               onChange={(e) => setStart(e.target.value)}
-              className="mt-1 w-full h-12 rounded-2xl bg-tg-bg-secondary px-3 text-tg-text tabular-nums"
+              className="mt-1 w-full min-w-0 h-12 rounded-2xl bg-tg-bg-secondary px-3 text-center text-tg-text tabular-nums"
             />
           </label>
-          <label className="block">
-            <span className="text-xs uppercase tracking-wider text-tg-text-hint">
+          <label className="block min-w-0">
+            <span className="block text-center text-xs uppercase tracking-wider text-tg-text-hint">
               {ru.student.responseWindow.endLabel}
             </span>
             <input
               type="time"
               value={end}
               onChange={(e) => setEnd(e.target.value)}
-              className="mt-1 w-full h-12 rounded-2xl bg-tg-bg-secondary px-3 text-tg-text tabular-nums"
+              className="mt-1 w-full min-w-0 h-12 rounded-2xl bg-tg-bg-secondary px-3 text-center text-tg-text tabular-nums"
             />
           </label>
         </div>

@@ -344,6 +344,7 @@ export interface Database {
           onboarding_last_active_at: string | null;
           onboarding_day1_limit_msg_sent_at: string | null;
           onboarding_last_pause_nudge_at: string | null;
+          unassigned_ack_sent_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -376,6 +377,7 @@ export interface Database {
           onboarding_last_active_at?: string | null;
           onboarding_day1_limit_msg_sent_at?: string | null;
           onboarding_last_pause_nudge_at?: string | null;
+          unassigned_ack_sent_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };

@@ -31,8 +31,13 @@ const access = {
   pendingNotice: "Сообщение сохранено. Жди — администратор подключит тебя к тренеру.",
   noTeachers:
     "Сообщение принято, но за тобой пока не закреплён ни один тренер. Сообщи администратору.",
+  // Sent ONCE per student (gated on subscriptions.unassigned_ack_sent_at)
+  // when an unassigned student records their first voice/video. Subsequent
+  // recordings while still unassigned don't re-send this — admins still
+  // get the fan-out ping every time.
   unassignedAck:
-    "Получили твоё сообщение. Сейчас подключим тренера, и он ответит.",
+    "Получили твоё сообщение. Сейчас подключим тренера, и он скоро ответит.\n\n" +
+    "А пока можешь продолжать записывать дальше, если хочется что-то ещё рассказать или добавить.",
 };
 
 const quota = {
@@ -68,7 +73,7 @@ const subscription = {
   granted: (days: number, until: string) =>
     `🎁 Тренер активировал подписку на ${days} ${pluralDay(days)}. Активна до ${until}. Записывай голосовые!`,
   reset:
-    "Подписка сброшена на пробный период (3 дня). Запиши голосовое — тренер ждёт.",
+    "Подписка сброшена на пробный период (2 дня). Запиши голосовое — тренер ждёт.",
   lapsed:
     "Подписка приостановлена. Свяжись с админом, чтобы возобновить.",
   frozenNotice: (until: string) =>

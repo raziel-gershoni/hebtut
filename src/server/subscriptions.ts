@@ -171,7 +171,7 @@ export function deriveStatus(row: SubscriptionRow, now: Date): DerivedStatus {
  * Hot path: called from the home-screen summary fetch and the access gate.
  *
  * If the user has no subscription row yet (e.g., a student created after
- * the initial backfill), one is provisioned with the default 3-day trial
+ * the initial backfill), one is provisioned with the default 2-day trial
  * starting now. This keeps the access gate & the home card consistent for
  * every student, regardless of when they joined.
  *
@@ -392,7 +392,7 @@ export function pickPaymentAnchor(
  * locked-in design choice.
  * ----------------------------------------------------------------------- */
 
-const TRIAL_RESET_DAYS = 3;
+const TRIAL_RESET_DAYS = 2;
 const MAX_GRANT_DAYS = 3650; // 10 years — clamps obvious typos
 
 /**
@@ -454,7 +454,7 @@ export async function grantSubscriptionDays(input: {
 }
 
 /**
- * Resets the user back to a fresh 3-day trial. Useful when an admin wants
+ * Resets the user back to a fresh 2-day trial. Useful when an admin wants
  * to give someone a "second chance" without paying days. Leaves
  * current_period_starts_at intact (so referral logic still treats a future
  * paid period as the user's "first paid").

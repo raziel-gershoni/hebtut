@@ -45,6 +45,20 @@ export function isSingularDay(n: number): boolean {
 }
 
 /**
+ * Russian "минута / минуты / минут" — feminine declension. Same Slavic
+ * rule as `pluralDay`. Used by `formatPracticeTime` for the student
+ * summary card.
+ */
+export function pluralMinute(n: number): string {
+  const n100 = n % 100;
+  const n10 = n % 10;
+  if (n100 >= 11 && n100 <= 14) return "минут";
+  if (n10 === 1) return "минута";
+  if (n10 >= 2 && n10 <= 4) return "минуты";
+  return "минут";
+}
+
+/**
  * Russian "связь / связи / связей" — used by the admin connections panel.
  * Same Slavic rule as `pluralDay` applied to a feminine noun.
  */

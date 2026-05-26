@@ -19,7 +19,7 @@ export const revalidate = 0;
  * Manual admin operations on a student's subscription:
  *   { action: "grant_days"; days: 1..3650 } — extends current_period_ends_at,
  *     anchored on existing future end if active/trial-with-time, else now.
- *   { action: "reset_trial" }              — fresh 3-day trial from now.
+ *   { action: "reset_trial" }              — fresh 2-day trial from now.
  *   { action: "lapse" }                    — close immediately.
  *
  * None of these trigger referral credits — that's only for actual paid

@@ -9,7 +9,8 @@ import { useRealtimeFeedback } from "@/hooks/useRealtimeFeedback";
 
 interface AuthorRef {
   id: number;
-  name: string | null;
+  /** Pre-resolved display label (real/preferred name in names mode,
+   *  animal handle in anon mode). Server picks via resolveDisplay. */
   handle: string;
 }
 
@@ -179,7 +180,7 @@ export function FeedbackThread({
   const name = user?.name ?? ru.inbox.feedbackThread.fallbackName;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-7rem)] sm:h-[70vh]">
+    <div className="flex flex-col h-[calc(100dvh-7rem)] sm:h-[70vh]">
       {user && (
         <header className="flex items-center gap-3 mb-3 pb-3 border-b border-tg-text-hint/15 shrink-0">
           <Avatar size={48} name={name} imageUrl={avatarUrl} />
@@ -242,7 +243,7 @@ export function FeedbackThread({
                 <div className="max-w-[80%] rounded-2xl px-3 py-2 bg-emerald-500/15 border-r-[3px] border-emerald-500">
                   {author && (
                     <div className="text-[11px] mb-1 font-semibold text-emerald-700 dark:text-emerald-400">
-                      {author.name ?? author.handle}
+                      {author.handle}
                     </div>
                   )}
                   <div className="text-xs whitespace-pre-wrap break-words">{m.text_content}</div>
@@ -264,7 +265,7 @@ export function FeedbackThread({
 
       {error && <div className="mb-2 text-xs text-tg-text-destructive">{error}</div>}
 
-      <div className="flex items-end gap-2 shrink-0">
+      <div className="flex items-end gap-2 shrink-0 pb-[env(safe-area-inset-bottom)]">
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
