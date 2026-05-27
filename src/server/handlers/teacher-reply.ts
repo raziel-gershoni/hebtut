@@ -11,7 +11,7 @@ import { nextWindowOpen } from "@/server/response-window";
 import { formatInTimeZone } from "date-fns-tz";
 import { addMinutes } from "date-fns";
 import { advanceOnboarding, scheduleTimer } from "@/server/onboarding";
-import { transcribeTgAudio } from "@/server/transcribe";
+import { transcribeTgAudio, translateToRussian, isMostlyRussian } from "@/server/transcribe";
 import { getTranscriptsEnabled, getTranslationEnabled } from "@/server/settings";
 
 export interface ReplyContext {
@@ -635,27 +635,32 @@ async function transcribeAndDeliverFor(
         }
       : {};
   try {
-    const result = await transcribeTgAudio(fileId, kind, {
-      translate: wantTranslate,
-    });
-    if (result) {
-      const { transcript, translation } = result;
+    const transcript = await transcribeTgAudio(fileId, kind);
+    if (transcript) {
       const sent = await getBot().api.sendMessage(studentChatId, transcript, replyParams);
 
+      // Translate as a separate text-only Gemini call so the audio prompt
+      // can't bleed Russian tokens into the Hebrew transcript. Skip when
+      // the source itself is already mostly Russian — no point echoing.
+      let translation: string | null = null;
       let translationTgMessageId: number | null = null;
-      if (wantTranslate && translation) {
-        try {
-          const sentTr = await getBot().api.sendMessage(
-            studentChatId,
-            `${ru.bot.transcripts.translationPrefix}${translation}`,
-            replyParams,
-          );
-          translationTgMessageId = sentTr.message_id;
-        } catch (e) {
-          console.warn(
-            "[transcribe] translation send failed",
-            (e as Error).message,
-          );
+      if (wantTranslate && !isMostlyRussian(transcript)) {
+        translation = await translateToRussian(transcript);
+        if (translation) {
+          try {
+            const sentTr = await getBot().api.sendMessage(
+              studentChatId,
+              `${ru.bot.transcripts.translationPrefix}${translation}`,
+              replyParams,
+            );
+            translationTgMessageId = sentTr.message_id;
+          } catch (e) {
+            console.warn(
+              "[transcribe] translation send failed",
+              (e as Error).message,
+            );
+            translation = null;
+          }
         }
       }
 

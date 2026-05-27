@@ -40,6 +40,7 @@ const transcriptsPage = {
   saveButton: "Сохранить",
   savingButton: "Сохраняем…",
   saveError: "Не получилось сохранить — попробуй ещё раз.",
+  globallyDisabledNotice: "Сейчас отключено для всех. Включи позже, когда заработает.",
 };
 
 const summary = {

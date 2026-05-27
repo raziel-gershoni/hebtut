@@ -5,6 +5,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { readJsonBody } from "@/lib/http";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { recordAudit } from "@/server/audit";
+import { getTranscriptsEnabled, getTranslationEnabled } from "@/server/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,15 +34,24 @@ export async function GET(req: NextRequest): Promise<Response> {
     return new Response("forbidden", { status: 403, headers: noStoreHeaders });
   }
   const sb = getServiceRoleClient();
-  const { data: row } = await sb
-    .from("subscriptions")
-    .select("transcripts_enabled, translation_enabled")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [{ data: row }, globalTranscripts, globalTranslation] = await Promise.all([
+    sb
+      .from("subscriptions")
+      .select("transcripts_enabled, translation_enabled")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    getTranscriptsEnabled(),
+    getTranslationEnabled(),
+  ]);
   return Response.json(
     {
       transcripts_enabled: row?.transcripts_enabled ?? true,
       translation_enabled: row?.translation_enabled ?? true,
+      // Global toggles surfaced so the student page can grey out the per-user
+      // checkbox + show a "off globally" notice when the admin disabled the
+      // feature centrally. Effective delivery is global AND per-user.
+      global_transcripts_enabled: globalTranscripts,
+      global_translation_enabled: globalTranslation,
     },
     { headers: noStoreHeaders },
   );

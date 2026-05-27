@@ -213,7 +213,7 @@ const transcripts = {
   correctionPrefix: "📝 Поправка: ",
   // Prefix for the Russian translation that follows the verbatim
   // transcript (sent as a second threaded reply to the audio).
-  translationPrefix: "🇷🇺 Перевод: ",
+  translationPrefix: "Перевод: ",
   // Fallback "edit" message for translation (translation editMessageText
   // refused).
   translationCorrectionPrefix: "📝 Поправка перевода: ",

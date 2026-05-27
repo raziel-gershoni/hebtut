@@ -31,16 +31,54 @@ export function EditUserTranscriptsDialog({
   const [translation, setTranslation] = useState(initialTranslation);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Snapshot of the global toggles, fetched once per open. Lets us grey
+  // out per-user checkboxes + show a "globally off" notice when the admin
+  // has the feature disabled centrally. Effective delivery is global AND
+  // per-user; admin can still save a preference for when global flips
+  // back on.
+  const [globals, setGlobals] = useState<{
+    transcripts: boolean;
+    translation: boolean;
+  } | null>(null);
 
   useEffect(() => {
     if (open) {
       setTranscripts(initialTranscripts);
       setTranslation(initialTranslation);
       setError(null);
+      setGlobals(null);
+      void fetch("/api/admin/settings", {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${jwt}` },
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then(
+          (d: {
+            settings?: {
+              transcripts_enabled?: boolean;
+              translation_enabled?: boolean;
+            };
+          } | null) => {
+            if (d?.settings) {
+              setGlobals({
+                transcripts: d.settings.transcripts_enabled === true,
+                translation: d.settings.translation_enabled === true,
+              });
+            }
+          },
+        )
+        .catch(() => {
+          // Treat as "globals on" — better to let the admin edit than to
+          // grey out wrongly on a transient network failure.
+        });
     }
-  }, [open, initialTranscripts, initialTranslation]);
+  }, [open, initialTranscripts, initialTranslation, jwt]);
 
   if (!open) return null;
+
+  const transcriptsLockedByGlobal = globals?.transcripts === false;
+  const translationLockedByGlobal = globals?.translation === false;
+  const translationDisabled = !transcripts || translationLockedByGlobal;
 
   const dirty =
     transcripts !== initialTranscripts || translation !== initialTranslation;
@@ -79,27 +117,40 @@ export function EditUserTranscriptsDialog({
           {ru.admin.userTranscripts.dialogHint}
         </p>
 
-        <label className="flex items-center gap-3 text-sm">
+        <label className="flex items-start gap-3 text-sm">
           <input
             type="checkbox"
             checked={transcripts}
             onChange={(e) => setTranscripts(e.target.checked)}
-            className="w-5 h-5 accent-tg-button"
+            disabled={transcriptsLockedByGlobal}
+            className="mt-0.5 w-5 h-5 accent-tg-button disabled:opacity-40"
           />
-          <span>{ru.admin.userTranscripts.transcriptsLabel}</span>
+          <div className={`min-w-0 flex-1 ${transcriptsLockedByGlobal ? "opacity-60" : ""}`}>
+            <div>{ru.admin.userTranscripts.transcriptsLabel}</div>
+            {transcriptsLockedByGlobal && (
+              <div className="text-[11px] text-tg-text-hint mt-0.5 italic">
+                {ru.admin.userTranscripts.globallyDisabledNotice}
+              </div>
+            )}
+          </div>
         </label>
 
-        <label className="flex items-center gap-3 text-sm">
+        <label className="flex items-start gap-3 text-sm">
           <input
             type="checkbox"
             checked={translation}
             onChange={(e) => setTranslation(e.target.checked)}
-            disabled={!transcripts}
-            className="w-5 h-5 accent-tg-button disabled:opacity-40"
+            disabled={translationDisabled}
+            className="mt-0.5 w-5 h-5 accent-tg-button disabled:opacity-40"
           />
-          <span className={transcripts ? "" : "text-tg-text-hint"}>
-            {ru.admin.userTranscripts.translationLabel}
-          </span>
+          <div className={`min-w-0 flex-1 ${translationDisabled ? "opacity-60" : ""}`}>
+            <div>{ru.admin.userTranscripts.translationLabel}</div>
+            {translationLockedByGlobal && (
+              <div className="text-[11px] text-tg-text-hint mt-0.5 italic">
+                {ru.admin.userTranscripts.globallyDisabledNotice}
+              </div>
+            )}
+          </div>
         </label>
 
         {error && <div className="text-xs text-tg-text-destructive">{error}</div>}

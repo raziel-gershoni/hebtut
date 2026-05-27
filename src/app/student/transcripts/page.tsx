@@ -6,6 +6,8 @@ import { ru } from "@/lib/i18n";
 interface Prefs {
   transcripts_enabled: boolean;
   translation_enabled: boolean;
+  global_transcripts_enabled: boolean;
+  global_translation_enabled: boolean;
 }
 
 export default function StudentTranscriptsPage() {
@@ -83,6 +85,13 @@ function Body({ jwt }: { jwt: string }) {
     transcripts !== data.transcripts_enabled ||
     translation !== data.translation_enabled;
 
+  // Persisted preference is kept editable, but disabled visually when the
+  // matching global toggle is off — saving still works, the choice just
+  // doesn't fire deliveries until the admin turns the global back on.
+  const transcriptsLockedByGlobal = !data.global_transcripts_enabled;
+  const translationLockedByGlobal = !data.global_translation_enabled;
+  const translationDisabled = !transcripts || translationLockedByGlobal;
+
   return (
     <div className="space-y-5">
       <section className="rounded-2xl bg-tg-bg-section p-5 space-y-4">
@@ -91,15 +100,21 @@ function Body({ jwt }: { jwt: string }) {
             type="checkbox"
             checked={transcripts}
             onChange={(e) => setTranscripts(e.target.checked)}
-            className="mt-0.5 w-5 h-5 accent-tg-button"
+            disabled={transcriptsLockedByGlobal}
+            className="mt-0.5 w-5 h-5 accent-tg-button disabled:opacity-40"
           />
-          <div className="min-w-0 flex-1">
+          <div className={`min-w-0 flex-1 ${transcriptsLockedByGlobal ? "opacity-60" : ""}`}>
             <div className="text-sm font-medium">
               {ru.student.transcriptsPage.transcriptsTitle}
             </div>
             <div className="text-xs text-tg-text-hint mt-0.5">
               {ru.student.transcriptsPage.transcriptsBody}
             </div>
+            {transcriptsLockedByGlobal && (
+              <div className="text-[11px] text-tg-text-hint mt-1 italic">
+                {ru.student.transcriptsPage.globallyDisabledNotice}
+              </div>
+            )}
           </div>
         </label>
 
@@ -108,20 +123,21 @@ function Body({ jwt }: { jwt: string }) {
             type="checkbox"
             checked={translation}
             onChange={(e) => setTranslation(e.target.checked)}
-            disabled={!transcripts}
+            disabled={translationDisabled}
             className="mt-0.5 w-5 h-5 accent-tg-button disabled:opacity-40"
           />
-          <div className="min-w-0 flex-1">
-            <div
-              className={`text-sm font-medium ${
-                transcripts ? "" : "text-tg-text-hint"
-              }`}
-            >
+          <div className={`min-w-0 flex-1 ${translationDisabled ? "opacity-60" : ""}`}>
+            <div className="text-sm font-medium">
               {ru.student.transcriptsPage.translationTitle}
             </div>
             <div className="text-xs text-tg-text-hint mt-0.5">
               {ru.student.transcriptsPage.translationBody}
             </div>
+            {translationLockedByGlobal && (
+              <div className="text-[11px] text-tg-text-hint mt-1 italic">
+                {ru.student.transcriptsPage.globallyDisabledNotice}
+              </div>
+            )}
           </div>
         </label>
       </section>

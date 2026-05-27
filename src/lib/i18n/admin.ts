@@ -60,6 +60,10 @@ const userTranscripts = {
   cancelButton: "Отмена",
   saveError: "Не получилось сохранить — попробуй ещё раз.",
   menuItem: "Расшифровка и перевод",
+  // Shown next to a per-user checkbox when the matching GLOBAL toggle
+  // is off — i.e. the persisted user preference doesn't matter right
+  // now because the feature is disabled centrally.
+  globallyDisabledNotice: "Глобально отключено в настройках.",
 };
 
 const tags = {

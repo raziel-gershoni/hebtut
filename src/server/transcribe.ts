@@ -7,9 +7,13 @@ const TIMEOUT_MS = 25_000;
 /**
  * Downloads a TG voice / video_note by file_id and runs it through Gemini
  * 3.5 Flash to get a verbatim transcript (Hebrew or Russian — both handled
- * natively). When `opts.translate === true`, the same call also produces a
- * natural Russian translation (or an empty string when the source language
- * is already Russian). Returns `null` on any failure — never throws.
+ * natively). Returns `null` on any failure — never throws.
+ *
+ * Translation is intentionally NOT done in this call. A combined
+ * transcribe+translate prompt caused Gemini to bleed Russian tokens into
+ * the Hebrew transcript itself (e.g. «היום э привет מה עושה»). Keep this
+ * single-purpose; translation lives in `translateToRussian` and runs as
+ * a separate text-only call when needed.
  *
  * Inline base64 in the prompt is fine because both TG voice (OGG/Opus) and
  * video_note (MP4) are well under Gemini's 20 MB inline limit (our
@@ -18,15 +22,12 @@ const TIMEOUT_MS = 25_000;
 export async function transcribeTgAudio(
   fileId: string,
   kind: "voice" | "video_note",
-  opts?: { translate?: boolean },
-): Promise<{ transcript: string; translation: string | null } | null> {
+): Promise<string | null> {
   const apiKey = serverEnv.GEMINI_API_KEY;
   if (!apiKey) {
     console.warn("[transcribe] skipped — GEMINI_API_KEY not set");
     return null;
   }
-
-  const translate = opts?.translate === true;
 
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
@@ -41,30 +42,21 @@ export async function transcribeTgAudio(
     const b64 = Buffer.from(bytes).toString("base64");
     const mime = kind === "voice" ? "audio/ogg" : "video/mp4";
 
-    const promptText = translate
-      ? "Transcribe this audio verbatim, preserving the spoken language " +
-        "(usually Hebrew, sometimes Russian). If the source language is " +
-        "NOT Russian, also produce a natural Russian translation. Return " +
-        "STRICT JSON of the shape: " +
-        "{\"transcript\":\"<verbatim>\",\"russian_translation\":\"<translation or empty string if source is already Russian>\"}. " +
-        "No commentary, no language tags."
-      : "Transcribe this audio verbatim. Preserve the spoken language " +
-        "(usually Hebrew, sometimes Russian). Return only the transcript " +
-        "text, no commentary, no quotes, no language tags.";
-
-    const body: Record<string, unknown> = {
+    const body = {
       contents: [
         {
           parts: [
             { inline_data: { mime_type: mime, data: b64 } },
-            { text: promptText },
+            {
+              text:
+                "Transcribe this audio verbatim. Preserve the spoken language " +
+                "(usually Hebrew, sometimes Russian). Return only the " +
+                "transcript text, no commentary, no quotes, no language tags.",
+            },
           ],
         },
       ],
     };
-    if (translate) {
-      body.generationConfig = { response_mime_type: "application/json" };
-    }
 
     const r = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
@@ -83,34 +75,88 @@ export async function transcribeTgAudio(
     const data = (await r.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
     };
-    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    if (!raw) return null;
-
-    if (!translate) {
-      return { transcript: raw, translation: null };
-    }
-    try {
-      const parsed = JSON.parse(raw) as {
-        transcript?: string;
-        russian_translation?: string;
-      };
-      const transcript = parsed.transcript?.trim();
-      const translation = parsed.russian_translation?.trim();
-      if (!transcript) return null;
-      return {
-        transcript,
-        translation: translation && translation.length > 0 ? translation : null,
-      };
-    } catch (e) {
-      console.warn(
-        "[transcribe] gemini json parse failed",
-        (e as Error).message,
-        raw.slice(0, 200),
-      );
-      return null;
-    }
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    return text && text.length > 0 ? text : null;
   } catch (e) {
     console.warn("[transcribe] failed", (e as Error).message);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Cheap script-majority heuristic: if more Cyrillic chars than other
+ * letters, it's already Russian → caller should skip translation. Punctuation
+ * + whitespace + digits don't count. Hebrew chars (block U+0590..U+05FF)
+ * are the main competing script in our audience.
+ *
+ * False-positives (a Russian sentence with a Hebrew word) → we'd skip a
+ * useful translation. False-negatives (a Hebrew sentence with a single
+ * Russian word) → we'd pay for an unnecessary translation call. Both are
+ * tolerable.
+ */
+export function isMostlyRussian(text: string): boolean {
+  let ru = 0;
+  let other = 0;
+  for (const ch of text) {
+    if (/[Ѐ-ӿ]/.test(ch)) ru++;
+    else if (/\p{L}/u.test(ch)) other++;
+  }
+  if (ru === 0 && other === 0) return false;
+  return ru > other;
+}
+
+/**
+ * Translates `text` to natural Russian via a text-only Gemini call.
+ * Returns `null` on any failure — never throws.
+ *
+ * Caller is responsible for the "is this already Russian" gate via
+ * `isMostlyRussian` so we don't waste a round-trip echoing the source.
+ */
+export async function translateToRussian(text: string): Promise<string | null> {
+  const apiKey = serverEnv.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
+  try {
+    const body = {
+      contents: [
+        {
+          parts: [
+            {
+              text:
+                "Translate the following text to natural, idiomatic Russian. " +
+                "Return ONLY the translation — no commentary, no quotes, no " +
+                "language tags, no original text alongside.\n\n" +
+                text,
+            },
+          ],
+        },
+      ],
+    };
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        signal: ac.signal,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    if (!r.ok) {
+      const errBody = await r.text().catch(() => "");
+      console.warn("[translate] gemini non-ok", r.status, errBody.slice(0, 300));
+      return null;
+    }
+    const data = (await r.json()) as {
+      candidates?: { content?: { parts?: { text?: string }[] } }[];
+    };
+    const out = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    return out && out.length > 0 ? out : null;
+  } catch (e) {
+    console.warn("[translate] failed", (e as Error).message);
     return null;
   } finally {
     clearTimeout(timer);
