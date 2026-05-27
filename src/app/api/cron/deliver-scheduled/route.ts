@@ -32,13 +32,32 @@ async function handler(req: NextRequest): Promise<Response> {
     .lte("deliver_at", nowIso)
     .limit(100);
 
-  if (!due?.length) return Response.json({ delivered: 0, failed: 0 });
+  if (!due?.length) return Response.json({ delivered: 0, failed: 0, skipped: 0 });
 
   const bot = getBot();
   let delivered = 0;
   let failed = 0;
+  let skipped = 0;
 
   for (const row of due) {
+    // Atomic claim. The UPDATE only succeeds if status is still 'queued'
+    // (i.e. no concurrent cron tick or prior failed-but-stuck send is
+    // already handling this row). Without this gate, a successful TG
+    // send followed by a failed status writeback would let the next
+    // cron tick re-send the SAME video to the student — confirmed
+    // repro: students were getting the same video on every minute tick.
+    const { data: claimed } = await sb
+      .from("scheduled_outbound")
+      .update({ status: "sending" })
+      .eq("id", row.id)
+      .eq("status", "queued")
+      .select("id")
+      .maybeSingle();
+    if (!claimed) {
+      skipped++;
+      continue;
+    }
+
     try {
       let tgMessageId: number;
       let newFileId = row.file_id;
@@ -93,6 +112,10 @@ async function handler(req: NextRequest): Promise<Response> {
       delivered++;
     } catch (e) {
       failed++;
+      // Roll the claim forward to 'failed' so subsequent ticks skip it.
+      // If THIS update itself fails, the row stays in 'sending' (still
+      // safe — claim gate keeps the next tick from re-sending) and an
+      // admin can manually inspect.
       await sb
         .from("scheduled_outbound")
         .update({ status: "failed" })
@@ -104,7 +127,7 @@ async function handler(req: NextRequest): Promise<Response> {
     }
   }
 
-  return Response.json({ delivered, failed });
+  return Response.json({ delivered, failed, skipped });
 }
 
 export { handler as GET, handler as POST };

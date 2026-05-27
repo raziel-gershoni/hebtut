@@ -425,7 +425,7 @@ export interface Database {
           original_message_id: number | null;
           tg_chat_id: number;
           deliver_at: string;
-          status: "queued" | "delivered" | "failed" | "cancelled";
+          status: "queued" | "sending" | "delivered" | "failed" | "cancelled";
           delivered_at: string | null;
           created_at: string;
         };
@@ -439,7 +439,7 @@ export interface Database {
           original_message_id?: number | null;
           tg_chat_id: number;
           deliver_at: string;
-          status?: "queued" | "delivered" | "failed" | "cancelled";
+          status?: "queued" | "sending" | "delivered" | "failed" | "cancelled";
           delivered_at?: string | null;
           created_at?: string;
         };
