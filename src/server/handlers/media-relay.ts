@@ -1,3 +1,4 @@
+import { InputFile } from "grammy";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { getBot } from "@/lib/tg";
 import { serverEnv } from "@/lib/env";
@@ -54,7 +55,15 @@ export async function sendLibraryItemToStudent(
   if (!student) throw new Error("student not found");
   if (student.role !== "student") throw new Error("not a student");
 
-  let sendArg: string;
+  // On the first send for a library item we forward bytes as multipart
+  // (`InputFile`) rather than handing TG the Supabase public URL. TG used
+  // to reject some URL-based sends with "wrong type of the web page
+  // content" — happens when the storage object's MIME doesn't satisfy
+  // TG's strict per-method check (e.g. octet-stream for a video, or an
+  // HTML error page on intermittent fetch failures). Multipart bypasses
+  // all that. Once TG ingests the bytes it returns a `file_id` which we
+  // cache below for instantaneous subsequent sends.
+  let sendArg: string | InputFile;
   if (library.tg_file_id) {
     sendArg = library.tg_file_id;
   } else {
@@ -64,7 +73,7 @@ export async function sendLibraryItemToStudent(
     if (!data.publicUrl) {
       throw new Error("could not construct public storage URL");
     }
-    sendArg = data.publicUrl;
+    sendArg = new InputFile(new URL(data.publicUrl));
   }
 
   let newFileId: string | null = null;
