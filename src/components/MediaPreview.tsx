@@ -77,13 +77,25 @@ export function MediaPreview({ item, jwt, selected, onClick, onKebab }: Props) {
               loading="lazy"
             />
           ) : item.kind === "video" ? (
-            <video
-              src={videoPublicUrl(item.storage_path)}
-              preload="metadata"
-              muted
-              playsInline
-              className="w-full h-full object-cover"
-            />
+            <div className="relative w-full h-full">
+              <video
+                // #t=0.1 nudges iOS Safari into actually rendering the
+                // first frame as a poster — without it the tile is just
+                // black until the user plays.
+                src={`${videoPublicUrl(item.storage_path)}#t=0.1`}
+                preload="metadata"
+                muted
+                playsInline
+                disablePictureInPicture
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+              <div
+                className="absolute inset-0 flex items-center justify-center bg-black/15 pointer-events-none"
+                aria-hidden
+              >
+                <PlayBadge />
+              </div>
+            </div>
           ) : (
             <AudioIcon />
           )}
@@ -132,6 +144,22 @@ export function MediaPreview({ item, jwt, selected, onClick, onKebab }: Props) {
           ⋯
         </button>
       )}
+    </div>
+  );
+}
+
+function PlayBadge() {
+  return (
+    <div className="w-10 h-10 rounded-full bg-black/55 backdrop-blur-sm flex items-center justify-center text-white shadow-lg">
+      <svg
+        width={16}
+        height={16}
+        viewBox="0 0 14 14"
+        fill="currentColor"
+        aria-hidden
+      >
+        <path d="M3 1.5L12 7L3 12.5z" />
+      </svg>
     </div>
   );
 }
