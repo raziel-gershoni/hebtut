@@ -49,9 +49,15 @@ export async function transcribeTgAudio(
             { inline_data: { mime_type: mime, data: b64 } },
             {
               text:
-                "Transcribe this audio verbatim. Preserve the spoken language " +
-                "(usually Hebrew, sometimes Russian). Return only the " +
-                "transcript text, no commentary, no quotes, no language tags.",
+                // The audio comes from a Hebrew tutor — Hebrew is the
+                // overwhelming default. Explicit anti-transliteration
+                // rule because earlier looser prompts caused Gemini to
+                // emit Hebrew speech as Cyrillic phonetics or to
+                // auto-translate to Russian.
+                "This is audio from a Hebrew-language tutor. Transcribe it verbatim in Hebrew script (אבגדהוזחטיכלמנסעפצקרשת).\n" +
+                "If — and only if — the speaker is clearly using Russian instead, transcribe in Cyrillic script.\n" +
+                "Do NOT translate. Do NOT transliterate (never write Hebrew in Cyrillic, never write Russian in Latin).\n" +
+                "Return ONLY the transcript text — no commentary, no quotes, no language labels.",
             },
           ],
         },
@@ -127,9 +133,13 @@ export async function translateToRussian(text: string): Promise<string | null> {
           parts: [
             {
               text:
-                "Translate the following text to natural, idiomatic Russian. " +
-                "Return ONLY the translation — no commentary, no quotes, no " +
-                "language tags, no original text alongside.\n\n" +
+                // Source is overwhelmingly Hebrew (tutor's lessons);
+                // very occasionally English or another non-Russian
+                // language. The caller already filters out Russian-only
+                // inputs via the Cyrillic-majority heuristic, so we
+                // don't have to handle "source is already Russian".
+                "Translate the following Hebrew text to natural, idiomatic Russian. " +
+                "Return ONLY the Russian translation — no commentary, no quotes, no language tags, no original text alongside.\n\n" +
                 text,
             },
           ],

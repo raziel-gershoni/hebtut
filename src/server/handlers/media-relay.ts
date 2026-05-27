@@ -80,9 +80,7 @@ export async function sendLibraryItemToStudent(
   let newFileUniqueId: string | null = null;
   let sentMessageId: number;
   if (library.kind === "photo") {
-    const sent = await bot.api.sendPhoto(student.tg_chat_id, sendArg, {
-      caption: captionFor(library.title, library.description),
-    });
+    const sent = await bot.api.sendPhoto(student.tg_chat_id, sendArg);
     const largest = sent.photo[sent.photo.length - 1];
     newFileId = largest?.file_id ?? library.tg_file_id ?? null;
     newFileUniqueId = largest?.file_unique_id ?? library.tg_file_unique_id ?? null;
@@ -95,7 +93,6 @@ export async function sendLibraryItemToStudent(
     // with these hints, the cached tg_file_id preserves the correct
     // rendering for every subsequent send.
     const sent = await bot.api.sendVideo(student.tg_chat_id, sendArg, {
-      caption: captionFor(library.title, library.description),
       duration: library.duration_seconds ?? undefined,
       width: library.width ?? undefined,
       height: library.height ?? undefined,
@@ -105,10 +102,7 @@ export async function sendLibraryItemToStudent(
     newFileUniqueId = sent.video?.file_unique_id ?? library.tg_file_unique_id ?? null;
     sentMessageId = sent.message_id;
   } else {
-    const sent = await bot.api.sendAudio(student.tg_chat_id, sendArg, {
-      caption: captionFor(library.title, library.description),
-      title: library.title ?? library.original_filename,
-    });
+    const sent = await bot.api.sendAudio(student.tg_chat_id, sendArg);
     newFileId = sent.audio?.file_id ?? library.tg_file_id ?? null;
     newFileUniqueId = sent.audio?.file_unique_id ?? library.tg_file_unique_id ?? null;
     sentMessageId = sent.message_id;
@@ -180,10 +174,3 @@ export async function sendLibraryItemToStudent(
   return { messageId: outRow.id };
 }
 
-function captionFor(title: string | null, description: string | null): string | undefined {
-  const parts: string[] = [];
-  if (title && title.trim()) parts.push(title.trim());
-  if (description && description.trim()) parts.push(description.trim());
-  if (parts.length === 0) return undefined;
-  return parts.join("\n").slice(0, 1024);
-}
