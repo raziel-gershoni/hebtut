@@ -51,7 +51,7 @@ export async function PATCH(
   const { data: msg } = await sb
     .from("messages")
     .select(
-      "id, student_id, teacher_id, direction, kind, translation_text, translation_tg_message_id, tg_message_id_in_student_chat",
+      "id, student_id, teacher_id, direction, kind, transcript_text, transcript_tg_message_id, translation_text, translation_tg_message_id, tg_message_id_in_student_chat",
     )
     .eq("id", id)
     .maybeSingle();
@@ -85,14 +85,28 @@ export async function PATCH(
     return new Response("no chat", { status: 502, headers: noStoreHeaders });
   }
 
+  // Translation lives inside the same combined TG message as the
+  // transcript («transcript\n\ntranslation»). Editing translation means
+  // rebuilding the body with the (unchanged) transcript + the new
+  // translation, then editing the shared message.
+  const combinedBody = msg.transcript_text
+    ? `${msg.transcript_text}\n\n${newText}`
+    : newText;
+
+  // Prefer the shared message id (== transcript_tg_message_id) when
+  // present; defensively fall back to the legacy translation_tg_message_id
+  // for rows written before the combine refactor.
+  const editTargetId =
+    msg.translation_tg_message_id ?? msg.transcript_tg_message_id;
+
   let fallback = false;
-  let newTgMessageId: number | null = msg.translation_tg_message_id;
-  if (msg.translation_tg_message_id != null) {
+  let newTgMessageId: number | null = editTargetId;
+  if (editTargetId != null) {
     try {
       await getBot().api.editMessageText(
         student.tg_chat_id,
-        msg.translation_tg_message_id,
-        `${ru.bot.transcripts.translationPrefix}${newText}`,
+        editTargetId,
+        combinedBody,
       );
     } catch (e) {
       console.warn(
@@ -109,7 +123,7 @@ export async function PATCH(
     try {
       const sent = await getBot().api.sendMessage(
         student.tg_chat_id,
-        `${ru.bot.transcripts.translationCorrectionPrefix}${newText}`,
+        `${ru.bot.transcripts.correctionPrefix}${combinedBody}`,
         msg.tg_message_id_in_student_chat != null
           ? {
               reply_parameters: {
@@ -129,10 +143,13 @@ export async function PATCH(
     }
   }
 
+  // Both columns repoint to the same target so the next edit (from
+  // either endpoint) hits the latest message.
   const { error: updErr } = await sb
     .from("messages")
     .update({
       translation_text: newText,
+      transcript_tg_message_id: newTgMessageId,
       translation_tg_message_id: newTgMessageId,
     })
     .eq("id", id);

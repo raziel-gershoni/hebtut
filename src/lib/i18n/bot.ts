@@ -209,14 +209,8 @@ const transcripts = {
   failureNotice: "Не удалось расшифровать запись.",
   // Prefix for the fallback "edit" message when TG refuses an
   // editMessageText call (e.g. 48h cap) and we send a fresh threaded
-  // transcript correction instead.
+  // correction (transcript + translation combined) instead.
   correctionPrefix: "📝 Поправка: ",
-  // Prefix for the Russian translation that follows the verbatim
-  // transcript (sent as a second threaded reply to the audio).
-  translationPrefix: "Перевод: ",
-  // Fallback "edit" message for translation (translation editMessageText
-  // refused).
-  translationCorrectionPrefix: "📝 Поправка перевода: ",
 };
 
 const notifications = {

@@ -216,10 +216,7 @@ export function MessageBubble({
         {msg.direction === "out" &&
           (msg.kind === "voice" || msg.kind === "video_note") &&
           msg.translation_text && (
-            <div className="mt-1 text-[12px] text-tg-text-hint italic leading-snug whitespace-pre-wrap break-words">
-              <span className="not-italic font-semibold mr-1">
-                {ru.inbox.message.translationLabel}:
-              </span>
+            <div className="mt-2 text-[12px] text-tg-text-hint italic leading-snug whitespace-pre-wrap break-words">
               {msg.translation_text}
               {onEditTranslation && (
                 <button

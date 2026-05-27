@@ -54,7 +54,7 @@ export async function PATCH(
   const { data: msg } = await sb
     .from("messages")
     .select(
-      "id, student_id, teacher_id, direction, kind, transcript_text, transcript_tg_message_id, tg_message_id_in_student_chat",
+      "id, student_id, teacher_id, direction, kind, transcript_text, transcript_tg_message_id, translation_text, translation_tg_message_id, tg_message_id_in_student_chat",
     )
     .eq("id", id)
     .maybeSingle();
@@ -88,6 +88,14 @@ export async function PATCH(
     return new Response("no chat", { status: 502, headers: noStoreHeaders });
   }
 
+  // Transcript + translation now live in a single combined TG message
+  // («transcript\n\ntranslation»). Editing transcript means rebuilding
+  // that combined body with the new transcript + the (unchanged)
+  // translation, and editing the same message.
+  const combinedBody = msg.translation_text
+    ? `${newText}\n\n${msg.translation_text}`
+    : newText;
+
   let fallback = false;
   let newTgMessageId: number | null = msg.transcript_tg_message_id;
   if (msg.transcript_tg_message_id != null) {
@@ -95,7 +103,7 @@ export async function PATCH(
       await getBot().api.editMessageText(
         student.tg_chat_id,
         msg.transcript_tg_message_id,
-        newText,
+        combinedBody,
       );
     } catch (e) {
       console.warn(
@@ -115,7 +123,7 @@ export async function PATCH(
     try {
       const sent = await getBot().api.sendMessage(
         student.tg_chat_id,
-        `${ru.bot.transcripts.correctionPrefix}${newText}`,
+        `${ru.bot.transcripts.correctionPrefix}${combinedBody}`,
         msg.tg_message_id_in_student_chat != null
           ? {
               reply_parameters: {
@@ -135,11 +143,15 @@ export async function PATCH(
     }
   }
 
+  // Both message_id columns repoint to the same TG message (either the
+  // edited original or the new fallback). Keeps the two edit endpoints
+  // symmetric.
   const { error: updErr } = await sb
     .from("messages")
     .update({
       transcript_text: newText,
       transcript_tg_message_id: newTgMessageId,
+      translation_tg_message_id: msg.translation_text ? newTgMessageId : null,
     })
     .eq("id", id);
   if (updErr) {

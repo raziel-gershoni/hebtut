@@ -637,40 +637,30 @@ async function transcribeAndDeliverFor(
   try {
     const transcript = await transcribeTgAudio(fileId, kind);
     if (transcript) {
-      const sent = await getBot().api.sendMessage(studentChatId, transcript, replyParams);
-
       // Translate as a separate text-only Gemini call so the audio prompt
       // can't bleed Russian tokens into the Hebrew transcript. Skip when
       // the source itself is already mostly Russian — no point echoing.
+      // Run translation BEFORE the send so transcript + translation land
+      // as a single TG message (blank line between, no labels).
       let translation: string | null = null;
-      let translationTgMessageId: number | null = null;
       if (wantTranslate && !isMostlyRussian(transcript)) {
         translation = await translateToRussian(transcript);
-        if (translation) {
-          try {
-            const sentTr = await getBot().api.sendMessage(
-              studentChatId,
-              `${ru.bot.transcripts.translationPrefix}${translation}`,
-              replyParams,
-            );
-            translationTgMessageId = sentTr.message_id;
-          } catch (e) {
-            console.warn(
-              "[transcribe] translation send failed",
-              (e as Error).message,
-            );
-            translation = null;
-          }
-        }
       }
 
+      const body = translation ? `${transcript}\n\n${translation}` : transcript;
+      const sent = await getBot().api.sendMessage(studentChatId, body, replyParams);
+
+      // Both message_id columns point at the same TG message — edits to
+      // either field rebuild the combined body and editMessageText this
+      // shared id. Keeping the column pair lets the edit endpoints stay
+      // single-purpose without checking "did we send one or two".
       await sb
         .from("messages")
         .update({
           transcript_text: transcript,
           transcript_tg_message_id: sent.message_id,
-          translation_text: translation && translationTgMessageId != null ? translation : null,
-          translation_tg_message_id: translationTgMessageId,
+          translation_text: translation,
+          translation_tg_message_id: translation ? sent.message_id : null,
         })
         .eq("id", messageId);
       return transcript;
