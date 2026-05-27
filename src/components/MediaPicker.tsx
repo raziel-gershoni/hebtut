@@ -10,6 +10,8 @@ import { EditMediaItemDialog } from "./EditMediaItemDialog";
 import { ALLOWED_MIME_TYPES, MAX_BYTES, MIME_TO_KIND, formatBytes } from "@/lib/media";
 import {
   COMPRESS_TRIGGER_BYTES,
+  LIBRARY_MAX_DURATION_SEC,
+  formatErr,
   isCompressibleVideo,
   isVideoPlayableByBrowser,
   prepareVideoForUpload,
@@ -168,33 +170,76 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
 
     let fileToSend: File = uploadStaging;
     const kind = MIME_TO_KIND[uploadStaging.type] ?? null;
-    // Compress when EITHER the file is over the TG ceiling OR the browser
-    // can't decode it (DJI/HEVC/10-bit/etc.). Only run the playable-probe
-    // for compressible video kinds — photos / audio don't go through
-    // ffmpeg.wasm here.
     const compressible = isCompressibleVideo(uploadStaging.type, kind);
-    const tooBig = uploadStaging.size > COMPRESS_TRIGGER_BYTES;
-    const playable =
-      !compressible || tooBig ? true : await isVideoPlayableByBrowser(uploadStaging);
-    if (compressible && (tooBig || !playable)) {
-      setCompressing({ ratio: 0, preset: "720p" });
-      try {
-        fileToSend = await prepareVideoForUpload(uploadStaging, {
-          onProgress: (p) => setCompressing(p),
-        });
-      } catch (e) {
+
+    if (compressible) {
+      // Probe first — same gate the onboarding pipeline uses. Gives us
+      // width/height/duration to plan the encode AND tells us if the
+      // file is at all sane. Without this we'd skip compression for
+      // files that <video> can load metadata for but ffmpeg can't
+      // actually decode (subtle H.264 incompatibilities), which is the
+      // root cause of the iOS "compression undefined" failure.
+      const meta = await probeVideoMetadata(uploadStaging);
+      const tooBig = uploadStaging.size > COMPRESS_TRIGGER_BYTES;
+      const probeOk = meta != null;
+      const tooLong = meta != null && meta.duration > LIBRARY_MAX_DURATION_SEC;
+
+      // No path forward: probe failed AND we can't fall back to uploading
+      // the original (too big). Surface a clear error up front.
+      if (!probeOk && uploadStaging.size > MAX_BYTES) {
         setUploadBusy(false);
-        setCompressing(null);
-        setUploadError(ru.inbox.mediaPicker.compressError((e as Error).message));
+        setUploadError(ru.inbox.mediaPicker.videoUnreadable);
         return;
       }
-      setCompressing(null);
-      if (fileToSend.size > MAX_BYTES) {
+      if (tooLong) {
         setUploadBusy(false);
         setUploadError(
-          ru.inbox.mediaPicker.stillTooLarge(formatBytes(fileToSend.size)),
+          ru.inbox.mediaPicker.videoTooLong(LIBRARY_MAX_DURATION_SEC),
         );
         return;
+      }
+
+      // Compress when: (a) too big to fit raw, OR (b) probe succeeded but
+      // the browser can't play it (forces ffmpeg's hand to re-mux to
+      // something TG can accept).
+      const playable =
+        probeOk && !tooBig ? await isVideoPlayableByBrowser(uploadStaging) : true;
+
+      if (tooBig || !playable) {
+        setCompressing({ ratio: 0, preset: "720p" });
+        try {
+          fileToSend = await prepareVideoForUpload(uploadStaging, {
+            libraryMode: true,
+            maxDurationSec: LIBRARY_MAX_DURATION_SEC,
+            meta: meta ?? undefined,
+            onProgress: (p) => setCompressing(p),
+          });
+        } catch (e) {
+          setCompressing(null);
+          // ffmpeg.wasm fails on some iOS WebView builds. When the
+          // source file is already under TG's hard limit, just upload
+          // it as-is — TG will decode whatever it can. Only block when
+          // the file truly can't be sent.
+          if (uploadStaging.size <= MAX_BYTES) {
+            console.warn(
+              "[media-upload] compression failed, uploading original",
+              e,
+            );
+            fileToSend = uploadStaging;
+          } else {
+            setUploadBusy(false);
+            setUploadError(ru.inbox.mediaPicker.compressError(formatErr(e)));
+            return;
+          }
+        }
+        setCompressing(null);
+        if (fileToSend.size > MAX_BYTES) {
+          setUploadBusy(false);
+          setUploadError(
+            ru.inbox.mediaPicker.stillTooLarge(formatBytes(fileToSend.size)),
+          );
+          return;
+        }
       }
     }
 

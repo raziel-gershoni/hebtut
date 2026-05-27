@@ -108,6 +108,10 @@ const mediaPicker = {
   emptyFile: "Пустой файл",
   fileTooLarge: (size: string) => `Файл больше ${size}`,
   compressError: (msg: string) => `не удалось сжать видео: ${msg}`,
+  videoUnreadable:
+    "Не получилось прочитать видео. Попробуй другой файл или открой админку с компьютера.",
+  videoTooLong: (sec: number) =>
+    `Видео длиннее ${Math.round(sec / 60)} минут. Обрежь перед загрузкой.`,
   stillTooLarge: (size: string) =>
     `после сжатия файл всё ещё ${size} — попробуй обрезать клип`,
   uploadsDisabled: "загрузка отключена администратором",

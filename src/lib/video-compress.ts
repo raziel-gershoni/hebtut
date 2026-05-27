@@ -46,15 +46,46 @@ interface FfmpegInstance {
 
 async function getFfmpeg(): Promise<FfmpegInstance> {
   if (cached) {
-    await cached.load;
-    return cached.instance as FfmpegInstance;
+    try {
+      await cached.load;
+      return cached.instance as FfmpegInstance;
+    } catch (e) {
+      // Don't poison the cache forever — clear it so the next call can
+      // try again (transient network failure fetching the wasm, for
+      // example, is recoverable). Re-throw with a useful message.
+      cached = null;
+      throw new Error(
+        `ffmpeg load failed (cached attempt): ${formatErr(e)}`,
+      );
+    }
   }
-  const mod = await import("@ffmpeg/ffmpeg");
+  let mod: typeof import("@ffmpeg/ffmpeg");
+  try {
+    mod = await import("@ffmpeg/ffmpeg");
+  } catch (e) {
+    throw new Error(`ffmpeg module import failed: ${formatErr(e)}`);
+  }
   const instance = new mod.FFmpeg() as unknown as FfmpegInstance;
   const load = instance.load({ coreURL: CORE_URL, wasmURL: WASM_URL });
   cached = { instance, load };
-  await load;
+  try {
+    await load;
+  } catch (e) {
+    cached = null;
+    throw new Error(`ffmpeg wasm load failed: ${formatErr(e)}`);
+  }
   return instance;
+}
+
+export function formatErr(e: unknown): string {
+  if (e instanceof Error) return e.message || e.name || "Error";
+  if (typeof e === "string") return e;
+  if (e == null) return "undefined";
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return String(e);
+  }
 }
 
 export interface CompressProgress {
@@ -76,6 +107,27 @@ export interface PrepareOpts {
    * `bot.api.sendVideoNote` — TG rejects non-square video-notes outright.
    */
   videoNote?: boolean;
+  /**
+   * Media-library encoder profile. Mirrors `videoNote`'s single-stage
+   * CRF design (which proved stable on iOS WebView) without the square
+   * crop or 60 s cap. Preserves aspect ratio, caps height at 720 p, and
+   * hard-caps duration at `maxDurationSec` (default 600). Use this for
+   * any iOS-bound library upload — the 4-stage CBR ladder kills the
+   * Worker on iOS.
+   */
+  libraryMode?: boolean;
+  /**
+   * Hard duration cap for `libraryMode`. Source longer than this throws
+   * before any ffmpeg work — admin should trim before uploading.
+   * Defaults to `LIBRARY_MAX_DURATION_SEC` (600 s / 10 min).
+   */
+  maxDurationSec?: number;
+  /**
+   * Pre-probed metadata. When provided, avoids a redundant
+   * `probeVideoMetadata` call inside `prepareVideoForUpload`. Required
+   * for the `libraryMode` duration pre-check; recommended otherwise.
+   */
+  meta?: VideoMetadata;
 }
 
 /** Square dimension and duration cap for TG video_note format. */
@@ -90,6 +142,14 @@ export const VIDEO_NOTE_MAX_DURATION_SEC = 60;
 // 11 MB so there's safety margin against container overhead pushing us
 // over the cap.
 export const VIDEO_NOTE_TARGET_BYTES = 11 * 1024 * 1024;
+
+/**
+ * Hard duration cap for media-library video uploads. Anything longer
+ * than this is rejected up-front before ffmpeg runs — iOS WebView
+ * Workers can't survive unbounded filter graphs and the admin really
+ * should trim before uploading a long clip anyway.
+ */
+export const LIBRARY_MAX_DURATION_SEC = 600;
 
 // We pick resolution from the computed bitrate budget rather than running
 // a fixed ladder — long videos need radically lower resolutions to hit
@@ -143,8 +203,11 @@ function planEncoding(durationSec: number, targetBytes: number): EncodePlan {
 function encodeArgs(
   plan: EncodePlan,
   hardCapBytes: number | null,
-  videoNote: boolean,
+  mode: "regular" | "videoNote" | "library",
+  libraryDurationCap?: number,
 ): string[] {
+  const videoNote = mode === "videoNote";
+  const library = mode === "library";
   // iOS Safari + Telegram Mini App webview is strict about H.264 streams:
   // it needs yuv420p chroma, a constrained-Main / Main profile at level
   // ≤ 4.1, AAC-LC audio (stereo), and `+faststart` moov. Without these the
@@ -154,12 +217,12 @@ function encodeArgs(
     "input",
     "-c:v",
     "libx264",
-    // 'medium' for video_notes — admin's content, students watch
-    // repeatedly, one-time encode cost (3-8 min on a phone for 60 s)
-    // worth the visible quality bump over 'fast'. 'veryfast' for the
-    // regular library where the same admin uploads many files.
+    // 'medium' for video_notes + library — predictable Worker scheduling
+    // on iOS WebView (`veryfast` pumps frames out faster than the
+    // postMessage queue drains and the Worker dies). The cost is real
+    // wall time but the encode succeeds.
     "-preset",
-    videoNote ? "medium" : "veryfast",
+    library || videoNote ? "medium" : "veryfast",
     "-profile:v",
     "main",
     "-level",
@@ -186,6 +249,20 @@ function encodeArgs(
       "-bufsize",
       "2800k",
     );
+  } else if (library) {
+    // CRF 23 = visually transparent for typical talking-head /
+    // explainer content. maxrate is the duration-derived bandwidth
+    // budget so we get a near-target output without 4-stage retries.
+    // SAFETY already shaves 15% off the cap inside planEncoding, so
+    // there's headroom for libx264 overshoots.
+    args.push(
+      "-crf",
+      "23",
+      "-maxrate",
+      `${plan.videoKbps}k`,
+      "-bufsize",
+      `${Math.floor(plan.videoKbps * 2)}k`,
+    );
   } else {
     args.push(
       "-b:v",
@@ -205,8 +282,8 @@ function encodeArgs(
         // square source; non-square inputs get an off-center crop
         // without this.
         `crop='min(iw\\,ih)':'min(iw\\,ih)',scale=${VIDEO_NOTE_DIM}:${VIDEO_NOTE_DIM}:flags=lanczos`
-      : // Regular video: scale to max height, auto-width rounded to even,
-        // never upscale.
+      : // Regular + library: scale to max height, auto-width rounded to
+        // even, never upscale.
         `scale=-2:${plan.maxHeight}:force_original_aspect_ratio=decrease`,
     "-c:a",
     "aac",
@@ -215,18 +292,16 @@ function encodeArgs(
     "-ac",
     "2",
     "-b:a",
-    // 96 kbps AAC for video_notes — solid for speech + light ambient
-    // mix, conservative enough to leave the 10.5 MB video budget intact
-    // under the 12 MiB TG cap. Regular video keeps the duration-derived
-    // value.
-    videoNote ? "96k" : `${plan.audioKbps}k`,
+    // 96 kbps for video_notes; library uses a fixed 128 kbps; regular
+    // keeps the duration-derived value.
+    videoNote ? "96k" : library ? "128k" : `${plan.audioKbps}k`,
     "-movflags",
     "+faststart",
   );
   if (videoNote) {
-    // Hard-cap the duration. TG video_notes are rejected past 60 s; cap
-    // the encode so we never produce a file the bot can't send.
     args.push("-t", String(VIDEO_NOTE_MAX_DURATION_SEC));
+  } else if (library && libraryDurationCap) {
+    args.push("-t", String(libraryDurationCap));
   }
   if (hardCapBytes != null) {
     // -fs hard-caps the output file size. ffmpeg stops muxing once the
@@ -288,19 +363,50 @@ export async function prepareVideoForUpload(
   file: File,
   opts: PrepareOpts = {},
 ): Promise<File> {
+  const mode: "regular" | "videoNote" | "library" = opts.videoNote
+    ? "videoNote"
+    : opts.libraryMode
+      ? "library"
+      : "regular";
   // Video_note mode uses a much tighter byte target — Vercel function
   // timeouts limit how big a file the bot can fetch + upload to TG
   // before being killed, so the output needs to be small enough that
   // the full Supabase→Vercel→TG round-trip completes in a few seconds.
-  const maxBytes = opts.videoNote
-    ? VIDEO_NOTE_TARGET_BYTES
-    : (opts.maxBytes ?? COMPRESS_TARGET_BYTES);
-  // Video-note mode ALWAYS re-encodes (we need square crop + duration
-  // cap regardless of size). Normal mode skips the round-trip when the
-  // file's already small enough.
-  if (!opts.videoNote && file.size <= maxBytes) return file;
+  const maxBytes =
+    mode === "videoNote"
+      ? VIDEO_NOTE_TARGET_BYTES
+      : (opts.maxBytes ?? COMPRESS_TARGET_BYTES);
+  // Video-note + library modes ALWAYS re-encode. Regular mode skips the
+  // round-trip when the file's already small enough.
+  if (mode === "regular" && file.size <= maxBytes) return file;
 
-  const duration = await probeDuration(file);
+  const libraryDurationCap =
+    mode === "library" ? (opts.maxDurationSec ?? LIBRARY_MAX_DURATION_SEC) : undefined;
+
+  // Library mode: pre-check duration BEFORE invoking ffmpeg. iOS WebView
+  // can't survive unbounded filter graphs, so we reject up front and let
+  // the admin trim before retrying.
+  if (mode === "library" && opts.meta && libraryDurationCap != null) {
+    if (opts.meta.duration > libraryDurationCap) {
+      throw new Error(
+        `video longer than ${libraryDurationCap}s — trim before upload`,
+      );
+    }
+  }
+
+  const duration = opts.meta?.duration ?? (await probeDuration(file));
+  // Same library guard, this time using the probed duration when meta
+  // wasn't supplied. Cheaper to throw here than after `getFfmpeg()`.
+  if (
+    mode === "library" &&
+    libraryDurationCap != null &&
+    duration > libraryDurationCap
+  ) {
+    throw new Error(
+      `video longer than ${libraryDurationCap}s — trim before upload`,
+    );
+  }
+
   const ffmpeg = await getFfmpeg();
 
   // Lazy-import fetchFile only inside the helper that needs it — keeps
@@ -318,19 +424,20 @@ export async function prepareVideoForUpload(
   // target so the bitrate calculation moves down the resolution ladder,
   // final pass adds -fs as a hard cap.
   //
-  // Video-note mode uses a single stage. The CRF+maxrate config in
-  // encodeArgs mathematically guarantees the output fits in 5 MB on the
-  // first try — no point re-encoding the same file with the same CRF
-  // and getting an identical result.
+  // Video-note + library modes use a single stage. The CRF+maxrate
+  // config in encodeArgs is designed to land under the target on the
+  // first try; retries don't help (same CRF, same maxrate, identical
+  // output). Single-stage is also crucial on iOS WebView where multi-
+  // stage retries can OOM the Worker between exec calls.
   const STAGES: Array<{ targetBytes: number; hardCap: number | null }> =
-    opts.videoNote
-      ? [{ targetBytes: maxBytes, hardCap: null }]
-      : [
+    mode === "regular"
+      ? [
           { targetBytes: maxBytes, hardCap: null },
           { targetBytes: Math.floor(maxBytes * 0.7), hardCap: null },
           { targetBytes: Math.floor(maxBytes * 0.5), hardCap: null },
           { targetBytes: Math.floor(maxBytes * 0.5), hardCap: maxBytes },
-        ];
+        ]
+      : [{ targetBytes: maxBytes, hardCap: null }];
 
   for (let i = 0; i < STAGES.length; i += 1) {
     const stage = STAGES[i];
@@ -351,7 +458,18 @@ export async function prepareVideoForUpload(
 
     try {
       if (opts.signal?.aborted) throw new Error("aborted");
-      await ffmpeg.exec(encodeArgs(plan, stage.hardCap, opts.videoNote ?? false));
+      try {
+        await ffmpeg.exec(encodeArgs(plan, stage.hardCap, mode, libraryDurationCap));
+      } catch (e) {
+        // `ffmpeg.exec` rejects with a non-Error / undefined-message
+        // object when the underlying Worker dies (OOM, postMessage
+        // failure on iOS WebView). Re-throw with a useful message so
+        // the caller's fallback decision is informed.
+        if (!(e instanceof Error) || !e.message) {
+          throw new Error("ffmpeg worker crashed (likely OOM on this device)");
+        }
+        throw e;
+      }
     } finally {
       ffmpeg.off("progress", progressHandler);
     }
