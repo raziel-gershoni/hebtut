@@ -5,14 +5,21 @@ import { serverEnv } from "@/lib/env";
 import { ru } from "@/lib/i18n";
 import { editAllNotificationsForMessage } from "@/server/notifications";
 import { isTgUserBanned } from "@/server/invites";
-import { userHandle } from "@/lib/handle";
+import { resolveDisplay } from "@/server/display";
 import { recordAudit } from "@/server/audit";
 import { nextWindowOpen } from "@/server/response-window";
 import { formatInTimeZone } from "date-fns-tz";
 import { addMinutes } from "date-fns";
 import { advanceOnboarding, scheduleTimer } from "@/server/onboarding";
 import { transcribeTgAudio, translateToRussian, isMostlyRussian } from "@/server/transcribe";
-import { getTranscriptsEnabled, getTranslationEnabled } from "@/server/settings";
+import {
+  getDisplayAnonymousHandlesEnabled,
+  getTranscriptsEnabled,
+  getTranslationEnabled,
+} from "@/server/settings";
+
+const DISPLAY_COLUMNS =
+  "tg_user_id, name, preferred_name, display_handle, display_emoji, avatar_file_id";
 
 export interface ReplyContext {
   replyToMessageId: number;
@@ -44,7 +51,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
   const sb = getServiceRoleClient();
   const { data: teacher } = await sb
     .from("users")
-    .select("id, role, tg_user_id, display_handle, status")
+    .select(`id, role, status, ${DISPLAY_COLUMNS}`)
     .eq("tg_user_id", ctx.from.id)
     .maybeSingle();
   if (!teacher || teacher.role !== "teacher") {
@@ -134,7 +141,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
 
   const { data: student } = await sb
     .from("users")
-    .select("tg_chat_id, tg_user_id, display_handle")
+    .select(`tg_chat_id, ${DISPLAY_COLUMNS}`)
     .eq("id", prompt.student_id)
     .single();
   if (!student) {
@@ -298,8 +305,9 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
         claimed_by_teacher_id: teacher.id,
       })
       .eq("id", original.id);
-    const teacherHandle = teacher.display_handle ?? userHandle(teacher.tg_user_id).handle;
-    const studentHandle = student.display_handle ?? userHandle(student.tg_user_id).handle;
+    const anonMode = await getDisplayAnonymousHandlesEnabled();
+    const teacherHandle = resolveDisplay(teacher, anonMode).handle;
+    const studentHandle = resolveDisplay(student, anonMode).handle;
     await editAllNotificationsForMessage(
       original.id,
       ru.bot.notifications.teacherNotificationTaken(teacherHandle, studentHandle),
@@ -398,7 +406,7 @@ export async function handleTeacherReplyText(ctx: Context): Promise<boolean> {
   const sb = getServiceRoleClient();
   const { data: teacher } = await sb
     .from("users")
-    .select("id, role, tg_user_id, display_handle, status")
+    .select(`id, role, status, ${DISPLAY_COLUMNS}`)
     .eq("tg_user_id", ctx.from.id)
     .maybeSingle();
   if (!teacher || teacher.role !== "teacher") return false;
@@ -471,7 +479,7 @@ export async function handleTeacherReplyText(ctx: Context): Promise<boolean> {
 
   const { data: student } = await sb
     .from("users")
-    .select("tg_chat_id, tg_user_id, display_handle")
+    .select(`tg_chat_id, ${DISPLAY_COLUMNS}`)
     .eq("id", prompt.student_id)
     .single();
   if (!student) {
@@ -547,8 +555,9 @@ export async function handleTeacherReplyText(ctx: Context): Promise<boolean> {
         claimed_by_teacher_id: teacher.id,
       })
       .eq("id", original.id);
-    const teacherHandle = teacher.display_handle ?? userHandle(teacher.tg_user_id).handle;
-    const studentHandle = student.display_handle ?? userHandle(student.tg_user_id).handle;
+    const anonMode = await getDisplayAnonymousHandlesEnabled();
+    const teacherHandle = resolveDisplay(teacher, anonMode).handle;
+    const studentHandle = resolveDisplay(student, anonMode).handle;
     await editAllNotificationsForMessage(
       original.id,
       ru.bot.notifications.teacherNotificationTaken(teacherHandle, studentHandle),

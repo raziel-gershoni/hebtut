@@ -3,19 +3,22 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { serverEnv } from "@/lib/env";
 import { ru, formatDuration } from "@/lib/i18n";
 import { formatWhen } from "@/lib/time";
-import { userHandle } from "@/lib/handle";
+import { resolveDisplay, type DisplayRow } from "@/server/display";
+import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
 import { editAllNotificationsForMessage } from "./notifications";
 import { recordAudit } from "./audit";
 import type { MessageDirection, MessageStatus } from "@/types/database";
 
-function handleFromRow(
-  row:
-    | { tg_user_id: number; display_handle: string | null }
-    | null
-    | undefined,
-): string {
-  if (row?.display_handle) return row.display_handle;
-  return userHandle(row?.tg_user_id ?? 0).handle;
+// All SELECTs that feed a user-facing display label MUST pull the same
+// columns so the resolver can pick preferred_name → name → handle by
+// global toggle. Keeping the column list in one place avoids "the
+// student looks right in the inbox but the tutor's DM says Ретивый
+// Кабан" drift.
+const DISPLAY_COLUMNS =
+  "tg_user_id, name, preferred_name, display_handle, display_emoji, avatar_file_id";
+
+function labelFromRow(row: DisplayRow | null | undefined, anonMode: boolean): string {
+  return resolveDisplay(row, anonMode).handle;
 }
 
 export type ReplyKind = "claim" | "session-refresh" | "followup";
@@ -137,21 +140,22 @@ export async function startReply(messageId: number, teacherId: number): Promise<
   });
 
   // Send prompt DM to the teacher.
-  const [{ data: student }, { data: teacher }] = await Promise.all([
+  const [{ data: student }, { data: teacher }, anonMode] = await Promise.all([
     sb
       .from("users")
-      .select("tg_user_id, display_handle")
+      .select(DISPLAY_COLUMNS)
       .eq("id", msg.student_id)
       .single(),
     sb
       .from("users")
-      .select("tg_user_id, tg_chat_id, display_handle, tz")
+      .select(`${DISPLAY_COLUMNS}, tg_chat_id, tz`)
       .eq("id", teacherId)
       .single(),
+    getDisplayAnonymousHandlesEnabled(),
   ]);
   if (!teacher) return { ok: false, reason: "fatal" };
 
-  const studentHandle = handleFromRow(student);
+  const studentHandle = labelFromRow(student, anonMode);
   const dur = formatDuration(msg.duration);
   const when = formatWhen(msg.created_at, teacher.tz);
   const promptText =
@@ -173,7 +177,7 @@ export async function startReply(messageId: number, teacherId: number): Promise<
   // these notifications are already in that state; calling the helper is a
   // safe no-op (TG returns 400 'message is not modified', which we swallow).
   if (decision.kind === "claim") {
-    const teacherHandle = handleFromRow(teacher);
+    const teacherHandle = labelFromRow(teacher, anonMode);
     const { data: pendingMsgs } = await sb
       .from("messages")
       .select("id")
@@ -279,21 +283,22 @@ export async function startInitiation(
     },
   });
 
-  const [{ data: student }, { data: teacher }] = await Promise.all([
+  const [{ data: student }, { data: teacher }, anonMode] = await Promise.all([
     sb
       .from("users")
-      .select("tg_user_id, display_handle")
+      .select(DISPLAY_COLUMNS)
       .eq("id", studentId)
       .single(),
     sb
       .from("users")
-      .select("tg_user_id, tg_chat_id, display_handle")
+      .select(`${DISPLAY_COLUMNS}, tg_chat_id`)
       .eq("id", teacherId)
       .single(),
+    getDisplayAnonymousHandlesEnabled(),
   ]);
   if (!teacher) return { ok: false, reason: "fatal" };
 
-  const studentHandle = handleFromRow(student);
+  const studentHandle = labelFromRow(student, anonMode);
   const sent = await getBot().api.sendMessage(
     teacher.tg_chat_id,
     ru.bot.notifications.teacherInitiatePrompt(studentHandle),
@@ -312,7 +317,7 @@ export async function startInitiation(
   // for this student as "in работе у X" so they don't try to claim something
   // we now own.
   if (isFreshClaim) {
-    const teacherHandle = handleFromRow(teacher);
+    const teacherHandle = labelFromRow(teacher, anonMode);
     const { data: pendingMsgs } = await sb
       .from("messages")
       .select("id")

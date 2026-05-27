@@ -420,6 +420,9 @@ export async function prepareVideoForUpload(
   await ffmpeg.writeFile("input", inputData);
 
   const stem = file.name.replace(/\.[^.]+$/, "");
+  // Track what went wrong on each stage so the final throw can name the
+  // real failure mode instead of the generic "try another file".
+  let lastFailure: { reason: string; bytes?: number; label: string } | null = null;
   // Stage ladder for the regular-video path: each retry tightens the
   // target so the bitrate calculation moves down the resolution ladder,
   // final pass adds -fs as a hard cap.
@@ -475,9 +478,12 @@ export async function prepareVideoForUpload(
     }
 
     const out = await ffmpeg.readFile("output.mp4");
-    if (!(out instanceof Uint8Array) || out.byteLength === 0) {
-      // Try next stage; if even the final hard-cap pass fails to produce
-      // anything, we'll fall through and throw below.
+    if (!(out instanceof Uint8Array)) {
+      lastFailure = { reason: "readFile returned non-bytes", label };
+      continue;
+    }
+    if (out.byteLength === 0) {
+      lastFailure = { reason: "output is empty (encoder produced 0 bytes)", label };
       continue;
     }
     if (out.byteLength <= maxBytes) {
@@ -489,11 +495,25 @@ export async function prepareVideoForUpload(
       opts.onProgress?.({ ratio: 1, preset: label });
       return outFile;
     }
+    lastFailure = {
+      reason: "output too large for cap",
+      bytes: out.byteLength,
+      label,
+    };
     // Output still over cap → try next stage (tighter target / hard cap).
   }
 
-  // We only reach here if even the -fs hard-cap pass produced nothing
-  // usable — typically a corrupt input or an OOM in the worker.
+  // We only reach here if every stage failed. Name the specific failure
+  // so callers (and devs scanning logs) know what to do.
+  if (lastFailure) {
+    const sizeNote =
+      lastFailure.bytes != null
+        ? ` (got ${(lastFailure.bytes / 1024 / 1024).toFixed(1)} MB, cap ${(maxBytes / 1024 / 1024).toFixed(0)} MB)`
+        : "";
+    throw new Error(
+      `сжатие не удалось на ${lastFailure.label}: ${lastFailure.reason}${sizeNote}`,
+    );
+  }
   throw new Error("сжатие не удалось — попробуй другой файл");
 }
 

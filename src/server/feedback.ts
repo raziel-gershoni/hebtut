@@ -23,12 +23,13 @@ export async function fanOutFeedbackToAdmins(args: {
   // only audience here, and they need the real identity to triage.
   const { data: user } = await sb
     .from("users")
-    .select("name, tg_username, display_handle")
+    .select("name, preferred_name, tg_username, display_handle")
     .eq("id", args.userId)
     .single();
   const userLabel = (() => {
     const parts: string[] = [];
-    if (user?.name) parts.push(user.name);
+    const realName = user?.preferred_name?.trim() || user?.name?.trim();
+    if (realName) parts.push(realName);
     if (user?.tg_username) parts.push(`@${user.tg_username}`);
     if (user?.display_handle && parts.length === 0) parts.push(user.display_handle);
     return parts.length > 0 ? parts.join(" ") : `user ${args.userId}`;
