@@ -8,6 +8,7 @@ interface Settings {
   display_anonymous_handles_enabled: boolean;
   media_uploads_teachers_enabled: boolean;
   transcripts_enabled: boolean;
+  translation_enabled: boolean;
 }
 
 type ToggleKey = keyof Settings;
@@ -25,6 +26,7 @@ const TOGGLES: readonly ToggleSpec[] = [
   { key: "display_anonymous_handles_enabled", ...ru.admin.settings.toggles.displayAnonymousHandles },
   { key: "media_uploads_teachers_enabled", ...ru.admin.settings.toggles.mediaUploadsTeachers },
   { key: "transcripts_enabled", ...ru.admin.settings.toggles.transcripts },
+  { key: "translation_enabled", ...ru.admin.settings.toggles.translation },
 ];
 
 export function AdminSettingsPanel({ jwt }: { jwt: string }) {

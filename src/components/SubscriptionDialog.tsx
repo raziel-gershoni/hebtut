@@ -15,6 +15,8 @@ export interface SubscriptionInfo {
   trial_ends_at: string;
   current_period_ends_at: string | null;
   frozen_until: string | null;
+  transcripts_enabled: boolean;
+  translation_enabled: boolean;
 }
 
 interface Props {

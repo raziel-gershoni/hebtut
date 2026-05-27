@@ -27,6 +27,8 @@ export type ThreadMsg = {
   } | null;
   transcript_text?: string | null;
   transcript_tg_message_id?: number | null;
+  translation_text?: string | null;
+  translation_tg_message_id?: number | null;
 };
 
 export interface Speaker {
@@ -57,6 +59,8 @@ interface MessageBubbleProps {
    * and only passes the callback for editable rows.
    */
   onEditTranscript?: (messageId: number) => void;
+  /** Twin of `onEditTranscript` for the translation block. */
+  onEditTranslation?: (messageId: number) => void;
 }
 
 function scrollToMessage(id: number) {
@@ -81,6 +85,7 @@ export function MessageBubble({
   onReply,
   replyDisabledReason,
   onEditTranscript,
+  onEditTranslation,
 }: MessageBubbleProps) {
   const isIn = msg.direction === "in";
   const align = isIn ? "justify-start" : "justify-end";
@@ -200,6 +205,28 @@ export function MessageBubble({
                   onClick={() => onEditTranscript(msg.id)}
                   aria-label={ru.inbox.message.editTranscriptAria}
                   title={ru.inbox.message.editTranscriptAria}
+                  className="ml-1.5 inline-flex items-center text-tg-text-link not-italic align-baseline"
+                >
+                  ✎
+                </button>
+              )}
+            </div>
+          )}
+
+        {msg.direction === "out" &&
+          (msg.kind === "voice" || msg.kind === "video_note") &&
+          msg.translation_text && (
+            <div className="mt-1 text-[12px] text-tg-text-hint italic leading-snug whitespace-pre-wrap break-words">
+              <span className="not-italic font-semibold mr-1">
+                {ru.inbox.message.translationLabel}:
+              </span>
+              {msg.translation_text}
+              {onEditTranslation && (
+                <button
+                  type="button"
+                  onClick={() => onEditTranslation(msg.id)}
+                  aria-label={ru.inbox.message.editTranslationAria}
+                  title={ru.inbox.message.editTranslationAria}
                   className="ml-1.5 inline-flex items-center text-tg-text-link not-italic align-baseline"
                 >
                   ✎

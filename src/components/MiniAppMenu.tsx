@@ -35,6 +35,12 @@ const ITEMS: MenuItem[] = [
     subtitle: ru.student.menu.items.responseWindow.subtitle,
     icon: "🕒",
   },
+  {
+    href: "/student/transcripts",
+    title: ru.student.menu.items.transcripts.title,
+    subtitle: ru.student.menu.items.transcripts.subtitle,
+    icon: "📝",
+  },
 ];
 
 // Minimal status shape — only the discriminator matters for gating.

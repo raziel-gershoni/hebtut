@@ -36,7 +36,7 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
   const { data: rawMessages, error } = await sb
     .from("messages")
     .select(
-      "id, direction, kind, duration, status, reply_to_id, created_at, teacher_id, text_content, media_library_id, transcript_text, transcript_tg_message_id",
+      "id, direction, kind, duration, status, reply_to_id, created_at, teacher_id, text_content, media_library_id, transcript_text, transcript_tg_message_id, translation_text, translation_tg_message_id",
     )
     .eq("student_id", studentId)
     .in("status", ["pending", "answered", "expired"])
@@ -130,6 +130,8 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
     media_library: m.media_library_id != null ? libById.get(m.media_library_id) ?? null : null,
     transcript_text: m.transcript_text ?? null,
     transcript_tg_message_id: m.transcript_tg_message_id ?? null,
+    translation_text: m.translation_text ?? null,
+    translation_tg_message_id: m.translation_tg_message_id ?? null,
   }));
 
   const { data: studentRow } = await sb

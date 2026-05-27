@@ -7,6 +7,7 @@ import { DateSeparator } from "./DateSeparator";
 import { PlaybackProvider } from "./PlaybackProvider";
 import { MediaPicker } from "./MediaPicker";
 import { EditTranscriptDialog } from "./EditTranscriptDialog";
+import { EditTranslationDialog } from "./EditTranslationDialog";
 import { speakerColor, type SpeakerColorClasses } from "@/lib/speaker-color";
 import { bgFromHandle } from "@/lib/handle";
 import { ru } from "@/lib/i18n";
@@ -60,6 +61,7 @@ export function ThreadView({
   const [initiateError, setInitiateError] = useState<string | null>(null);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [editingTranscriptMessageId, setEditingTranscriptMessageId] = useState<number | null>(null);
+  const [editingTranslationMessageId, setEditingTranslationMessageId] = useState<number | null>(null);
   const initialScrollDoneRef = useRef(false);
   const isAdmin = role === "admin";
 
@@ -170,6 +172,51 @@ export function ThreadView({
         ? messages.find((m) => m.id === editingTranscriptMessageId) ?? null
         : null,
     [editingTranscriptMessageId, messages],
+  );
+
+  // Translation deep-link: mirrors the transcript one with ?edit_translation=<id>.
+  useEffect(() => {
+    if (!loaded || editingTranslationMessageId != null) return;
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("edit_translation");
+    if (!raw) return;
+    const id = Number(raw);
+    if (!Number.isFinite(id)) return;
+    const target = messages.find((m) => m.id === id);
+    if (!target?.translation_text) return;
+    const canEdit = isAdmin || target.teacher_id === myUserId;
+    if (canEdit) setEditingTranslationMessageId(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, messages]);
+
+  const closeTranslationDialog = useCallback(() => {
+    setEditingTranslationMessageId(null);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("edit_translation")) {
+      url.searchParams.delete("edit_translation");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
+
+  const onEditTranslationFor = useCallback(
+    (msg: ApiMessage): ((messageId: number) => void) | undefined => {
+      if (msg.direction !== "out") return undefined;
+      if (!msg.translation_text) return undefined;
+      const canEdit = isAdmin || msg.teacher_id === myUserId;
+      if (!canEdit) return undefined;
+      return (id) => setEditingTranslationMessageId(id);
+    },
+    [isAdmin, myUserId],
+  );
+
+  const editingTranslationMsg = useMemo(
+    () =>
+      editingTranslationMessageId != null
+        ? messages.find((m) => m.id === editingTranslationMessageId) ?? null
+        : null,
+    [editingTranslationMessageId, messages],
   );
 
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
@@ -361,6 +408,7 @@ export function ThreadView({
                 onReply={onReply}
                 replyDisabledReason={replyDisabledReason}
                 onEditTranscript={onEditTranscriptFor(m)}
+                onEditTranslation={onEditTranslationFor(m)}
               />
             </Fragment>
           );
@@ -386,6 +434,19 @@ export function ThreadView({
         onClose={closeEditDialog}
         onSaved={async () => {
           closeEditDialog();
+          await load();
+        }}
+      />
+    )}
+    {editingTranslationMsg?.translation_text && (
+      <EditTranslationDialog
+        open={true}
+        jwt={jwt}
+        messageId={editingTranslationMsg.id}
+        currentText={editingTranslationMsg.translation_text}
+        onClose={closeTranslationDialog}
+        onSaved={async () => {
+          closeTranslationDialog();
           await load();
         }}
       />

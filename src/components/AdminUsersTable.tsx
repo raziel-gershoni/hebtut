@@ -4,6 +4,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { Avatar } from "./Avatar";
 import { SubscriptionDialog, type SubscriptionInfo } from "./SubscriptionDialog";
 import { EditPreferredNameDialog } from "./EditPreferredNameDialog";
+import { EditUserTranscriptsDialog } from "./EditUserTranscriptsDialog";
 import { ru } from "@/lib/i18n";
 
 export type AdminUser = {
@@ -63,6 +64,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [subscriptionUser, setSubscriptionUser] = useState<AdminUser | null>(null);
   const [editingNameUser, setEditingNameUser] = useState<AdminUser | null>(null);
+  const [transcriptsUser, setTranscriptsUser] = useState<AdminUser | null>(null);
 
   async function patchRole(id: number, body: { role?: AdminUser["role"]; is_admin?: boolean }) {
     await fetch(`/api/admin/users/${id}/role`, {
@@ -323,6 +325,18 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                       {ru.admin.users.menuResetOnboarding}
                     </button>
                   )}
+                  {u.role === "student" && u.subscription && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenMenuId(null);
+                        setTranscriptsUser(u);
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-tg-bg-secondary transition-colors"
+                    >
+                      {ru.admin.userTranscripts.menuItem}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -377,6 +391,16 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
         tgName={editingNameUser?.name ?? null}
         preferredName={editingNameUser?.preferred_name ?? null}
         onClose={() => setEditingNameUser(null)}
+        onSaved={refetch}
+      />
+
+      <EditUserTranscriptsDialog
+        open={!!transcriptsUser}
+        jwt={jwt}
+        userId={transcriptsUser?.id ?? 0}
+        initialTranscripts={transcriptsUser?.subscription?.transcripts_enabled ?? true}
+        initialTranslation={transcriptsUser?.subscription?.translation_enabled ?? true}
+        onClose={() => setTranscriptsUser(null)}
         onSaved={refetch}
       />
 

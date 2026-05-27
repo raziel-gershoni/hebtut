@@ -21,7 +21,25 @@ const menu = {
       title: "Время ответа",
       subtitle: "Когда тренеру можно начинать диалог",
     },
+    transcripts: {
+      title: "Расшифровки и перевод",
+      subtitle: "Что приходит после голосовых тренера",
+    },
   },
+};
+
+const transcriptsPage = {
+  pageTitle: "Расшифровки и перевод",
+  studentsOnly: "Только для учеников.",
+  transcriptsTitle: "Расшифровка",
+  transcriptsBody:
+    "Текст того, что сказал тренер, приходит отдельным сообщением после голосового.",
+  translationTitle: "Перевод на русский",
+  translationBody:
+    "Если тренер говорит не по-русски — придёт ещё и перевод. Если по-русски — перевод не нужен и не пришлётся.",
+  saveButton: "Сохранить",
+  savingButton: "Сохраняем…",
+  saveError: "Не получилось сохранить — попробуй ещё раз.",
 };
 
 const summary = {
@@ -150,5 +168,6 @@ export const student = {
   freeze,
   referrals,
   responseWindow,
+  transcriptsPage,
   home,
 };

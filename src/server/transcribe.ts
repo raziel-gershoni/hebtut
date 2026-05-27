@@ -7,9 +7,9 @@ const TIMEOUT_MS = 25_000;
 /**
  * Downloads a TG voice / video_note by file_id and runs it through Gemini
  * 3.5 Flash to get a verbatim transcript (Hebrew or Russian — both handled
- * natively). Returns `null` on any failure — never throws. Callers should
- * treat null as "no transcript today, move on" and decide whether to
- * surface a failure notice to the student.
+ * natively). When `opts.translate === true`, the same call also produces a
+ * natural Russian translation (or an empty string when the source language
+ * is already Russian). Returns `null` on any failure — never throws.
  *
  * Inline base64 in the prompt is fine because both TG voice (OGG/Opus) and
  * video_note (MP4) are well under Gemini's 20 MB inline limit (our
@@ -18,14 +18,15 @@ const TIMEOUT_MS = 25_000;
 export async function transcribeTgAudio(
   fileId: string,
   kind: "voice" | "video_note",
-): Promise<string | null> {
-  // Env is optional (see src/lib/env.ts). When unset, behave like a
-  // transcription failure so the caller's failure-notice path fires.
+  opts?: { translate?: boolean },
+): Promise<{ transcript: string; translation: string | null } | null> {
   const apiKey = serverEnv.GEMINI_API_KEY;
   if (!apiKey) {
     console.warn("[transcribe] skipped — GEMINI_API_KEY not set");
     return null;
   }
+
+  const translate = opts?.translate === true;
 
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
@@ -40,21 +41,30 @@ export async function transcribeTgAudio(
     const b64 = Buffer.from(bytes).toString("base64");
     const mime = kind === "voice" ? "audio/ogg" : "video/mp4";
 
-    const body = {
+    const promptText = translate
+      ? "Transcribe this audio verbatim, preserving the spoken language " +
+        "(usually Hebrew, sometimes Russian). If the source language is " +
+        "NOT Russian, also produce a natural Russian translation. Return " +
+        "STRICT JSON of the shape: " +
+        "{\"transcript\":\"<verbatim>\",\"russian_translation\":\"<translation or empty string if source is already Russian>\"}. " +
+        "No commentary, no language tags."
+      : "Transcribe this audio verbatim. Preserve the spoken language " +
+        "(usually Hebrew, sometimes Russian). Return only the transcript " +
+        "text, no commentary, no quotes, no language tags.";
+
+    const body: Record<string, unknown> = {
       contents: [
         {
           parts: [
             { inline_data: { mime_type: mime, data: b64 } },
-            {
-              text:
-                "Transcribe this audio verbatim. Preserve the spoken language " +
-                "(usually Hebrew, sometimes Russian). Return only the " +
-                "transcript text, no commentary, no quotes, no language tags.",
-            },
+            { text: promptText },
           ],
         },
       ],
     };
+    if (translate) {
+      body.generationConfig = { response_mime_type: "application/json" };
+    }
 
     const r = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
@@ -73,8 +83,32 @@ export async function transcribeTgAudio(
     const data = (await r.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
     };
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    return text && text.length > 0 ? text : null;
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    if (!raw) return null;
+
+    if (!translate) {
+      return { transcript: raw, translation: null };
+    }
+    try {
+      const parsed = JSON.parse(raw) as {
+        transcript?: string;
+        russian_translation?: string;
+      };
+      const transcript = parsed.transcript?.trim();
+      const translation = parsed.russian_translation?.trim();
+      if (!transcript) return null;
+      return {
+        transcript,
+        translation: translation && translation.length > 0 ? translation : null,
+      };
+    } catch (e) {
+      console.warn(
+        "[transcribe] gemini json parse failed",
+        (e as Error).message,
+        raw.slice(0, 200),
+      );
+      return null;
+    }
   } catch (e) {
     console.warn("[transcribe] failed", (e as Error).message);
     return null;

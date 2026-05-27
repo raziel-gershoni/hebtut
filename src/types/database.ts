@@ -126,6 +126,8 @@ export interface Database {
           media_library_id: number | null;
           transcript_text: string | null;
           transcript_tg_message_id: number | null;
+          translation_text: string | null;
+          translation_tg_message_id: number | null;
           created_at: string;
         };
         Insert: {
@@ -147,6 +149,8 @@ export interface Database {
           media_library_id?: number | null;
           transcript_text?: string | null;
           transcript_tg_message_id?: number | null;
+          translation_text?: string | null;
+          translation_tg_message_id?: number | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;
@@ -345,6 +349,8 @@ export interface Database {
           onboarding_day1_limit_msg_sent_at: string | null;
           onboarding_last_pause_nudge_at: string | null;
           unassigned_ack_sent_at: string | null;
+          transcripts_enabled: boolean;
+          translation_enabled: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -378,6 +384,8 @@ export interface Database {
           onboarding_day1_limit_msg_sent_at?: string | null;
           onboarding_last_pause_nudge_at?: string | null;
           unassigned_ack_sent_at?: string | null;
+          transcripts_enabled?: boolean;
+          translation_enabled?: boolean;
           created_at?: string;
           updated_at?: string;
         };

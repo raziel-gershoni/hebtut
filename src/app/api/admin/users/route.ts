@@ -14,6 +14,8 @@ interface SubscriptionSummary {
   trial_ends_at: string;
   current_period_ends_at: string | null;
   frozen_until: string | null;
+  transcripts_enabled: boolean;
+  translation_enabled: boolean;
 }
 
 export async function GET(req: NextRequest) {
@@ -37,9 +39,11 @@ export async function GET(req: NextRequest) {
   const { data: subs } = ids.length
     ? await sb
         .from("subscriptions")
-        .select("user_id, status, trial_ends_at, current_period_ends_at, frozen_until")
+        .select(
+          "user_id, status, trial_ends_at, current_period_ends_at, frozen_until, transcripts_enabled, translation_enabled",
+        )
         .in("user_id", ids)
-    : { data: [] as SubscriptionSummary[] & { user_id: number }[] };
+    : { data: [] as (SubscriptionSummary & { user_id: number })[] };
   const subByUser = new Map<number, SubscriptionSummary>();
   for (const s of subs ?? []) {
     subByUser.set(s.user_id, {
@@ -47,6 +51,8 @@ export async function GET(req: NextRequest) {
       trial_ends_at: s.trial_ends_at,
       current_period_ends_at: s.current_period_ends_at,
       frozen_until: s.frozen_until,
+      transcripts_enabled: s.transcripts_enabled,
+      translation_enabled: s.translation_enabled,
     });
   }
 

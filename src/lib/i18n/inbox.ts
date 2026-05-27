@@ -89,6 +89,14 @@ const message = {
   transcriptSaveButton: "Сохранить",
   transcriptCancelButton: "Отмена",
   transcriptSaveError: "Не получилось сохранить — попробуй ещё раз.",
+  editTranslationAria: "Изменить перевод",
+  translationLabel: "Перевод",
+  translationDialogTitle: "Перевод",
+  translationDialogHint:
+    "Если перевод неточный — поправь текст. Ученику в Telegram придёт исправление.",
+  translationSaveButton: "Сохранить",
+  translationCancelButton: "Отмена",
+  translationSaveError: "Не получилось сохранить — попробуй ещё раз.",
 };
 
 const mediaPicker = {

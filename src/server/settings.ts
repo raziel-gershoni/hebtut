@@ -79,6 +79,16 @@ export function getTranscriptsEnabled(): Promise<boolean> {
   return getBoolSetting("transcripts_enabled");
 }
 
+/**
+ * Russian translation alongside the auto-transcript. Default ON via the
+ * row inserted in migration 20260527000001. Effective delivery requires
+ * both this global toggle AND the per-user `subscriptions.translation_enabled`
+ * AND the source language not being Russian.
+ */
+export function getTranslationEnabled(): Promise<boolean> {
+  return getBoolSetting("translation_enabled");
+}
+
 export function invalidateSettingsCache(): void {
   cache.clear();
 }

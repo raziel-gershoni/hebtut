@@ -12,7 +12,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { addMinutes } from "date-fns";
 import { advanceOnboarding, scheduleTimer } from "@/server/onboarding";
 import { transcribeTgAudio } from "@/server/transcribe";
-import { getTranscriptsEnabled } from "@/server/settings";
+import { getTranscriptsEnabled, getTranslationEnabled } from "@/server/settings";
 
 export interface ReplyContext {
   replyToMessageId: number;
@@ -338,6 +338,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
     outRow?.id != null
       ? await transcribeAndDeliverFor(
           outRow.id,
+          prompt.student_id,
           student.tg_chat_id,
           sentMessageId,
           newFileId,
@@ -601,12 +602,29 @@ export async function handleTeacherReplyText(ctx: Context): Promise<boolean> {
  */
 async function transcribeAndDeliverFor(
   messageId: number,
+  studentId: number,
   studentChatId: number,
   audioTgMessageId: number | null,
   fileId: string,
   kind: "voice" | "video_note",
 ): Promise<string | null> {
   if (!(await getTranscriptsEnabled())) return null;
+
+  // Per-user opt-out (defaults are ON in the migration). Reading the row
+  // here keeps the hot path one extra round-trip; acceptable for the
+  // legibility win — no need to thread the toggle through the whole
+  // call chain.
+  const sb = getServiceRoleClient();
+  const { data: subPrefs } = await sb
+    .from("subscriptions")
+    .select("transcripts_enabled, translation_enabled")
+    .eq("user_id", studentId)
+    .maybeSingle();
+  if (subPrefs && !subPrefs.transcripts_enabled) return null;
+
+  const wantTranslate =
+    (subPrefs?.translation_enabled ?? true) && (await getTranslationEnabled());
+
   const replyParams =
     audioTgMessageId != null
       ? {
@@ -617,18 +635,40 @@ async function transcribeAndDeliverFor(
         }
       : {};
   try {
-    const text = await transcribeTgAudio(fileId, kind);
-    if (text) {
-      const sent = await getBot().api.sendMessage(studentChatId, text, replyParams);
-      const sb = getServiceRoleClient();
+    const result = await transcribeTgAudio(fileId, kind, {
+      translate: wantTranslate,
+    });
+    if (result) {
+      const { transcript, translation } = result;
+      const sent = await getBot().api.sendMessage(studentChatId, transcript, replyParams);
+
+      let translationTgMessageId: number | null = null;
+      if (wantTranslate && translation) {
+        try {
+          const sentTr = await getBot().api.sendMessage(
+            studentChatId,
+            `${ru.bot.transcripts.translationPrefix}${translation}`,
+            replyParams,
+          );
+          translationTgMessageId = sentTr.message_id;
+        } catch (e) {
+          console.warn(
+            "[transcribe] translation send failed",
+            (e as Error).message,
+          );
+        }
+      }
+
       await sb
         .from("messages")
         .update({
-          transcript_text: text,
+          transcript_text: transcript,
           transcript_tg_message_id: sent.message_id,
+          translation_text: translation && translationTgMessageId != null ? translation : null,
+          translation_tg_message_id: translationTgMessageId,
         })
         .eq("id", messageId);
-      return text;
+      return transcript;
     }
     await getBot()
       .api.sendMessage(
