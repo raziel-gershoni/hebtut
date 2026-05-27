@@ -34,10 +34,16 @@ const WASM_URL = "/ffmpeg/ffmpeg-core.wasm";
 // we don't want to re-pay it on every upload. Cleared on terminate().
 let cached: { instance: unknown; load: Promise<unknown> } | null = null;
 
+interface LogEvent {
+  type: string;
+  message: string;
+}
 interface FfmpegInstance {
   load(opts: { coreURL: string; wasmURL: string }): Promise<boolean>;
   on(event: "progress", handler: (ev: { progress: number; time: number }) => void): void;
+  on(event: "log", handler: (ev: LogEvent) => void): void;
   off(event: "progress", handler: (ev: { progress: number; time: number }) => void): void;
+  off(event: "log", handler: (ev: LogEvent) => void): void;
   writeFile(name: string, data: Uint8Array): Promise<boolean>;
   readFile(name: string): Promise<Uint8Array | string>;
   exec(args: string[]): Promise<number>;
@@ -422,7 +428,12 @@ export async function prepareVideoForUpload(
   const stem = file.name.replace(/\.[^.]+$/, "");
   // Track what went wrong on each stage so the final throw can name the
   // real failure mode instead of the generic "try another file".
-  let lastFailure: { reason: string; bytes?: number; label: string } | null = null;
+  let lastFailure: {
+    reason: string;
+    bytes?: number;
+    label: string;
+    log?: string;
+  } | null = null;
   // Stage ladder for the regular-video path: each retry tightens the
   // target so the bitrate calculation moves down the resolution ladder,
   // final pass adds -fs as a hard cap.
@@ -457,7 +468,18 @@ export async function prepareVideoForUpload(
       const localRatio = Math.max(0, Math.min(1, ev.progress));
       opts.onProgress?.({ ratio: localRatio, preset: label });
     };
+    // Ring-buffer the most recent ffmpeg log lines so a silent 0-byte
+    // output (encoder error that doesn't propagate to the JS side) can
+    // surface its actual cause in the thrown error message.
+    const LOG_TAIL = 12;
+    const logTail: string[] = [];
+    const logHandler = (ev: LogEvent) => {
+      if (!ev?.message) return;
+      logTail.push(ev.message);
+      if (logTail.length > LOG_TAIL) logTail.shift();
+    };
     ffmpeg.on("progress", progressHandler);
+    ffmpeg.on("log", logHandler);
 
     try {
       if (opts.signal?.aborted) throw new Error("aborted");
@@ -475,15 +497,26 @@ export async function prepareVideoForUpload(
       }
     } finally {
       ffmpeg.off("progress", progressHandler);
+      ffmpeg.off("log", logHandler);
     }
 
-    const out = await ffmpeg.readFile("output.mp4");
+    const out = await ffmpeg.readFile("output.mp4").catch(() => null);
+    const logSummary = logTail.join(" | ");
+    // Always log the full tail for devtools, even on success-paths where
+    // we don't surface it to the user.
+    if (logTail.length > 0) {
+      console.warn("[compress] ffmpeg log tail", logTail);
+    }
     if (!(out instanceof Uint8Array)) {
-      lastFailure = { reason: "readFile returned non-bytes", label };
+      lastFailure = { reason: "readFile returned non-bytes", label, log: logSummary };
       continue;
     }
     if (out.byteLength === 0) {
-      lastFailure = { reason: "output is empty (encoder produced 0 bytes)", label };
+      lastFailure = {
+        reason: "output is empty (encoder produced 0 bytes)",
+        label,
+        log: logSummary,
+      };
       continue;
     }
     if (out.byteLength <= maxBytes) {
@@ -499,6 +532,7 @@ export async function prepareVideoForUpload(
       reason: "output too large for cap",
       bytes: out.byteLength,
       label,
+      log: logSummary,
     };
     // Output still over cap → try next stage (tighter target / hard cap).
   }
@@ -510,8 +544,13 @@ export async function prepareVideoForUpload(
       lastFailure.bytes != null
         ? ` (got ${(lastFailure.bytes / 1024 / 1024).toFixed(1)} MB, cap ${(maxBytes / 1024 / 1024).toFixed(0)} MB)`
         : "";
+    // Truncate the log tail to keep the user-facing string sane; the
+    // full tail is already in the console (warned above).
+    const logNote = lastFailure.log
+      ? ` — ${lastFailure.log.slice(-300)}`
+      : "";
     throw new Error(
-      `сжатие не удалось на ${lastFailure.label}: ${lastFailure.reason}${sizeNote}`,
+      `сжатие не удалось на ${lastFailure.label}: ${lastFailure.reason}${sizeNote}${logNote}`,
     );
   }
   throw new Error("сжатие не удалось — попробуй другой файл");
