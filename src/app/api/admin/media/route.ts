@@ -129,6 +129,8 @@ const Body = z.object({
   description: z.string().max(500).nullable().optional(),
   tag_ids: z.array(z.number().int().positive()).optional(),
   duration_seconds: z.number().int().positive().nullable().optional(),
+  width: z.number().int().positive().nullable().optional(),
+  height: z.number().int().positive().nullable().optional(),
 });
 
 export async function POST(req: NextRequest): Promise<Response> {
@@ -181,6 +183,9 @@ export async function POST(req: NextRequest): Promise<Response> {
       title,
       description,
       bytes: body.bytes,
+      duration_seconds: body.duration_seconds ?? null,
+      width: body.width ?? null,
+      height: body.height ?? null,
     })
     .select("id")
     .single();

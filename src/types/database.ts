@@ -498,6 +498,8 @@ export interface Database {
           description: string | null;
           bytes: number;
           duration_seconds: number | null;
+          width: number | null;
+          height: number | null;
           tg_file_id: string | null;
           tg_file_unique_id: string | null;
           created_at: string;
@@ -513,6 +515,8 @@ export interface Database {
           description?: string | null;
           bytes: number;
           duration_seconds?: number | null;
+          width?: number | null;
+          height?: number | null;
           tg_file_id?: string | null;
           tg_file_unique_id?: string | null;
           created_at?: string;

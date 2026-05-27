@@ -41,7 +41,7 @@ export async function sendLibraryItemToStudent(
   const { data: library } = await sb
     .from("media_library")
     .select(
-      "id, kind, storage_path, mime_type, original_filename, title, description, bytes, duration_seconds, tg_file_id, tg_file_unique_id",
+      "id, kind, storage_path, mime_type, original_filename, title, description, bytes, duration_seconds, width, height, tg_file_id, tg_file_unique_id",
     )
     .eq("id", args.libraryId)
     .maybeSingle();
@@ -88,14 +88,17 @@ export async function sendLibraryItemToStudent(
     newFileUniqueId = largest?.file_unique_id ?? library.tg_file_unique_id ?? null;
     sentMessageId = sent.message_id;
   } else if (library.kind === "video") {
-    // `supports_streaming` + `duration` together stop TG from defaulting
-    // to a 320×320 square preview when it can't infer aspect ratio from
-    // the container itself. Once TG has ingested the bytes once, the
-    // cached `tg_file_id` preserves the correct dimensions for every
-    // subsequent send (the file_id encodes TG's rendition metadata).
+    // Explicit width/height + duration + supports_streaming stop TG from
+    // defaulting to a 320×320 square preview when it can't infer aspect
+    // ratio from the container. Dimensions are probed client-side at
+    // upload time via probeVideoMetadata. Once TG has ingested the bytes
+    // with these hints, the cached tg_file_id preserves the correct
+    // rendering for every subsequent send.
     const sent = await bot.api.sendVideo(student.tg_chat_id, sendArg, {
       caption: captionFor(library.title, library.description),
       duration: library.duration_seconds ?? undefined,
+      width: library.width ?? undefined,
+      height: library.height ?? undefined,
       supports_streaming: true,
     });
     newFileId = sent.video?.file_id ?? library.tg_file_id ?? null;

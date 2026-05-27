@@ -13,6 +13,7 @@ import {
   isCompressibleVideo,
   isVideoPlayableByBrowser,
   prepareVideoForUpload,
+  probeVideoMetadata,
   type CompressProgress,
 } from "@/lib/video-compress";
 import { tusUpload } from "@/lib/direct-upload";
@@ -247,6 +248,14 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
     setUploading(null);
     const signed = { bucket, path };
 
+    // Probe the final video so TG's sendVideo gets explicit width/height/
+    // duration. Without those TG defaults the preview to 320×320 (squished
+    // square) and caches that bad rendering in the resulting file_id.
+    let videoMeta: { width: number; height: number; duration: number } | null = null;
+    if (kind === "video") {
+      videoMeta = await probeVideoMetadata(fileToSend);
+    }
+
     const r = await fetch("/api/admin/media", {
       method: "POST",
       cache: "no-store",
@@ -262,6 +271,9 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
         title: uploadTitle.trim() || null,
         description: uploadDescription.trim() || null,
         tag_ids: uploadTagIds,
+        duration_seconds: videoMeta ? Math.max(1, Math.round(videoMeta.duration)) : null,
+        width: videoMeta ? videoMeta.width : null,
+        height: videoMeta ? videoMeta.height : null,
       }),
     });
     setUploadBusy(false);
