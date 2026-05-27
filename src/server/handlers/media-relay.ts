@@ -88,8 +88,15 @@ export async function sendLibraryItemToStudent(
     newFileUniqueId = largest?.file_unique_id ?? library.tg_file_unique_id ?? null;
     sentMessageId = sent.message_id;
   } else if (library.kind === "video") {
+    // `supports_streaming` + `duration` together stop TG from defaulting
+    // to a 320×320 square preview when it can't infer aspect ratio from
+    // the container itself. Once TG has ingested the bytes once, the
+    // cached `tg_file_id` preserves the correct dimensions for every
+    // subsequent send (the file_id encodes TG's rendition metadata).
     const sent = await bot.api.sendVideo(student.tg_chat_id, sendArg, {
       caption: captionFor(library.title, library.description),
+      duration: library.duration_seconds ?? undefined,
+      supports_streaming: true,
     });
     newFileId = sent.video?.file_id ?? library.tg_file_id ?? null;
     newFileUniqueId = sent.video?.file_unique_id ?? library.tg_file_unique_id ?? null;
