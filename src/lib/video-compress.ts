@@ -288,9 +288,13 @@ function encodeArgs(
         // square source; non-square inputs get an off-center crop
         // without this.
         `crop='min(iw\\,ih)':'min(iw\\,ih)',scale=${VIDEO_NOTE_DIM}:${VIDEO_NOTE_DIM}:flags=lanczos`
-      : // Regular + library: scale to max height, auto-width rounded to
-        // even, never upscale.
-        `scale=-2:${plan.maxHeight}:force_original_aspect_ratio=decrease`,
+      : // Regular + library: scale to max height (capped by source so we
+        // never upscale), auto-width rounded to even via -2. Previous
+        // form used `force_original_aspect_ratio=decrease`, which on
+        // portrait sources overrode -2's even-rounding and emitted odd
+        // widths (e.g. 405 from 1080x1920 → 405x720) — libx264 then
+        // refused to open the encoder for yuv420p.
+        `scale=-2:'min(${plan.maxHeight}\\,ih)'`,
     "-c:a",
     "aac",
     "-ar",
