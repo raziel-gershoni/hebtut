@@ -57,7 +57,7 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
   const { data: libRows } = mediaLibIds.length
     ? await sb
         .from("media_library")
-        .select("id, title, description, original_filename, bytes, kind")
+        .select("id, title, description, original_filename, bytes, kind, storage_path")
         .in("id", mediaLibIds)
     : { data: [] as {
         id: number;
@@ -66,6 +66,7 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
         original_filename: string;
         bytes: number;
         kind: "photo" | "video" | "audio";
+        storage_path: string;
       }[] };
   const libById = new Map<
     number,
@@ -75,6 +76,7 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
       original_filename: string;
       bytes: number;
       kind: "photo" | "video" | "audio";
+      storage_path: string;
     }
   >();
   for (const l of libRows ?? []) {
@@ -84,6 +86,7 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
       original_filename: l.original_filename,
       bytes: l.bytes,
       kind: l.kind as "photo" | "video" | "audio",
+      storage_path: l.storage_path,
     });
   }
 

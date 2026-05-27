@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { formatDuration, ru } from "@/lib/i18n";
+import { videoPublicUrl } from "./MediaPreview";
 import { Spinner } from "./Spinner";
 import { Avatar } from "./Avatar";
 import type { SpeakerColorClasses } from "@/lib/speaker-color";
@@ -24,6 +25,7 @@ export type ThreadMsg = {
     original_filename: string;
     bytes: number;
     kind: "photo" | "video" | "audio";
+    storage_path: string;
   } | null;
   transcript_text?: string | null;
   transcript_tg_message_id?: number | null;
@@ -606,8 +608,13 @@ function LibraryMediaBlock({
 
       {kind === "video" && (
         <video
-          src={previewUrl}
+          // Direct public URL — bypasses our 302-redirect /preview route
+          // because iOS WebKit (TG Mini App webview) is flaky with
+          // `<video>` + 302 + cross-origin range requests. Bucket is
+          // public, no auth needed. Same trick the onboarding panel uses.
+          src={lib?.storage_path ? videoPublicUrl(lib.storage_path) : previewUrl}
           controls
+          playsInline
           preload="metadata"
           className="block w-full max-h-72 rounded-xl bg-black"
         />

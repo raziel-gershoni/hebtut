@@ -2,12 +2,14 @@
 
 import { ru } from "@/lib/i18n";
 import { formatBytes } from "@/lib/media";
+import { publicEnv } from "@/lib/env";
 
 export interface MediaLibraryListItem {
   id: number;
   kind: "photo" | "video" | "audio";
   uploaded_by_user_id: number;
   original_filename: string;
+  storage_path: string;
   title: string | null;
   description: string | null;
   bytes: number;
@@ -15,8 +17,27 @@ export interface MediaLibraryListItem {
   tags: { id: number; name: string; slug: string }[];
 }
 
+const BUCKET = "media-library";
+
+/**
+ * Photo/audio path: keep the JWT-protected `/preview` endpoint (302 to
+ * Supabase) — it's fine for `<img>` and `<audio>`.
+ */
 export function previewUrl(id: number, jwt: string): string {
   return `/api/admin/media/${id}/preview?token=${encodeURIComponent(jwt)}`;
+}
+
+/**
+ * Video path: skip the redirect entirely and hit Supabase Storage
+ * directly. iOS WebKit (TG Mini App webview) is flaky with `<video>` +
+ * 302 redirect + cross-origin range requests — the video element loads
+ * the preview URL, follows the redirect, then never reads any frames so
+ * the picker tile stays blank. The bucket is public (see migration
+ * 20260521000001) so this URL needs no auth.
+ */
+export function videoPublicUrl(storagePath: string): string {
+  const base = publicEnv.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "");
+  return `${base}/storage/v1/object/public/${BUCKET}/${storagePath}`;
 }
 
 interface Props {
@@ -57,9 +78,10 @@ export function MediaPreview({ item, jwt, selected, onClick, onKebab }: Props) {
             />
           ) : item.kind === "video" ? (
             <video
-              src={previewUrl(item.id, jwt)}
+              src={videoPublicUrl(item.storage_path)}
               preload="metadata"
               muted
+              playsInline
               className="w-full h-full object-cover"
             />
           ) : (
