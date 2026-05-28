@@ -14,6 +14,7 @@ import {
 import { tusUpload } from "@/lib/direct-upload";
 import { publicEnv } from "@/lib/env";
 import { ru } from "@/lib/i18n";
+import { extractFfmpegLogTail, reportClientMediaError } from "@/lib/diag";
 import type { OnboardingVideoStep } from "@/types/database";
 
 const BUCKET = "media-library";
@@ -123,6 +124,18 @@ export function AdminOnboardingVideos({ jwt }: Props) {
         setBusy(null);
         setUploadingStep(null);
         setCompressing(null);
+        void reportClientMediaError(
+          "compress",
+          e,
+          {
+            size_bytes: file.size,
+            mime: file.type,
+            name: file.name,
+            surface: "onboarding-videos",
+            ffmpeg_log_tail: extractFfmpegLogTail(e),
+          },
+          jwt,
+        );
         setError(ru.admin.onboardingVideos.prepFailed((e as Error).message));
         return;
       }
@@ -131,6 +144,18 @@ export function AdminOnboardingVideos({ jwt }: Props) {
     if (fileToSend.size > MAX_BYTES) {
       setBusy(null);
       setUploadingStep(null);
+      void reportClientMediaError(
+        "compress",
+        new Error(`compressed output ${fileToSend.size}B still over cap`),
+        {
+          size_bytes: fileToSend.size,
+          original_size_bytes: file.size,
+          mime: fileToSend.type,
+          name: fileToSend.name,
+          surface: "onboarding-videos",
+        },
+        jwt,
+      );
       setError(ru.admin.onboardingVideos.stillTooLarge(formatBytes(fileToSend.size)));
       return;
     }
@@ -155,6 +180,18 @@ export function AdminOnboardingVideos({ jwt }: Props) {
       if (!urlRes.ok) {
         setBusy(null);
         setUploadingStep(null);
+        void reportClientMediaError(
+          "upload-presign",
+          new Error(`presign HTTP ${urlRes.status}`),
+          {
+            size_bytes: fileToSend.size,
+            mime: fileToSend.type,
+            name: fileToSend.name,
+            http_status: urlRes.status,
+            surface: "onboarding-videos",
+          },
+          jwt,
+        );
         setError(
           urlRes.status === 415
             ? ru.admin.onboardingVideos.unsupportedMime
@@ -178,6 +215,18 @@ export function AdminOnboardingVideos({ jwt }: Props) {
       setBusy(null);
       setUploadingStep(null);
       setUploading(null);
+      void reportClientMediaError(
+        "upload-tus",
+        e,
+        {
+          size_bytes: fileToSend.size,
+          mime: fileToSend.type,
+          name: fileToSend.name,
+          storage_path: path,
+          surface: "onboarding-videos",
+        },
+        jwt,
+      );
       setError(ru.admin.onboardingVideos.uploadFailed((e as Error).message));
       return;
     }
@@ -201,6 +250,19 @@ export function AdminOnboardingVideos({ jwt }: Props) {
     setUploadingStep(null);
     if (!r.ok) {
       const body = await r.text().catch(() => "");
+      void reportClientMediaError(
+        "register",
+        new Error(`register HTTP ${r.status}: ${body || r.statusText}`),
+        {
+          size_bytes: fileToSend.size,
+          mime: fileToSend.type,
+          name: fileToSend.name,
+          storage_path: path,
+          http_status: r.status,
+          surface: "onboarding-videos",
+        },
+        jwt,
+      );
       setError(
         body.startsWith("max clips")
           ? ru.admin.onboardingVideos.capReached(MAX_CLIPS_PER_STEP)

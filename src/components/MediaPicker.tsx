@@ -19,6 +19,7 @@ import {
   type CompressProgress,
 } from "@/lib/video-compress";
 import { tusUpload } from "@/lib/direct-upload";
+import { extractFfmpegLogTail, reportClientMediaError } from "@/lib/diag";
 
 interface Props {
   open: boolean;
@@ -188,11 +189,32 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
       // the original (too big). Surface a clear error up front.
       if (!probeOk && uploadStaging.size > MAX_BYTES) {
         setUploadBusy(false);
+        void reportClientMediaError(
+          "probe",
+          new Error("probe failed; file too large to upload raw"),
+          {
+            size_bytes: uploadStaging.size,
+            mime: uploadStaging.type,
+            name: uploadStaging.name,
+          },
+          jwt,
+        );
         setUploadError(ru.inbox.mediaPicker.videoUnreadable);
         return;
       }
       if (tooLong) {
         setUploadBusy(false);
+        void reportClientMediaError(
+          "probe",
+          new Error(`source duration exceeds ${LIBRARY_MAX_DURATION_SEC}s`),
+          {
+            size_bytes: uploadStaging.size,
+            mime: uploadStaging.type,
+            name: uploadStaging.name,
+            duration_sec: meta?.duration ?? null,
+          },
+          jwt,
+        );
         setUploadError(
           ru.inbox.mediaPicker.videoTooLong(LIBRARY_MAX_DURATION_SEC),
         );
@@ -228,6 +250,17 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
             fileToSend = uploadStaging;
           } else {
             setUploadBusy(false);
+            void reportClientMediaError(
+              "compress",
+              e,
+              {
+                size_bytes: uploadStaging.size,
+                mime: uploadStaging.type,
+                name: uploadStaging.name,
+                ffmpeg_log_tail: extractFfmpegLogTail(e),
+              },
+              jwt,
+            );
             setUploadError(ru.inbox.mediaPicker.compressError(formatErr(e)));
             return;
           }
@@ -235,6 +268,17 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
         setCompressing(null);
         if (fileToSend.size > MAX_BYTES) {
           setUploadBusy(false);
+          void reportClientMediaError(
+            "compress",
+            new Error(`compressed output ${fileToSend.size}B still over cap`),
+            {
+              size_bytes: fileToSend.size,
+              original_size_bytes: uploadStaging.size,
+              mime: fileToSend.type,
+              name: fileToSend.name,
+            },
+            jwt,
+          );
           setUploadError(
             ru.inbox.mediaPicker.stillTooLarge(formatBytes(fileToSend.size)),
           );
@@ -263,6 +307,17 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
       });
       if (!urlRes.ok) {
         setUploadBusy(false);
+        void reportClientMediaError(
+          "upload-presign",
+          new Error(`presign HTTP ${urlRes.status}`),
+          {
+            size_bytes: fileToSend.size,
+            mime: fileToSend.type,
+            name: fileToSend.name,
+            http_status: urlRes.status,
+          },
+          jwt,
+        );
         setUploadError(
           urlRes.status === 403
             ? ru.inbox.mediaPicker.uploadsDisabled
@@ -287,6 +342,17 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
     } catch (e) {
       setUploadBusy(false);
       setUploading(null);
+      void reportClientMediaError(
+        "upload-tus",
+        e,
+        {
+          size_bytes: fileToSend.size,
+          mime: fileToSend.type,
+          name: fileToSend.name,
+          storage_path: path,
+        },
+        jwt,
+      );
       setUploadError(ru.inbox.mediaPicker.storageUploadFailed((e as Error).message));
       return;
     }
@@ -324,6 +390,18 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
     setUploadBusy(false);
     if (!r.ok) {
       const body = await r.text().catch(() => "");
+      void reportClientMediaError(
+        "register",
+        new Error(`register HTTP ${r.status}: ${body || r.statusText}`),
+        {
+          size_bytes: fileToSend.size,
+          mime: fileToSend.type,
+          name: fileToSend.name,
+          storage_path: path,
+          http_status: r.status,
+        },
+        jwt,
+      );
       setUploadError(
         body.startsWith("uploaded object missing")
           ? ru.inbox.mediaPicker.storageMissed
@@ -353,6 +431,16 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
     });
     setSendBusy(false);
     if (!r.ok) {
+      void reportClientMediaError(
+        "send",
+        new Error(`send HTTP ${r.status}`),
+        {
+          library_id: selectedId,
+          student_id: studentId,
+          http_status: r.status,
+        },
+        jwt,
+      );
       setError(r.status === 403 ? ru.inbox.mediaPicker.sendNoAccess : ru.inbox.mediaPicker.sendError);
       return;
     }

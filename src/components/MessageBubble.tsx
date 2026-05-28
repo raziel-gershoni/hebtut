@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatDuration, ru } from "@/lib/i18n";
 import { videoPublicUrl } from "./MediaPreview";
+import { reportClientMediaError } from "@/lib/diag";
 import { Spinner } from "./Spinner";
 import { Avatar } from "./Avatar";
 import type { SpeakerColorClasses } from "@/lib/speaker-color";
@@ -616,6 +617,29 @@ function LibraryMediaBlock({
           controls
           playsInline
           preload="metadata"
+          onError={(e) => {
+            const err = e.currentTarget.error;
+            const codes: Record<number, string> = {
+              1: "ABORTED",
+              2: "NETWORK",
+              3: "DECODE",
+              4: "SRC_NOT_SUPPORTED",
+            };
+            void reportClientMediaError(
+              "preview-load",
+              new Error(
+                `library video load failed: ${
+                  err ? `${codes[err.code] ?? "UNKNOWN"} · ${err.message || ""}` : "no error obj"
+                }`,
+              ),
+              {
+                library_id: libraryId,
+                storage_path: lib?.storage_path ?? undefined,
+                surface: "thread-bubble",
+              },
+              jwt,
+            );
+          }}
           className="block w-full max-h-72 rounded-xl bg-black"
         />
       )}

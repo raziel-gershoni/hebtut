@@ -3,6 +3,7 @@
 import { ru } from "@/lib/i18n";
 import { formatBytes } from "@/lib/media";
 import { publicEnv } from "@/lib/env";
+import { reportClientMediaError } from "@/lib/diag";
 
 export interface MediaLibraryListItem {
   id: number;
@@ -87,6 +88,32 @@ export function MediaPreview({ item, jwt, selected, onClick, onKebab }: Props) {
                 muted
                 playsInline
                 disablePictureInPicture
+                onError={(e) => {
+                  const err = e.currentTarget.error;
+                  const codes: Record<number, string> = {
+                    1: "ABORTED",
+                    2: "NETWORK",
+                    3: "DECODE",
+                    4: "SRC_NOT_SUPPORTED",
+                  };
+                  void reportClientMediaError(
+                    "preview-load",
+                    new Error(
+                      `picker tile video load failed: ${
+                        err
+                          ? `${codes[err.code] ?? "UNKNOWN"} · ${err.message || ""}`
+                          : "no error obj"
+                      }`,
+                    ),
+                    {
+                      library_id: item.id,
+                      storage_path: item.storage_path,
+                      mime: item.original_filename,
+                      surface: "picker-tile",
+                    },
+                    jwt,
+                  );
+                }}
                 className="absolute inset-0 w-full h-full object-cover"
               />
               <div
