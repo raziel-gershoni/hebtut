@@ -67,9 +67,16 @@ let cachedHandler: ((req: Request) => Promise<Response>) | null = null;
 function getHandler(): (req: Request) => Promise<Response> {
   if (cachedHandler) return cachedHandler;
   installHandlers();
-  cachedHandler = webhookCallback(getBot(), "std/http") as unknown as (
-    req: Request,
-  ) => Promise<Response>;
+  cachedHandler = webhookCallback(getBot(), "std/http", {
+    // grammY's default timeout is 10s — far short of our actual
+    // critical path now that transcribe + translate run inline (each
+    // up to 25s via Gemini Flash). When the handler exceeds 10s
+    // grammY throws «Request timed out after 10000 ms» and TG retries,
+    // producing the duplicate-send symptom. Bump to match Vercel's
+    // maxDuration ceiling; Redis dedup catches any retries that still
+    // happen.
+    timeoutMilliseconds: 55_000,
+  }) as unknown as (req: Request) => Promise<Response>;
   return cachedHandler;
 }
 
