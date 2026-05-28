@@ -90,8 +90,9 @@ function SkeletonCard() {
 
 /* -------------------------------------------------------------------------
  * StatusStrip — top sliver of the card. Maps to the spec's "Верхняя строка"
- * column. Colour signals urgency: amber for 'about to lapse', red for locked,
- * grey for steady-state info. 'active' steady-state has no strip per spec.
+ * column. Amber is reserved for "about to lapse" (genuine urgency); locked
+ * + steady-state both render in muted hint colour — red read as nervous /
+ * alarmist for what's a normal "trial finished, pay to continue" prompt.
  * ----------------------------------------------------------------------- */
 function StatusStrip({ status }: { status: ApiStatus }) {
   const text = stripText(status);
@@ -102,9 +103,7 @@ function StatusStrip({ status }: { status: ApiStatus }) {
       className={`text-xs uppercase tracking-widest ${
         tone === "amber"
           ? "text-amber-600 dark:text-amber-400"
-          : tone === "red"
-            ? "text-tg-text-destructive"
-            : "text-tg-text-hint"
+          : "text-tg-text-hint"
       }`}
     >
       {text}
@@ -171,7 +170,7 @@ function MainLine({
     status.kind === "payment_failed";
   if (locked) {
     return (
-      <p className="text-tg-text-destructive">
+      <p className="text-tg-text-subtitle">
         {ru.student.summary.practiceStopped}
       </p>
     );
