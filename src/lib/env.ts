@@ -76,6 +76,13 @@ const ServerSchema = z.object({
   // access — a missing key here would otherwise break unrelated routes
   // (cron, webhooks, etc.).
   GEMINI_API_KEY: z.string().min(1).optional(),
+  // Upstash Redis (REST). Used by the TG webhook to dedup retries by
+  // `update_id` — without this, slow handlers (transcribe/translate
+  // can run 30-50s in-band) get re-fired by TG's ~30s retry timeout
+  // and the student receives the relayed voice/video multiple times.
+  // Free tier covers our volume easily (10k commands/day).
+  UPSTASH_REDIS_REST_URL: z.string().url(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().min(20),
 });
 
 const PublicSchema = z.object({

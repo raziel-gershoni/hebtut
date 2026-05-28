@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { webhookCallback } from "grammy";
 import { getBot } from "@/lib/tg";
 import { serverEnv } from "@/lib/env";
+import { getRedis } from "@/lib/redis";
 import { ensureBootstrapAdmin } from "@/server/bootstrap";
 import { handleStart } from "@/server/handlers/start";
 import { handleStudentMedia } from "@/server/handlers/student-message";
@@ -77,6 +78,54 @@ export async function POST(req: NextRequest) {
   if (secret !== serverEnv.TELEGRAM_WEBHOOK_SECRET) {
     return new Response("forbidden", { status: 403 });
   }
+
+  // Consume the body once. We need it for (a) update_id dedup and (b)
+  // re-pass to grammY's webhookCallback. NextRequest's body is a
+  // single-use ReadableStream so we save the string here.
+  const body = await req.text();
+  let updateId: number | null = null;
+  try {
+    const parsed = JSON.parse(body) as { update_id?: unknown };
+    if (typeof parsed.update_id === "number" && Number.isInteger(parsed.update_id)) {
+      updateId = parsed.update_id;
+    }
+  } catch {
+    // Malformed body — let grammY produce its own 400. No dedup.
+  }
+
+  // Atomic SETNX with 24 h TTL. TG retries unacked updates with the
+  // same update_id for up to ~24 h with backoff; after that no chance
+  // of recurrence. A `null` return means the key already existed → TG
+  // retry → ack 200 and skip the handler. The previous behaviour (no
+  // dedup) let slow handlers (transcribe + translate inline run 30-50s,
+  // past TG's ~30s retry window) re-fire `bot.api.sendVoice` on every
+  // retry, giving the student 2-3 copies of the relayed audio.
+  if (updateId != null) {
+    try {
+      const result = await getRedis().set(`webhook:${updateId}`, "1", {
+        nx: true,
+        ex: 86400,
+      });
+      if (result === null) {
+        return new Response("ok (dup)", { status: 200 });
+      }
+    } catch (e) {
+      // Fail-soft: log + proceed. Dropping a legitimate update to
+      // enforce dedup is worse than the occasional duplicate.
+      console.warn("[webhook] dedup SETNX failed; proceeding", {
+        update_id: updateId,
+        err: (e as Error).message,
+      });
+    }
+  }
+
   await ensureBootstrapAdmin();
-  return getHandler()(req);
+  // Reconstruct the Request — grammY's webhookCallback reads the body
+  // itself. Preserve method + headers + body verbatim.
+  const reqForHandler = new Request(req.url, {
+    method: req.method,
+    headers: req.headers,
+    body,
+  });
+  return getHandler()(reqForHandler);
 }
