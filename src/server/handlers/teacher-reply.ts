@@ -342,7 +342,7 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
   // Best-effort: audio is already in the student's chat by now. Gated by
   // the admin `transcripts_enabled` toggle and the GEMINI_API_KEY env;
   // either off → returns null and we fall back to the plain ack.
-  const transcriptText =
+  const transcribeResult =
     outRow?.id != null
       ? await transcribeAndDeliverFor(
           outRow.id,
@@ -354,23 +354,42 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
         )
       : null;
 
-  if (transcriptText && outRow?.id != null) {
-    const editUrl = `${serverEnv.APP_BASE_URL.replace(/\/$/, "")}/students/${prompt.student_id}?edit_transcript=${outRow.id}`;
-    await ctx.reply(
-      ru.bot.notifications.teacherReplyDeliveredWithTranscript(transcriptText),
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: ru.bot.notifications.editTranscriptButton,
-                web_app: { url: editUrl },
-              },
-            ],
+  if (transcribeResult && outRow?.id != null) {
+    const base = serverEnv.APP_BASE_URL.replace(/\/$/, "");
+    const editTranscriptUrl = `${base}/students/${prompt.student_id}?edit_transcript=${outRow.id}`;
+    const editTranslationUrl = `${base}/students/${prompt.student_id}?edit_translation=${outRow.id}`;
+    const text = transcribeResult.translation
+      ? ru.bot.notifications.teacherReplyDeliveredWithBoth(
+          transcribeResult.transcript,
+          transcribeResult.translation,
+        )
+      : ru.bot.notifications.teacherReplyDeliveredWithTranscript(transcribeResult.transcript);
+    // Two buttons when translation is present (one per row so each is
+    // tappable on phones), one when transcript-only.
+    const inline_keyboard = transcribeResult.translation
+      ? [
+          [
+            {
+              text: ru.bot.notifications.editTranscriptButton,
+              web_app: { url: editTranscriptUrl },
+            },
           ],
-        },
-      },
-    );
+          [
+            {
+              text: ru.bot.notifications.editTranslationButton,
+              web_app: { url: editTranslationUrl },
+            },
+          ],
+        ]
+      : [
+          [
+            {
+              text: ru.bot.notifications.editTranscriptButton,
+              web_app: { url: editTranscriptUrl },
+            },
+          ],
+        ];
+    await ctx.reply(text, { reply_markup: { inline_keyboard } });
   } else {
     await ctx.reply(ru.bot.notifications.teacherReplyDelivered);
   }
@@ -609,6 +628,11 @@ export async function handleTeacherReplyText(ctx: Context): Promise<boolean> {
  *    (also threaded) so the absence doesn't read like bot brokenness.
  *  - Post-deliver throw: swallow with a warn — the student has the audio.
  */
+interface TranscribeResult {
+  transcript: string;
+  translation: string | null;
+}
+
 async function transcribeAndDeliverFor(
   messageId: number,
   studentId: number,
@@ -616,7 +640,7 @@ async function transcribeAndDeliverFor(
   audioTgMessageId: number | null,
   fileId: string,
   kind: "voice" | "video_note",
-): Promise<string | null> {
+): Promise<TranscribeResult | null> {
   if (!(await getTranscriptsEnabled())) return null;
 
   // Per-user opt-out (defaults are ON in the migration). Reading the row
@@ -672,7 +696,7 @@ async function transcribeAndDeliverFor(
           translation_tg_message_id: translation ? sent.message_id : null,
         })
         .eq("id", messageId);
-      return transcript;
+      return { transcript, translation };
     }
     await getBot()
       .api.sendMessage(

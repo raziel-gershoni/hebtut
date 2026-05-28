@@ -218,8 +218,11 @@ const notifications = {
     "Чтобы ответить ученику, открой мини-приложение, нажми «Ответить» рядом с его сообщением, и потом свайпни по подсказке.",
   teacherReplyDelivered: "✅ Ответ отправлен ученику.",
   teacherReplyDeliveredWithTranscript: (transcript: string) =>
-    `✅ Ответ отправлен ученику.\n\n📝 Расшифровка:\n${transcript}`,
+    `✅ Ответ отправлен ученику.\n\n${transcript}`,
+  teacherReplyDeliveredWithBoth: (transcript: string, translation: string) =>
+    `✅ Ответ отправлен ученику.\n\n${transcript}\n\n${translation}`,
   editTranscriptButton: "Изменить расшифровку",
+  editTranslationButton: "Изменить перевод",
   teacherReplyScheduled: (time: string) =>
     `✅ Запланировано. Ученик получит сообщение в ${time} — он попросил приходить только в это время.`,
   teacherReplyFailed: "Не удалось отправить ответ. Попробуй ещё раз через мини-приложение.",
