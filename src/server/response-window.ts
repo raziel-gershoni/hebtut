@@ -87,3 +87,23 @@ function currentMinuteOfDay(now: Date, tz: string): number {
   const mm = Number(formatInTimeZone(now, tz, "mm"));
   return hh * 60 + mm;
 }
+
+/**
+ * "What should `deliver_at` be for a scheduled_outbound row given the
+ * student's current window?"
+ *
+ * Returns `now` when the window is open or unconfigured (so the cron's
+ * next tick delivers immediately), else the next window-open instant.
+ * Shared by the PATCH-side reschedule cascade and the cron-side
+ * defensive recheck so both paths agree on what counts as "live
+ * correct".
+ */
+export function computeDeliverAt(
+  now: Date,
+  windowStart: string | null,
+  windowEnd: string | null,
+  tz: string,
+): Date {
+  const next = nextWindowOpen(now, windowStart, windowEnd, tz);
+  return next ?? now;
+}

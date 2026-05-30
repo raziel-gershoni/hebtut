@@ -3,6 +3,7 @@ import { serverEnv } from "@/lib/env";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { getBot } from "@/lib/tg";
 import { recordAudit } from "@/server/audit";
+import { nextWindowOpen } from "@/server/response-window";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,6 +41,38 @@ async function handler(req: NextRequest): Promise<Response> {
   let skipped = 0;
 
   for (const row of due) {
+    // Defensive recheck against the live subscription window. The
+    // PATCH-side cascade in /api/student/response-window is the primary
+    // mechanism that keeps deliver_at in sync, but anything that
+    // updates the subscriptions row without going through PATCH
+    // (admin DB edit, future surface, race with cron) would leave the
+    // row with a stale deliver_at. If the live window says "not now",
+    // push the row forward and let a later tick handle it; otherwise
+    // fall through to the existing send path.
+    const { data: sub } = await sb
+      .from("subscriptions")
+      .select("response_window_start, response_window_end, response_window_tz")
+      .eq("user_id", row.student_id)
+      .maybeSingle();
+    const now = new Date();
+    const nextOpen = sub
+      ? nextWindowOpen(
+          now,
+          sub.response_window_start,
+          sub.response_window_end,
+          sub.response_window_tz,
+        )
+      : null;
+    if (nextOpen && nextOpen.getTime() > now.getTime()) {
+      await sb
+        .from("scheduled_outbound")
+        .update({ deliver_at: nextOpen.toISOString() })
+        .eq("id", row.id)
+        .eq("status", "queued");
+      skipped++;
+      continue;
+    }
+
     // Atomic claim. The UPDATE only succeeds if status is still 'queued'
     // (i.e. no concurrent cron tick or prior failed-but-stuck send is
     // already handling this row). Without this gate, a successful TG

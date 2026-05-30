@@ -5,6 +5,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { readJsonBody } from "@/lib/http";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { recordAudit } from "@/server/audit";
+import { computeDeliverAt } from "@/server/response-window";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,14 +81,49 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     },
     { onConflict: "user_id" },
   );
+
+  // Cascade the window change to any queued teacher-initiated messages
+  // for this student. Without this, widening (e.g. 12-16 → 10-20 at
+  // 11:00) leaves the row stuck at its old deliver_at=12:00 — the cron
+  // can't pull it forward because its query only sees rows whose
+  // deliver_at has already passed. Narrowing / clearing where the new
+  // next-open is in the past is also handled here (newDeliverAt = now
+  // → cron's next tick delivers).
+  const { data: tzRow } = await sb
+    .from("subscriptions")
+    .select("response_window_tz")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const tz = tzRow?.response_window_tz ?? "Asia/Jerusalem";
+  const now = new Date();
+  const newDeliverAt = computeDeliverAt(
+    now,
+    update.response_window_start,
+    update.response_window_end,
+    tz,
+  );
+  const { data: rescheduled } = await sb
+    .from("scheduled_outbound")
+    .update({ deliver_at: newDeliverAt.toISOString() })
+    .eq("student_id", user.id)
+    .eq("status", "queued")
+    .select("id");
+
   await recordAudit({
     action: cleared ? "response_window.cleared" : "response_window.set",
     actorId: user.id,
     subjectType: "user",
     subjectId: user.id,
-    meta: cleared
-      ? {}
-      : { start: (parsed.data as { start: string }).start, end: (parsed.data as { end: string }).end },
+    meta: {
+      ...(cleared
+        ? {}
+        : {
+            start: (parsed.data as { start: string }).start,
+            end: (parsed.data as { end: string }).end,
+          }),
+      rescheduled_count: rescheduled?.length ?? 0,
+      new_deliver_at: newDeliverAt.toISOString(),
+    },
   });
 
   return Response.json({ ok: true }, { headers: noStoreHeaders });
