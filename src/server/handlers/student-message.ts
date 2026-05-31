@@ -227,25 +227,27 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
 
   // Choose the reply: overflow > low-warning > normal. Each takes priority
   // because the more urgent state should not be hidden by the cheerier copy.
-  // When the global toggle is off the entire quota narrative is suppressed —
-  // the student gets a flat "✅ Отправлено." and reads remaining time on the
-  // Mini App dashboard instead.
+  // When the global toggle is off the accept reply is suppressed entirely —
+  // TG's own ✓✓ already tells the student we received them, so a bare
+  // "✅ Отправлено" bubble is pure noise. Remaining time lives on the Mini
+  // App dashboard. Reject paths (overQuota / exhausted) still surface
+  // because the student needs to know when a message ISN'T kept.
   //
   // Unassigned-student branch: the message is recorded, but no teacher exists
   // to pick it up. Send the dedicated ack so the student knows we received
   // them, and DM all admins with a one-tap link to assign a teacher.
   if (hasTeachers) {
-    let reply: string;
-    if (!quotaChat) {
-      reply = ru.bot.quota.acceptedNeutral;
-    } else if (decision.tomorrowDebit > 0) {
-      reply = ru.bot.quota.acceptedOverflow(formatDuration(decision.tomorrowDebit));
-    } else if (decision.newRemainingToday > 0 && decision.newRemainingToday <= 60) {
-      reply = ru.bot.quota.acceptedLow(formatDuration(decision.newRemainingToday));
-    } else {
-      reply = ru.bot.quota.accepted(formatDuration(decision.newRemainingToday));
+    if (quotaChat) {
+      let reply: string;
+      if (decision.tomorrowDebit > 0) {
+        reply = ru.bot.quota.acceptedOverflow(formatDuration(decision.tomorrowDebit));
+      } else if (decision.newRemainingToday > 0 && decision.newRemainingToday <= 60) {
+        reply = ru.bot.quota.acceptedLow(formatDuration(decision.newRemainingToday));
+      } else {
+        reply = ru.bot.quota.accepted(formatDuration(decision.newRemainingToday));
+      }
+      await ctx.reply(reply);
     }
-    await ctx.reply(reply);
     await fanOutToTeachers(inserted.id);
   } else {
     // Send the "got it, hooking a coach up" ack only once per student.

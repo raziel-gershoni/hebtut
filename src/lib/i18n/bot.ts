@@ -44,12 +44,13 @@ const quota = {
   overQuota: (remaining: string) =>
     `На сегодня осталось ${remaining}. Сократи запись или попробуй завтра.`,
   overQuotaExhausted: "Лимит на сегодня исчерпан. Попробуй завтра.",
-  // Neutral variants used when chat-side quota notifications are off (the
-  // admin toggle in app_settings). Quota is still enforced; the student
-  // sees their remaining time on the Mini App home card instead.
+  // Neutral reject variant used when chat-side quota notifications are off
+  // (the admin toggle in app_settings). Quota is still enforced; the
+  // student sees their remaining time on the Mini App home card. The
+  // accept branch is silenced entirely in that mode — TG's own ✓✓ already
+  // confirms receipt, so a bot bubble on top reads as noise.
   rejectedNeutral:
     "Не удалось отправить. Открой мини-приложение, чтобы посмотреть статус.",
-  acceptedNeutral: "✅ Отправлено.",
   accepted: (remaining: string) => `✅ Отправлено! Осталось ${remaining} на сегодня.`,
   acceptedLow: (remaining: string) =>
     `✅ Отправлено! ⚠️ Осталось ${remaining} — меньше минуты на сегодня.`,
