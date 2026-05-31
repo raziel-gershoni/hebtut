@@ -196,6 +196,33 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
     .eq("student_id", user.id);
   const hasTeachers = (links?.length ?? 0) > 0;
 
+  // If the student swipe-replied to a specific bubble in their chat,
+  // resolve that target to its parent messages row. We only thread to
+  // teacher outbound (direction='out') — audio/video/text bubble, or
+  // the transcript-echo text bubble that points at the parent audio
+  // via transcript_tg_message_id (which for combined Heb+Ru echoes is
+  // the same TG message id as translation_tg_message_id, so a single
+  // column check suffices). Scoped to this student so cross-student
+  // TG-id collisions can't leak. Replies to bot system messages
+  // (welcome / quota / onboarding) never match a messages row → stay
+  // null, which is the correct "no thread" outcome. Replies to the
+  // student's own earlier voice are direction='in' → also miss the
+  // direction filter and stay null (would be noise to the teacher).
+  const replyToTgMessageId = msg.reply_to_message?.message_id ?? null;
+  let replyToId: number | null = null;
+  if (replyToTgMessageId != null) {
+    const { data: parent } = await sb
+      .from("messages")
+      .select("id")
+      .eq("student_id", user.id)
+      .eq("direction", "out")
+      .or(
+        `tg_message_id_in_student_chat.eq.${replyToTgMessageId},transcript_tg_message_id.eq.${replyToTgMessageId}`,
+      )
+      .maybeSingle();
+    replyToId = parent?.id ?? null;
+  }
+
   const { data: inserted, error } = await sb
     .from("messages")
     .insert({
@@ -207,6 +234,7 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
       duration,
       status: "pending",
       tg_message_id_in_student_chat: msg.message_id,
+      reply_to_id: replyToId,
     })
     .select("id")
     .single();

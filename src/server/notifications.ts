@@ -4,6 +4,7 @@ import { ru, formatDuration } from "@/lib/i18n";
 import { resolveDisplay } from "@/server/display";
 import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
 import { serverEnv } from "@/lib/env";
+import { formatInTimeZone } from "date-fns-tz";
 
 // Used by the fan-out copy below — picks the user's display label per the
 // global names-vs-handles toggle. Resolved at the start of the fan-out so a
@@ -45,10 +46,34 @@ export async function fanOutToTeachers(messageId: number): Promise<void> {
   const sb = getServiceRoleClient();
   const { data: msg } = await sb
     .from("messages")
-    .select("id, kind, duration, student_id")
+    .select("id, kind, duration, student_id, reply_to_id")
     .eq("id", messageId)
     .single();
   if (!msg) return;
+
+  // If this inbound was a swipe-reply to a teacher bubble, pull the
+  // parent's details + author handle so we can augment the actionable
+  // copy with "ответ на твоё/X-тренера ... от HH:MM". Parent author
+  // resolution failure (deleted teacher row, race) falls back to the
+  // un-augmented copy — silent degrade, not a hard error.
+  const { data: parent } =
+    msg.reply_to_id != null
+      ? await sb
+          .from("messages")
+          .select("id, kind, duration, created_at, teacher_id")
+          .eq("id", msg.reply_to_id)
+          .maybeSingle()
+      : { data: null };
+  const { data: parentTeacher } =
+    parent?.teacher_id != null
+      ? await sb
+          .from("users")
+          .select(
+            "tg_user_id, name, preferred_name, display_handle, display_emoji, avatar_file_id",
+          )
+          .eq("id", parent.teacher_id)
+          .maybeSingle()
+      : { data: null };
 
   // Resolve once for the whole fan-out so a flip mid-batch doesn't yield
   // inconsistent copy across the messages we send.
@@ -99,7 +124,24 @@ export async function fanOutToTeachers(messageId: number): Promise<void> {
   const bot = getBot();
   const kindLabel = msg.kind === "voice" ? ru.bot.labels.voiceLower : ru.bot.labels.videoNoteLower;
   const durationLabel = formatDuration(msg.duration);
-  const actionable = ru.bot.notifications.teacherNotificationActionable(studentHandle, kindLabel, durationLabel);
+  const parentKindLabel = parent
+    ? parent.kind === "voice"
+      ? ru.bot.labels.voiceLower
+      : parent.kind === "video_note"
+        ? ru.bot.labels.videoNoteLower
+        : ru.bot.labels.textLower
+    : "";
+  const parentTimeLabel = parent
+    ? formatParentTime(parent.created_at, "Asia/Jerusalem", new Date())
+    : "";
+  const parentTeacherHandle = parentTeacher
+    ? handleFromDisplay(parentTeacher, anonMode)
+    : "";
+  const plainActionable = ru.bot.notifications.teacherNotificationActionable(
+    studentHandle,
+    kindLabel,
+    durationLabel,
+  );
   const taken = (name: string) => ru.bot.notifications.teacherNotificationTaken(name, studentHandle);
 
   const rows: {
@@ -109,6 +151,28 @@ export async function fanOutToTeachers(messageId: number): Promise<void> {
     tg_notification_message_id: number;
   }[] = [];
   for (const t of teachers) {
+    let actionable: string;
+    if (parent && parentTeacher) {
+      actionable =
+        parent.teacher_id === t.id
+          ? ru.bot.notifications.teacherNotificationActionableReplyMine(
+              studentHandle,
+              kindLabel,
+              durationLabel,
+              parentKindLabel,
+              parentTimeLabel,
+            )
+          : ru.bot.notifications.teacherNotificationActionableReplyOther(
+              studentHandle,
+              kindLabel,
+              durationLabel,
+              parentTeacherHandle,
+              parentKindLabel,
+              parentTimeLabel,
+            );
+    } else {
+      actionable = plainActionable;
+    }
     const text =
       handlerId && handlerId !== t.id ? taken(handlerHandle ?? "Тренер") : actionable;
     try {
@@ -201,4 +265,18 @@ export async function editAllNotificationsForMessage(
       console.warn("editMessageText", e);
     }
   }
+}
+
+/**
+ * Format the parent message's timestamp for the fan-out reply context.
+ * Same-day in the student's tz → bare "HH:mm" (overwhelmingly common
+ * case, reads tighter); cross-day → "dd.MM HH:mm" so a swipe-reply to
+ * yesterday's tutor voice doesn't render as a confusing same-day time.
+ */
+function formatParentTime(iso: string, tz: string, now: Date): string {
+  const parentDay = formatInTimeZone(iso, tz, "yyyy-MM-dd");
+  const today = formatInTimeZone(now, tz, "yyyy-MM-dd");
+  return parentDay === today
+    ? formatInTimeZone(iso, tz, "HH:mm")
+    : formatInTimeZone(iso, tz, "dd.MM HH:mm");
 }

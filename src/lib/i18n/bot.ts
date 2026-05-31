@@ -199,6 +199,7 @@ const labels = {
   adminFallback: "Админ",
   voiceLower: "голосовое",
   videoNoteLower: "круглое видео",
+  textLower: "сообщение",
   voiceUpper: "Голосовое",
   videoNoteUpper: "Круглое видео",
   openInline: "Открыть",
@@ -241,6 +242,29 @@ const notifications = {
     "💬 Новый ответ от админа. Открой обратную связь, чтобы прочитать и ответить.",
   teacherNotificationActionable: (studentName: string, kindLabel: string, durationLabel: string) =>
     `🔔 Новое: ${kindLabel} ${durationLabel} от ${studentName}. Открой мини-приложение, чтобы взять в работу.`,
+  // Variants for when the student swipe-replied to a specific bubble.
+  // The reply target is always a teacher outbound (audio / video / text /
+  // transcript echo); for replies to bot system messages or the student's
+  // own earlier voice we fall back to the plain actionable above.
+  // "Mine" goes to the teacher who owns the parent bubble; "Other" goes
+  // to every other linked teacher in the fan-out.
+  teacherNotificationActionableReplyMine: (
+    studentName: string,
+    kindLabel: string,
+    durationLabel: string,
+    parentKindLabel: string,
+    parentTimeLabel: string,
+  ) =>
+    `🔔 Новое: ${kindLabel} ${durationLabel} от ${studentName} — ответ на твоё ${parentKindLabel} от ${parentTimeLabel}. Открой мини-приложение, чтобы взять в работу.`,
+  teacherNotificationActionableReplyOther: (
+    studentName: string,
+    kindLabel: string,
+    durationLabel: string,
+    parentTeacherHandle: string,
+    parentKindLabel: string,
+    parentTimeLabel: string,
+  ) =>
+    `🔔 Новое: ${kindLabel} ${durationLabel} от ${studentName} — ответ на ${parentKindLabel} тренера ${parentTeacherHandle} от ${parentTimeLabel}. Открой мини-приложение, чтобы взять в работу.`,
   teacherNotificationTaken: (handler: string, studentHandle: string) =>
     `✓ ${studentHandle}: в работе у ${handler}.`,
   teacherNotificationExpired: "⚠️ Время на ответ истекло, сообщение снова доступно.",
