@@ -102,8 +102,17 @@ async function forward(
       respHeaders.set(k, v);
     }
   }
-  // HEAD responses must have no body; otherwise stream through.
-  const responseBody = method === "HEAD" ? null : await upstream.arrayBuffer();
+  // HEAD responses must have no body; same for the "null body statuses"
+  // 204/205/304 (Fetch spec — undici throws "Invalid response status
+  // code 204" on `new Response(emptyArrayBuffer, { status: 204 })`).
+  // TUS PATCH chunk responses are 204, so without this every chunk
+  // upload was crashing the proxy.
+  const isNullBodyStatus =
+    upstream.status === 204 ||
+    upstream.status === 205 ||
+    upstream.status === 304;
+  const responseBody =
+    method === "HEAD" || isNullBodyStatus ? null : await upstream.arrayBuffer();
   return new Response(responseBody, {
     status: upstream.status,
     statusText: upstream.statusText,
