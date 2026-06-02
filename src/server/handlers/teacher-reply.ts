@@ -681,7 +681,15 @@ async function transcribeAndDeliverFor(
       }
 
       const body = translation ? `${transcript}\n\n${translation}` : transcript;
-      const sent = await getBot().api.sendMessage(studentChatId, body, replyParams);
+      // Wrap the whole bubble in a TG spoiler entity so it renders blurred
+      // in the student's chat. Tap reveals — privacy win for public listening,
+      // and fluent students who don't need the text aren't visually spammed.
+      // The failure-notice path below stays in-the-clear (status string,
+      // not content; blurring would be a usability foot-gun).
+      const sent = await getBot().api.sendMessage(studentChatId, body, {
+        ...replyParams,
+        entities: [{ type: "spoiler", offset: 0, length: body.length }],
+      });
 
       // Both message_id columns point at the same TG message — edits to
       // either field rebuild the combined body and editMessageText this

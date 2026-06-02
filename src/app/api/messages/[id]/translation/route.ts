@@ -107,6 +107,7 @@ export async function PATCH(
         student.tg_chat_id,
         editTargetId,
         combinedBody,
+        { entities: [{ type: "spoiler", offset: 0, length: combinedBody.length }] },
       );
     } catch (e) {
       console.warn(
@@ -121,17 +122,21 @@ export async function PATCH(
 
   if (fallback) {
     try {
+      const fallbackBody = `${ru.bot.transcripts.correctionPrefix}${combinedBody}`;
       const sent = await getBot().api.sendMessage(
         student.tg_chat_id,
-        `${ru.bot.transcripts.correctionPrefix}${combinedBody}`,
-        msg.tg_message_id_in_student_chat != null
-          ? {
-              reply_parameters: {
-                message_id: msg.tg_message_id_in_student_chat,
-                allow_sending_without_reply: true,
-              },
-            }
-          : {},
+        fallbackBody,
+        {
+          ...(msg.tg_message_id_in_student_chat != null
+            ? {
+                reply_parameters: {
+                  message_id: msg.tg_message_id_in_student_chat,
+                  allow_sending_without_reply: true,
+                },
+              }
+            : {}),
+          entities: [{ type: "spoiler", offset: 0, length: fallbackBody.length }],
+        },
       );
       newTgMessageId = sent.message_id;
     } catch (e) {
