@@ -13,6 +13,7 @@ import {
   isTgUserBanned,
 } from "@/server/invites";
 import { recordAudit } from "@/server/audit";
+import { fanOutNewUserToAdmins } from "@/server/notifications";
 import { getQuotaChatNotificationsEnabled } from "@/server/settings";
 import { sendStep1Welcome, resendCurrentOnboardingStep } from "@/server/onboarding";
 
@@ -93,6 +94,7 @@ export async function handleStart(ctx: Context): Promise<void> {
         subjectId: teacher.id,
         meta: { via: "invite", tg_user_id: from.id },
       });
+      void fanOutNewUserToAdmins(teacher.id, "invite");
       await welcomeNewTeacher(ctx);
       return;
     }
@@ -146,6 +148,7 @@ export async function handleStart(ctx: Context): Promise<void> {
       subjectId: student.id,
       meta: { tg_user_id: from.id, ref_token_present: !!refToken },
     });
+    void fanOutNewUserToAdmins(student.id, "start");
   }
   await welcomeNewStudent(ctx, student?.id ?? null);
 }

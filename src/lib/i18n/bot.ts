@@ -203,6 +203,9 @@ const labels = {
   voiceUpper: "Голосовое",
   videoNoteUpper: "Круглое видео",
   openInline: "Открыть",
+  roleStudent: "ученик",
+  roleTeacher: "тренер",
+  viaInviteSuffix: " (по инвайту)",
 };
 
 const transcripts = {
@@ -238,6 +241,8 @@ const notifications = {
     `💬 От ${userLabel}: «${snippet}». Открой админку, чтобы ответить.`,
   adminUnassignedPing: (userLabel: string, kindLabel: string) =>
     `📥 ${kindLabel} от ${userLabel} — ученик пока не закреплён ни за одним тренером. Назначь тренера, чтобы ответ пошёл.`,
+  adminNewUserPing: (label: string, roleLabel: string, viaLabel: string) =>
+    `👤 Новый пользователь: ${label} — ${roleLabel}${viaLabel}. Открой админку, чтобы посмотреть.`,
   userFeedbackReplyPing:
     "💬 Новый ответ от админа. Открой обратную связь, чтобы прочитать и ответить.",
   teacherNotificationActionable: (studentName: string, kindLabel: string, durationLabel: string) =>

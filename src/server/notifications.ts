@@ -246,6 +246,58 @@ export async function fanOutUnassignedToAdmins(messageId: number): Promise<void>
   }
 }
 
+/**
+ * DM every admin when a brand-new user is registered (student via /start,
+ * teacher via invite, or student via the auto-register-on-first-media
+ * fallback). Bootstrap admin self-create is not hooked. Fail-soft per
+ * admin — one bad chat_id doesn't sink the batch.
+ */
+export async function fanOutNewUserToAdmins(
+  newUserId: number,
+  via: "start" | "invite" | "media",
+): Promise<void> {
+  const sb = getServiceRoleClient();
+  const { data: user } = await sb
+    .from("users")
+    .select(
+      "id, role, tg_user_id, name, preferred_name, display_handle, display_emoji, avatar_file_id",
+    )
+    .eq("id", newUserId)
+    .single();
+  if (!user) return;
+
+  const anonMode = await getDisplayAnonymousHandlesEnabled();
+  const label = handleFromDisplay(user, anonMode);
+  const roleLabel =
+    user.role === "teacher" ? ru.bot.labels.roleTeacher : ru.bot.labels.roleStudent;
+  const viaLabel = via === "invite" ? ru.bot.labels.viaInviteSuffix : "";
+  const text = ru.bot.notifications.adminNewUserPing(label, roleLabel, viaLabel);
+
+  const { data: admins } = await sb
+    .from("users")
+    .select("id, tg_chat_id")
+    .eq("is_admin", true);
+  if (!admins?.length) return;
+
+  const url = `${serverEnv.APP_BASE_URL.replace(/\/$/, "")}/admin`;
+  const bot = getBot();
+  for (const admin of admins) {
+    if (admin.id === newUserId) continue;
+    try {
+      await bot.api.sendMessage(admin.tg_chat_id, text, {
+        reply_markup: {
+          inline_keyboard: [[{ text: ru.bot.labels.openInline, web_app: { url } }]],
+        },
+      });
+    } catch (e) {
+      console.warn("new-user admin DM failed", {
+        chat_id: admin.tg_chat_id,
+        reason: (e as Error).message,
+      });
+    }
+  }
+}
+
 export async function editAllNotificationsForMessage(
   messageId: number,
   text: string,
