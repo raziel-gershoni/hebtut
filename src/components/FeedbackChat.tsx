@@ -11,7 +11,12 @@ interface FeedbackMessage {
   direction: "in" | "out";
   text_content: string;
   created_at: string;
-  author: { handle: string } | null;
+  author: {
+    id: number;
+    handle: string;
+    emoji: string | null;
+    has_avatar: boolean;
+  } | null;
 }
 
 function formatTime(iso: string): string {
@@ -128,14 +133,20 @@ export function FeedbackChat({ jwt }: { jwt: string }) {
             );
           }
           const handle = m.author?.handle ?? ru.inbox.feedbackChat.adminFallback;
+          const avatarImage =
+            m.author?.has_avatar
+              ? `/api/avatar/${m.author.id}?token=${encodeURIComponent(jwt)}`
+              : undefined;
           return (
             <div key={m.id} className="flex items-start gap-2">
               <div className="shrink-0 mt-1.5">
                 <Avatar
                   size={32}
                   name={handle}
-                  emoji={"👑"}
+                  imageUrl={avatarImage}
+                  emoji={m.author?.emoji ?? undefined}
                   bgClass={bgFromHandle(handle)}
+                  isAdmin
                 />
               </div>
               <div className="max-w-[80%] rounded-2xl px-3 py-2 bg-tg-bg-section border-l-[3px] border-tg-text-accent/40">

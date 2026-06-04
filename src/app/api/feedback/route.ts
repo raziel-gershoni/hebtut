@@ -53,7 +53,10 @@ export async function GET(req: NextRequest) {
         .map((m) => m.author_id as number),
     ),
   );
-  const handlesById = new Map<number, string>();
+  const authorsById = new Map<
+    number,
+    { id: number; handle: string; emoji: string | null; has_avatar: boolean }
+  >();
   if (authorIds.length > 0) {
     const { data: authors } = await sb
       .from("users")
@@ -62,7 +65,13 @@ export async function GET(req: NextRequest) {
       )
       .in("id", authorIds);
     for (const a of authors ?? []) {
-      handlesById.set(a.id, resolveDisplay(a, anonMode).handle);
+      const d = resolveDisplay(a, anonMode);
+      authorsById.set(a.id, {
+        id: a.id,
+        handle: d.handle,
+        emoji: d.emoji,
+        has_avatar: d.has_avatar,
+      });
     }
   }
 
@@ -73,7 +82,12 @@ export async function GET(req: NextRequest) {
     created_at: m.created_at,
     author:
       m.direction === "out" && m.author_id != null
-        ? { handle: handlesById.get(m.author_id) ?? ru.bot.labels.adminFallback }
+        ? authorsById.get(m.author_id) ?? {
+            id: m.author_id,
+            handle: ru.bot.labels.adminFallback,
+            emoji: null,
+            has_avatar: false,
+          }
         : null,
   }));
 
