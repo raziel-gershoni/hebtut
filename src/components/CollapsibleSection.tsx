@@ -47,7 +47,7 @@ export function CollapsibleSection({
     <details
       open={open}
       onToggle={handleToggle}
-      className="group mb-3 overflow-hidden rounded-2xl bg-tg-bg-section"
+      className="group mb-3 rounded-2xl bg-tg-bg-section"
     >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 select-none">
         <span className="text-lg font-semibold tracking-tight">{title}</span>
