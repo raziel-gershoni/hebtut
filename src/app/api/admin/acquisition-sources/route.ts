@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
+import { randomBytes } from "node:crypto";
 import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { readJsonBody } from "@/lib/http";
@@ -24,30 +25,13 @@ interface SourceRow {
   revoked_at: string | null;
 }
 
-// Russian transliteration map — slug needs to be ASCII because it
-// rides in a Telegram start parameter (`?start=src_<slug>`), which only
-// accepts [A-Za-z0-9_-]. Without this, a label like «Инстаграм май 2026»
-// produces an empty slug after the ASCII filter and the endpoint 400s.
-const RU_TRANSLIT: Record<string, string> = {
-  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "yo",
-  ж: "zh", з: "z", и: "i", й: "y", к: "k", л: "l", м: "m",
-  н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u",
-  ф: "f", х: "h", ц: "ts", ч: "ch", ш: "sh", щ: "sch", ъ: "",
-  ы: "y", ь: "", э: "e", ю: "yu", я: "ya",
-};
-
-function slugify(input: string): string {
-  const transliterated = input
-    .toLowerCase()
-    .split("")
-    .map((ch) => RU_TRANSLIT[ch] ?? ch)
-    .join("");
-  return transliterated
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "") // strip diacritics
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40);
+// Random opaque token for the URL. 8 hex chars = 32 bits = ~4B unique;
+// far more than we'll ever create. Decoupled from the label so the URL
+// doesn't leak campaign details — an outsider can't tell what
+// «src_a3f9c2b1» is for. Matches the parseSrcPayload regex
+// ([a-z0-9-]{1,40} starting with alnum).
+function randomToken(): string {
+  return randomBytes(4).toString("hex");
 }
 
 export async function GET(req: NextRequest) {
@@ -96,30 +80,28 @@ export async function POST(req: NextRequest) {
   const parsed = Body.safeParse(await readJsonBody(req));
   if (!parsed.success) return new Response("bad body", { status: 400 });
 
-  const base = slugify(parsed.data.label);
-  if (!base) return new Response("label produces empty slug", { status: 400 });
-
-  // Collision loop: append -2, -3, ... until unique. Bounded so a buggy
-  // input doesn't spin forever.
+  // Retry on the (vanishingly unlikely) unique-violation. Postgres
+  // unique-constraint error code is 23505.
   const sb = getServiceRoleClient();
-  let slug = base;
-  for (let n = 2; n <= 20; n++) {
-    const { data: clash } = await sb
+  let data:
+    | { id: number; slug: string; label: string; created_at: string }
+    | null = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const slug = randomToken();
+    const { data: inserted, error } = await sb
       .from("acquisition_sources")
-      .select("id")
-      .eq("slug", slug)
-      .maybeSingle();
-    if (!clash) break;
-    slug = `${base}-${n}`.slice(0, 40);
-    if (n === 20) return new Response("slug collision", { status: 409 });
+      .insert({ slug, label: parsed.data.label, created_by_user_id: user.id })
+      .select("id, slug, label, created_at")
+      .single();
+    if (!error && inserted) {
+      data = inserted;
+      break;
+    }
+    if (error && error.code !== "23505") {
+      return new Response(error.message, { status: 500 });
+    }
   }
-
-  const { data, error } = await sb
-    .from("acquisition_sources")
-    .insert({ slug, label: parsed.data.label, created_by_user_id: user.id })
-    .select("id, slug, label, created_at")
-    .single();
-  if (error || !data) return new Response(error?.message ?? "insert failed", { status: 500 });
+  if (!data) return new Response("token collision after retries", { status: 500 });
 
   await recordAudit({
     action: "admin.acquisition_source_create",
