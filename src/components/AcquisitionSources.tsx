@@ -28,6 +28,7 @@ export function AcquisitionSources({ jwt }: { jwt: string }) {
   const [label, setLabel] = useState("");
   const [latest, setLatest] = useState<SourceRow | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const refetch = useCallback(async () => {
     const r = await fetch("/api/admin/acquisition-sources", {
@@ -48,6 +49,7 @@ export function AcquisitionSources({ jwt }: { jwt: string }) {
   async function createSource() {
     if (!label.trim()) return;
     setCreating(true);
+    setError(null);
     try {
       const r = await fetch("/api/admin/acquisition-sources", {
         method: "POST",
@@ -63,7 +65,12 @@ export function AcquisitionSources({ jwt }: { jwt: string }) {
         setLatest(d);
         setLabel("");
         await refetch();
+      } else {
+        const body = await r.text().catch(() => "");
+        setError(`${r.status}: ${body || "no body"}`);
       }
+    } catch (e) {
+      setError((e as Error).message || "network error");
     } finally {
       setCreating(false);
     }
@@ -129,6 +136,12 @@ export function AcquisitionSources({ jwt }: { jwt: string }) {
           <span>{ru.admin.acquisitionSources.createButton}</span>
         </button>
       </div>
+
+      {error && (
+        <div className="mb-3 rounded-xl bg-tg-text-destructive/10 px-3 py-2 text-xs text-tg-text-destructive break-words">
+          {error}
+        </div>
+      )}
 
       {latest && (
         <div className="mb-3 rounded-2xl bg-tg-bg-section p-3 border border-emerald-500/40">
