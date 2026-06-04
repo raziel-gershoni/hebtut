@@ -3,6 +3,7 @@ import { userHandle } from "@/lib/handle";
 
 const PAYLOAD_PREFIX = "invite_";
 const REF_PREFIX = "ref_";
+const SRC_PREFIX = "src_";
 
 /**
  * Strips the `ref_` prefix and validates a referral token's shape. Same
@@ -18,6 +19,23 @@ export function parseRefPayload(payload: string | undefined | null): string | nu
 
 export function buildReferralUrl(botUsername: string, token: string): string {
   return `https://t.me/${botUsername}?start=${REF_PREFIX}${token}`;
+}
+
+/**
+ * Strips the `src_` prefix and validates an advertiser acquisition-source
+ * slug. Slug shape mirrors the slugify output in the admin endpoint:
+ * lowercase alnum + hyphen, starting with alnum, 1..40 chars total.
+ */
+export function parseSrcPayload(payload: string | undefined | null): string | null {
+  if (!payload) return null;
+  if (!payload.startsWith(SRC_PREFIX)) return null;
+  const slug = payload.slice(SRC_PREFIX.length).toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(slug)) return null;
+  return slug;
+}
+
+export function buildAcquisitionUrl(botUsername: string, slug: string): string {
+  return `https://t.me/${botUsername}?start=${SRC_PREFIX}${slug}`;
 }
 
 /**

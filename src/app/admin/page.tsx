@@ -8,6 +8,7 @@ import {
   type Connection,
 } from "@/components/AdminConnectionsPanel";
 import { TeacherInvites } from "@/components/TeacherInvites";
+import { AcquisitionSources } from "@/components/AcquisitionSources";
 import { BannedUsersPanel } from "@/components/BannedUsersPanel";
 import { AdminSettingsPanel } from "@/components/AdminSettingsPanel";
 import { AdminTagsManager } from "@/components/AdminTagsManager";
@@ -114,6 +115,12 @@ function AdminBody({ jwt }: { jwt: string }) {
       </CollapsibleSection>
       <CollapsibleSection id="invites" title={ru.admin.pages.sections.invites}>
         <TeacherInvites jwt={jwt} />
+      </CollapsibleSection>
+      <CollapsibleSection
+        id="acquisition-sources"
+        title={ru.admin.pages.sections.acquisitionSources}
+      >
+        <AcquisitionSources jwt={jwt} />
       </CollapsibleSection>
       <CollapsibleSection id="banned" title={ru.admin.pages.sections.banned}>
         <BannedUsersPanel jwt={jwt} />

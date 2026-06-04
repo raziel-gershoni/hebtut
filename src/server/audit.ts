@@ -9,7 +9,8 @@ export type AuditSubjectType =
   | "link"
   | "banlist"
   | "media_library"
-  | "media_tag";
+  | "media_tag"
+  | "acquisition_source";
 
 export interface AuditEventInput {
   /** Event code in `<area>.<verb>` form. Free text — see CONVENTIONS in audit_events migration. */

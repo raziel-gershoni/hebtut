@@ -352,6 +352,7 @@ export interface Database {
           unassigned_ack_sent_at: string | null;
           transcripts_enabled: boolean;
           translation_enabled: boolean;
+          acquisition_source_id: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -387,10 +388,31 @@ export interface Database {
           unassigned_ack_sent_at?: string | null;
           transcripts_enabled?: boolean;
           translation_enabled?: boolean;
+          acquisition_source_id?: number | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["subscriptions"]["Insert"]>;
+        Relationships: [];
+      };
+      acquisition_sources: {
+        Row: {
+          id: number;
+          slug: string;
+          label: string;
+          created_by_user_id: number;
+          created_at: string;
+          revoked_at: string | null;
+        };
+        Insert: {
+          id?: number;
+          slug: string;
+          label: string;
+          created_by_user_id: number;
+          created_at?: string;
+          revoked_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["acquisition_sources"]["Insert"]>;
         Relationships: [];
       };
       onboarding_timers: {

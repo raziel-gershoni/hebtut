@@ -6,6 +6,7 @@ import { refreshUserAvatar } from "@/server/avatars";
 import {
   parseInvitePayload,
   parseRefPayload,
+  parseSrcPayload,
   isInviteValid,
   consumeInviteAndUpgrade,
   createTeacherWithInvite,
@@ -41,6 +42,7 @@ export async function handleStart(ctx: Context): Promise<void> {
   const payload = typeof ctx.match === "string" ? ctx.match : "";
   const token = parseInvitePayload(payload);
   const refToken = parseRefPayload(payload);
+  const srcSlug = parseSrcPayload(payload);
 
   if (existing) {
     if (existing.status === "suspended") {
@@ -141,12 +143,46 @@ export async function handleStart(ctx: Context): Promise<void> {
         });
       }
     }
+    // Acquisition-source attribution (advertiser links). Mutually
+    // exclusive with refToken in practice — the start prefix is unique
+    // — but if both somehow arrive, the source attribution overwrites
+    // the referrer (advertisers win — the explicit campaign wins over a
+    // per-user share link).
+    if (srcSlug) {
+      const { data: source } = await sb
+        .from("acquisition_sources")
+        .select("id")
+        .eq("slug", srcSlug)
+        .is("revoked_at", null)
+        .maybeSingle();
+      if (source) {
+        await sb.from("subscriptions").upsert(
+          {
+            user_id: student.id,
+            acquisition_source_id: source.id,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id" },
+        );
+        await recordAudit({
+          action: "acquisition.attributed",
+          actorId: student.id,
+          subjectType: "user",
+          subjectId: student.id,
+          meta: { source_id: source.id, slug: srcSlug },
+        });
+      }
+    }
     await recordAudit({
       action: "signup.student",
       actorId: student.id,
       subjectType: "user",
       subjectId: student.id,
-      meta: { tg_user_id: from.id, ref_token_present: !!refToken },
+      meta: {
+        tg_user_id: from.id,
+        ref_token_present: !!refToken,
+        src_slug: srcSlug ?? null,
+      },
     });
     void fanOutNewUserToAdmins(student.id, "start");
   }

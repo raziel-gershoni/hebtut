@@ -42,6 +42,7 @@ function row(overrides: Partial<SubscriptionRow>): SubscriptionRow {
     unassigned_ack_sent_at: null,
     transcripts_enabled: true,
     translation_enabled: true,
+    acquisition_source_id: null,
     created_at: "2026-05-08T12:00:00Z",
     updated_at: "2026-05-08T12:00:00Z",
     ...overrides,

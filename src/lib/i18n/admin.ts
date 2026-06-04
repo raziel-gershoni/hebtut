@@ -307,6 +307,9 @@ const audit = {
     "admin.user_unban": "Разбанен",
     "admin.invite_create": "Создал ссылку",
     "admin.invite_revoke": "Отозвал ссылку",
+    "admin.acquisition_source_create": "Создал источник",
+    "admin.acquisition_source_revoke": "Отозвал источник",
+    "acquisition.attributed": "Привязка к источнику",
     "admin.link_create": "Связал",
     "admin.link_delete": "Разорвал связь",
     "invite.consume": "Активировал ссылку",
@@ -337,6 +340,22 @@ const invites = {
     active: "Активна",
     consumed: "Использована",
     revoked: "Отозвана",
+  },
+};
+
+const acquisitionSources = {
+  sectionTitle: "Источники привлечения",
+  hint: "Многоразовые ссылки для рекламы. Каждая регистрация по такой ссылке привязывается к источнику — потом увидишь, откуда пришёл ученик.",
+  labelPlaceholder: "Например, Instagram май 2026",
+  createButton: "+ Создать источник",
+  copyButton: "Копировать",
+  copiedTick: "✓",
+  revokeButton: "Отозвать",
+  emptyState: "Пока нет источников. Создай первый.",
+  signupCount: (n: number) => `регистраций: ${n}`,
+  stateLabels: {
+    active: "Активен",
+    revoked: "Отозван",
   },
 };
 
@@ -381,6 +400,7 @@ const pages = {
     tags: "Теги медиа-библиотеки",
     mediaLibrary: "Медиа-библиотека",
     invites: "Приглашения тренеров",
+    acquisitionSources: "Источники привлечения",
     banned: "Заблокированные",
   },
   // /admin/feedback + /admin/feedback/[userId]
@@ -404,6 +424,7 @@ export const admin = {
   audit,
   bannedUsers,
   invites,
+  acquisitionSources,
   versionFooter,
   editName,
   userChecklist,
