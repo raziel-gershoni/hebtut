@@ -335,7 +335,10 @@ const invites = {
   copyButton: "Копировать",
   copiedTick: "✓",
   emptyState: "Пока нет ссылок. Создай первую.",
+  emptyStateActive: "Активных ссылок нет.",
   revokeButton: "Отозвать",
+  showInactiveButton: (n: number) => `Показать неактивные (${n})`,
+  hideInactiveButton: "Скрыть неактивные",
   stateLabels: {
     active: "Активна",
     consumed: "Использована",
@@ -352,6 +355,9 @@ const acquisitionSources = {
   copiedTick: "✓",
   revokeButton: "Отозвать",
   emptyState: "Пока нет источников. Создай первый.",
+  emptyStateActive: "Активных источников нет.",
+  showInactiveButton: (n: number) => `Показать неактивные (${n})`,
+  hideInactiveButton: "Скрыть неактивные",
   signupCount: (n: number) => `регистраций: ${n}`,
   stateLabels: {
     active: "Активен",

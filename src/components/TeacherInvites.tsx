@@ -28,6 +28,7 @@ export function TeacherInvites({ jwt }: { jwt: string }) {
   const [creating, setCreating] = useState(false);
   const [latest, setLatest] = useState<InviteRow | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
 
   const refetch = useCallback(async () => {
     const r = await fetch("/api/admin/invites", {
@@ -131,44 +132,67 @@ export function TeacherInvites({ jwt }: { jwt: string }) {
         </div>
       )}
 
-      {loaded && invites.length > 0 && (
-        <ul className="space-y-1.5">
-          {invites.map((i) => (
-            <li
-              key={i.id}
-              className="rounded-xl bg-tg-bg-section px-3 py-2 flex items-center gap-3"
-            >
-              <div className="min-w-0 flex-1 leading-tight">
-                <div className={`text-xs font-semibold ${STATE_COLOR[i.state]}`}>
-                  {STATE_LABEL[i.state]}
-                  {i.consumed_by_name ? ` — ${i.consumed_by_name}` : ""}
-                </div>
-                <div className="text-[11px] text-tg-text-hint tabular-nums truncate">
-                  {new Date(i.created_at).toLocaleString("ru-RU")}
-                </div>
+      {loaded && invites.length > 0 && (() => {
+        const inactiveCount = invites.filter((i) => i.state !== "active").length;
+        const visible = showInactive ? invites : invites.filter((i) => i.state === "active");
+        return (
+          <>
+            {visible.length === 0 ? (
+              <div className="rounded-2xl bg-tg-bg-section p-4 text-center text-sm text-tg-text-hint">
+                {ru.admin.invites.emptyStateActive}
               </div>
-              {i.state === "active" && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => void copyLink(i.url)}
-                    className="shrink-0 text-xs text-tg-text-link transition-opacity active:opacity-60"
+            ) : (
+              <ul className="space-y-1.5">
+                {visible.map((i) => (
+                  <li
+                    key={i.id}
+                    className="rounded-xl bg-tg-bg-section px-3 py-2 flex items-center gap-3"
                   >
-                    {ru.admin.invites.copyButton}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void revoke(i.id)}
-                    className="shrink-0 text-xs text-tg-text-destructive transition-opacity active:opacity-60"
-                  >
-                    {ru.admin.invites.revokeButton}
-                  </button>
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+                    <div className="min-w-0 flex-1 leading-tight">
+                      <div className={`text-xs font-semibold ${STATE_COLOR[i.state]}`}>
+                        {STATE_LABEL[i.state]}
+                        {i.consumed_by_name ? ` — ${i.consumed_by_name}` : ""}
+                      </div>
+                      <div className="text-[11px] text-tg-text-hint tabular-nums truncate">
+                        {new Date(i.created_at).toLocaleString("ru-RU")}
+                      </div>
+                    </div>
+                    {i.state === "active" && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => void copyLink(i.url)}
+                          className="shrink-0 text-xs text-tg-text-link transition-opacity active:opacity-60"
+                        >
+                          {ru.admin.invites.copyButton}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void revoke(i.id)}
+                          className="shrink-0 text-xs text-tg-text-destructive transition-opacity active:opacity-60"
+                        >
+                          {ru.admin.invites.revokeButton}
+                        </button>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {inactiveCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowInactive((v) => !v)}
+                className="mt-3 text-xs text-tg-text-link transition-opacity active:opacity-60"
+              >
+                {showInactive
+                  ? ru.admin.invites.hideInactiveButton
+                  : ru.admin.invites.showInactiveButton(inactiveCount)}
+              </button>
+            )}
+          </>
+        );
+      })()}
     </section>
   );
 }

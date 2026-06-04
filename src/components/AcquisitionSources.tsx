@@ -29,6 +29,7 @@ export function AcquisitionSources({ jwt }: { jwt: string }) {
   const [latest, setLatest] = useState<SourceRow | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showInactive, setShowInactive] = useState(false);
 
   const refetch = useCallback(async () => {
     const r = await fetch("/api/admin/acquisition-sources", {
@@ -177,45 +178,70 @@ export function AcquisitionSources({ jwt }: { jwt: string }) {
         </div>
       )}
 
-      {loaded && sources.length > 0 && (
-        <ul className="space-y-1.5">
-          {sources.map((s) => (
-            <li
-              key={s.id}
-              className="rounded-xl bg-tg-bg-section px-3 py-2 flex items-center gap-3"
-            >
-              <div className="min-w-0 flex-1 leading-tight">
-                <div className="text-sm font-medium truncate">{s.label}</div>
-                <div className="text-[11px] tabular-nums truncate">
-                  <span className={STATE_COLOR[s.state]}>{STATE_LABEL[s.state]}</span>
-                  <span className="text-tg-text-hint">
-                    {" · "}
-                    {ru.admin.acquisitionSources.signupCount(s.signup_count)}
-                  </span>
-                </div>
+      {loaded && sources.length > 0 && (() => {
+        const inactiveCount = sources.filter((s) => s.state !== "active").length;
+        const visible = showInactive
+          ? sources
+          : sources.filter((s) => s.state === "active");
+        return (
+          <>
+            {visible.length === 0 ? (
+              <div className="rounded-2xl bg-tg-bg-section p-4 text-center text-sm text-tg-text-hint">
+                {ru.admin.acquisitionSources.emptyStateActive}
               </div>
+            ) : (
+              <ul className="space-y-1.5">
+                {visible.map((s) => (
+                  <li
+                    key={s.id}
+                    className="rounded-xl bg-tg-bg-section px-3 py-2 flex items-center gap-3"
+                  >
+                    <div className="min-w-0 flex-1 leading-tight">
+                      <div className="text-sm font-medium truncate">{s.label}</div>
+                      <div className="text-[11px] tabular-nums truncate">
+                        <span className={STATE_COLOR[s.state]}>{STATE_LABEL[s.state]}</span>
+                        <span className="text-tg-text-hint">
+                          {" · "}
+                          {ru.admin.acquisitionSources.signupCount(s.signup_count)}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void copyLink(s.id, s.url)}
+                      className="shrink-0 text-xs text-tg-text-link transition-opacity active:opacity-60"
+                    >
+                      {copiedId === s.id
+                        ? ru.admin.acquisitionSources.copiedTick
+                        : ru.admin.acquisitionSources.copyButton}
+                    </button>
+                    {s.state === "active" && (
+                      <button
+                        type="button"
+                        onClick={() => void revoke(s.id)}
+                        className="shrink-0 text-xs text-tg-text-destructive transition-opacity active:opacity-60"
+                      >
+                        {ru.admin.acquisitionSources.revokeButton}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {inactiveCount > 0 && (
               <button
                 type="button"
-                onClick={() => void copyLink(s.id, s.url)}
-                className="shrink-0 text-xs text-tg-text-link transition-opacity active:opacity-60"
+                onClick={() => setShowInactive((v) => !v)}
+                className="mt-3 text-xs text-tg-text-link transition-opacity active:opacity-60"
               >
-                {copiedId === s.id
-                  ? ru.admin.acquisitionSources.copiedTick
-                  : ru.admin.acquisitionSources.copyButton}
+                {showInactive
+                  ? ru.admin.acquisitionSources.hideInactiveButton
+                  : ru.admin.acquisitionSources.showInactiveButton(inactiveCount)}
               </button>
-              {s.state === "active" && (
-                <button
-                  type="button"
-                  onClick={() => void revoke(s.id)}
-                  className="shrink-0 text-xs text-tg-text-destructive transition-opacity active:opacity-60"
-                >
-                  {ru.admin.acquisitionSources.revokeButton}
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+            )}
+          </>
+        );
+      })()}
     </section>
   );
 }

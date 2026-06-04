@@ -95,7 +95,7 @@ function AdminBody({ jwt }: { jwt: string }) {
           {ru.admin.pages.navAudit}
         </Link>
       </div>
-      <CollapsibleSection id="users" title={ru.admin.pages.sections.users} defaultOpen>
+      <CollapsibleSection id="users" title={ru.admin.pages.sections.users}>
         <AdminUsersTable jwt={jwt} users={users} loaded={loaded} refetch={refetch} />
       </CollapsibleSection>
       <CollapsibleSection id="connections" title={ru.admin.pages.sections.connections}>
