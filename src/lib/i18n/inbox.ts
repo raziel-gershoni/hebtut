@@ -57,12 +57,28 @@ const thread = {
 
 const studentCard = {
   dialogTitle: "Карточка ученика",
+  statusHeading: "Подписка",
+  originHeading: "Откуда пришёл",
+  originDirect: "Прямая регистрация",
+  originReferral: (handle: string) => `По ссылке от ${handle}`,
+  originSource: (label: string) => `По источнику «${label}»`,
   tagsHeading: "Теги",
   tagsEmptyDictionary: "Тегов пока нет — попроси администратора добавить.",
   tagsHint: "Нажми на тег, чтобы пометить/снять.",
   loadError: "не удалось загрузить",
   saveError: "не удалось сохранить",
   closeButton: "Закрыть",
+  statusLabels: {
+    queued: "В очереди",
+    trial: (date: string) => `Пробный · до ${date}`,
+    active: (date: string) => `Активна · до ${date}`,
+    activeNoPeriod: "Активна",
+    trial_expired: "Пробный закончился",
+    lapsed: "Закрыта",
+    payment_failed: "Платёж не прошёл",
+    frozen: (date: string) => `🧊 до ${date}`,
+    frozenNoDate: "🧊 Заморожена",
+  },
 };
 
 const assignTeacher = {

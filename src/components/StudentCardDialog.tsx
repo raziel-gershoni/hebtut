@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Spinner } from "./Spinner";
 import { ru } from "@/lib/i18n";
+import type { SubscriptionStatus } from "@/types/database";
 
 interface TagDictEntry {
   id: number;
@@ -9,11 +10,28 @@ interface TagDictEntry {
   slug: string;
 }
 
+interface StatusInfo {
+  kind: SubscriptionStatus;
+  trial_ends_at: string;
+  current_period_ends_at: string | null;
+  frozen_until: string | null;
+}
+
+type Origin =
+  | { kind: "direct" }
+  | { kind: "referral"; referrer: { handle: string } }
+  | { kind: "source"; source: { label: string; slug: string } };
+
+interface CardResponse {
+  status: StatusInfo | null;
+  origin: Origin;
+  tags: { dictionary: TagDictEntry[]; assigned: number[] };
+}
+
 /**
- * Tutor-facing "card" for a student. Opened from the chat header. Today
- * shows the student's name + tag chips wired to the admin-managed
- * dictionary in /api/admin/media/tags. Tapping a chip toggles the
- * assignment (saves after a debounce).
+ * Tutor-facing "card" for a student. Opened from the chat header.
+ * Bundles subscription status, acquisition origin, and tag assignments
+ * via /api/users/[id]/card. Toggling a tag chip PUTs to /tags.
  *
  * Auth: admin OR the teacher linked to this student. Same gate as the
  * thread itself.
@@ -31,27 +49,25 @@ export function StudentCardDialog({
   studentLabel: string;
   onClose: () => void;
 }) {
-  const [dict, setDict] = useState<TagDictEntry[] | null>(null);
+  const [card, setCard] = useState<CardResponse | null>(null);
   const [assigned, setAssigned] = useState<Set<number> | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
-    const headers = { Authorization: `Bearer ${jwt}` };
     try {
-      const [dictRes, assignedRes] = await Promise.all([
-        fetch("/api/admin/media/tags", { cache: "no-store", headers }),
-        fetch(`/api/users/${studentId}/tags`, { cache: "no-store", headers }),
-      ]);
-      if (!dictRes.ok || !assignedRes.ok) {
+      const r = await fetch(`/api/users/${studentId}/card`, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${jwt}` },
+      });
+      if (!r.ok) {
         setError(ru.inbox.studentCard.loadError);
         return;
       }
-      const dictBody = (await dictRes.json()) as { tags: TagDictEntry[] };
-      const assignedBody = (await assignedRes.json()) as { tags: TagDictEntry[] };
-      setDict(dictBody.tags);
-      setAssigned(new Set(assignedBody.tags.map((t) => t.id)));
+      const d = (await r.json()) as CardResponse;
+      setCard(d);
+      setAssigned(new Set(d.tags.assigned));
     } catch {
       setError(ru.inbox.studentCard.loadError);
     }
@@ -59,13 +75,14 @@ export function StudentCardDialog({
 
   useEffect(() => {
     if (!open) return;
-    setDict(null);
+    setCard(null);
     setAssigned(null);
     void load();
   }, [open, load]);
 
   async function toggle(tagId: number) {
     if (busy || assigned === null) return;
+    const previous = assigned;
     const next = new Set(assigned);
     if (next.has(tagId)) next.delete(tagId);
     else next.add(tagId);
@@ -84,12 +101,11 @@ export function StudentCardDialog({
       });
       if (!r.ok) {
         setError(ru.inbox.studentCard.saveError);
-        // Roll back the optimistic toggle on failure.
-        setAssigned(assigned);
+        setAssigned(previous);
       }
     } catch {
       setError(ru.inbox.studentCard.saveError);
-      setAssigned(assigned);
+      setAssigned(previous);
     } finally {
       setBusy(false);
     }
@@ -105,41 +121,63 @@ export function StudentCardDialog({
         </h2>
         <div className="text-sm text-tg-text-subtitle mb-4 truncate">{studentLabel}</div>
 
-        <div className="flex-1 overflow-y-auto -mx-1 px-1">
-          <h3 className="text-xs uppercase tracking-wider text-tg-text-hint mb-2">
-            {ru.inbox.studentCard.tagsHeading}
-          </h3>
-          {dict === null || assigned === null ? (
+        <div className="flex-1 overflow-y-auto -mx-1 px-1 space-y-5">
+          {card === null || assigned === null ? (
             <div className="py-6 text-center"><Spinner /></div>
-          ) : dict.length === 0 ? (
-            <div className="text-sm text-tg-text-hint italic py-4">
-              {ru.inbox.studentCard.tagsEmptyDictionary}
-            </div>
           ) : (
             <>
-              <p className="text-xs text-tg-text-hint mb-3 leading-snug">
-                {ru.inbox.studentCard.tagsHint}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {dict.map((tag) => {
-                  const on = assigned.has(tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void toggle(tag.id)}
-                      className={`inline-flex items-center px-3 h-8 rounded-full text-xs font-medium transition-all active:scale-95 disabled:opacity-50 ${
-                        on
-                          ? "bg-tg-button text-tg-button-text"
-                          : "bg-tg-bg-secondary text-tg-text"
-                      }`}
-                    >
-                      {tag.name}
-                    </button>
-                  );
-                })}
-              </div>
+              {card.status && (
+                <section>
+                  <h3 className="text-xs uppercase tracking-wider text-tg-text-hint mb-2">
+                    {ru.inbox.studentCard.statusHeading}
+                  </h3>
+                  <StatusChip status={card.status} />
+                </section>
+              )}
+
+              <section>
+                <h3 className="text-xs uppercase tracking-wider text-tg-text-hint mb-2">
+                  {ru.inbox.studentCard.originHeading}
+                </h3>
+                <p className="text-sm">{originText(card.origin)}</p>
+              </section>
+
+              <section>
+                <h3 className="text-xs uppercase tracking-wider text-tg-text-hint mb-2">
+                  {ru.inbox.studentCard.tagsHeading}
+                </h3>
+                {card.tags.dictionary.length === 0 ? (
+                  <div className="text-sm text-tg-text-hint italic">
+                    {ru.inbox.studentCard.tagsEmptyDictionary}
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-tg-text-hint mb-3 leading-snug">
+                      {ru.inbox.studentCard.tagsHint}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {card.tags.dictionary.map((tag) => {
+                        const on = assigned.has(tag.id);
+                        return (
+                          <button
+                            key={tag.id}
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void toggle(tag.id)}
+                            className={`inline-flex items-center px-3 h-8 rounded-full text-xs font-medium transition-all active:scale-95 disabled:opacity-50 ${
+                              on
+                                ? "bg-tg-button text-tg-button-text"
+                                : "bg-tg-bg-secondary text-tg-text"
+                            }`}
+                          >
+                            {tag.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </section>
             </>
           )}
         </div>
@@ -159,5 +197,67 @@ export function StudentCardDialog({
         </div>
       </div>
     </div>
+  );
+}
+
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
+}
+
+function originText(o: Origin): string {
+  switch (o.kind) {
+    case "direct":
+      return ru.inbox.studentCard.originDirect;
+    case "referral":
+      return ru.inbox.studentCard.originReferral(o.referrer.handle);
+    case "source":
+      return ru.inbox.studentCard.originSource(o.source.label);
+  }
+}
+
+function StatusChip({ status }: { status: StatusInfo }) {
+  const labels = ru.inbox.studentCard.statusLabels;
+  const tone = (() => {
+    switch (status.kind) {
+      case "queued":
+        return "bg-tg-bg-secondary text-tg-text-subtitle";
+      case "trial":
+        return "bg-sky-500/15 text-sky-700 dark:text-sky-400";
+      case "active":
+        return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400";
+      case "frozen":
+        return "bg-tg-bg-secondary text-tg-text-hint";
+      case "trial_expired":
+      case "lapsed":
+      case "payment_failed":
+        return "bg-tg-text-destructive/10 text-tg-text-destructive";
+    }
+  })();
+  const text = (() => {
+    switch (status.kind) {
+      case "queued":
+        return labels.queued;
+      case "trial":
+        return labels.trial(fmtDate(status.trial_ends_at));
+      case "active":
+        return status.current_period_ends_at
+          ? labels.active(fmtDate(status.current_period_ends_at))
+          : labels.activeNoPeriod;
+      case "trial_expired":
+        return labels.trial_expired;
+      case "lapsed":
+        return labels.lapsed;
+      case "payment_failed":
+        return labels.payment_failed;
+      case "frozen":
+        return status.frozen_until ? labels.frozen(fmtDate(status.frozen_until)) : labels.frozenNoDate;
+    }
+  })();
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium tabular-nums ${tone}`}
+    >
+      {text}
+    </span>
   );
 }
