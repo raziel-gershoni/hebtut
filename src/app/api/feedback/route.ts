@@ -7,7 +7,8 @@ import { readJsonBody } from "@/lib/http";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { recordAudit } from "@/server/audit";
 import { fanOutFeedbackToAdmins } from "@/server/feedback";
-import { userHandle } from "@/lib/handle";
+import { resolveDisplay } from "@/server/display";
+import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,7 +41,11 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: true });
   if (error) return new Response(error.message, { status: 500, headers: noStoreHeaders });
 
-  // Resolve out-direction author handles for privacy-safe display.
+  // Resolve out-direction author handles. Respects the global
+  // names-vs-handles toggle so an admin's bubble shows their real (or
+  // preferred) name in names mode, not the animal handle — same as the
+  // admin-side /api/admin/feedback/[userId] resolver.
+  const anonMode = await getDisplayAnonymousHandlesEnabled();
   const authorIds = Array.from(
     new Set(
       ((rows ?? []) as RawMessage[])
@@ -52,11 +57,12 @@ export async function GET(req: NextRequest) {
   if (authorIds.length > 0) {
     const { data: authors } = await sb
       .from("users")
-      .select("id, tg_user_id, display_handle")
+      .select(
+        "id, tg_user_id, name, preferred_name, display_handle, display_emoji, avatar_file_id",
+      )
       .in("id", authorIds);
     for (const a of authors ?? []) {
-      const h = a.display_handle ?? userHandle(a.tg_user_id).handle;
-      handlesById.set(a.id, h);
+      handlesById.set(a.id, resolveDisplay(a, anonMode).handle);
     }
   }
 
