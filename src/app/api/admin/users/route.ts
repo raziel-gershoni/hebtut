@@ -3,6 +3,7 @@ import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { userHandle } from "@/lib/handle";
+import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
 import type { SubscriptionStatus } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -58,6 +59,10 @@ export async function GET(req: NextRequest) {
 
   // Lazy backfill: legacy rows have NULL display_handle. Compute, write back
   // (fire-and-forget so the response isn't blocked), and fill the response too.
+  // When the anon-handles feature is disabled system-wide we still backfill the
+  // DB but null out the field in the response so the admin row hides the nick
+  // pill — nicks only carry meaning when the system uses them.
+  const showHandles = await getDisplayAnonymousHandlesEnabled();
   const backfills: { id: number; handle: string; emoji: string }[] = [];
   const enriched = userRows.map((u) => {
     let handle = u.display_handle;
@@ -71,8 +76,8 @@ export async function GET(req: NextRequest) {
     const { avatar_file_id, ...rest } = u;
     return {
       ...rest,
-      display_handle: handle,
-      display_emoji: emoji,
+      display_handle: showHandles ? handle : null,
+      display_emoji: showHandles ? emoji : null,
       has_avatar: !!avatar_file_id,
       subscription: subByUser.get(u.id) ?? null,
     };
