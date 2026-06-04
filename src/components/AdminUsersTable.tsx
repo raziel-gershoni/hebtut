@@ -62,6 +62,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
   const [pending, setPending] = useState<PendingChange | null>(null);
   const [filter, setFilter] = useState("");
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [menuDirection, setMenuDirection] = useState<"up" | "down">("down");
   const [subscriptionUser, setSubscriptionUser] = useState<AdminUser | null>(null);
   const [editingNameUser, setEditingNameUser] = useState<AdminUser | null>(null);
   const [transcriptsUser, setTranscriptsUser] = useState<AdminUser | null>(null);
@@ -276,6 +277,14 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                 aria-label={ru.admin.users.actionsAriaLabel}
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (openMenuId !== u.id) {
+                    // Auto-flip: when the button is close to the bottom of the
+                    // viewport, open upward so the menu doesn't get clipped.
+                    // Approximate menu height (7 items × ~36px + padding).
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const spaceBelow = window.innerHeight - rect.bottom;
+                    setMenuDirection(spaceBelow < 280 ? "up" : "down");
+                  }
                   setOpenMenuId(openMenuId === u.id ? null : u.id);
                 }}
                 className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-tg-text-hint hover:text-tg-text transition-colors"
@@ -285,7 +294,9 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
               {openMenuId === u.id && (
                 <div
                   onClick={(e) => e.stopPropagation()}
-                  className="absolute right-0 top-9 z-10 w-44 rounded-xl bg-tg-bg-section border border-tg-text-hint/15 shadow-xl py-1 text-sm"
+                  className={`absolute right-0 z-10 w-44 rounded-xl bg-tg-bg-section border border-tg-text-hint/15 shadow-xl py-1 text-sm ${
+                    menuDirection === "up" ? "bottom-9" : "top-9"
+                  }`}
                 >
                   <button
                     type="button"
