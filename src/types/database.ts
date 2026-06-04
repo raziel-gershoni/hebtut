@@ -415,6 +415,22 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["acquisition_sources"]["Insert"]>;
         Relationships: [];
       };
+      user_tag_links: {
+        Row: {
+          user_id: number;
+          tag_id: number;
+          created_by_user_id: number;
+          created_at: string;
+        };
+        Insert: {
+          user_id: number;
+          tag_id: number;
+          created_by_user_id: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["user_tag_links"]["Insert"]>;
+        Relationships: [];
+      };
       onboarding_timers: {
         Row: {
           student_id: number;

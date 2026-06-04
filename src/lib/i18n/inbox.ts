@@ -44,6 +44,8 @@ const thread = {
   attachMediaAriaLabel: "Прикрепить медиа из библиотеки",
   attachMediaTitle: "Медиа-библиотека",
   initiateButton: "+ Написать",
+  cardButton: "Карточка",
+  cardButtonAria: "Открыть карточку ученика",
   activeSessionHint: "Активная сессия с этим учеником — отвечай в чате.",
   noMessages: "Сообщений ещё нет.",
   initiateErrors: {
@@ -51,6 +53,16 @@ const thread = {
     notAllowed: "Связь с этим учеником утрачена",
     generic: "Не удалось — попробуй ещё раз",
   },
+};
+
+const studentCard = {
+  dialogTitle: "Карточка ученика",
+  tagsHeading: "Теги",
+  tagsEmptyDictionary: "Тегов пока нет — попроси администратора добавить.",
+  tagsHint: "Нажми на тег, чтобы пометить/снять.",
+  loadError: "не удалось загрузить",
+  saveError: "не удалось сохранить",
+  closeButton: "Закрыть",
 };
 
 const assignTeacher = {
@@ -198,6 +210,7 @@ export const inbox = {
   row,
   inboxPage,
   thread,
+  studentCard,
   assignTeacher,
   appShell,
   message,

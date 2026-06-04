@@ -8,6 +8,7 @@ import { PlaybackProvider } from "./PlaybackProvider";
 import { MediaPicker } from "./MediaPicker";
 import { EditTranscriptDialog } from "./EditTranscriptDialog";
 import { EditTranslationDialog } from "./EditTranslationDialog";
+import { StudentCardDialog } from "./StudentCardDialog";
 import { speakerColor, type SpeakerColorClasses } from "@/lib/speaker-color";
 import { bgFromHandle } from "@/lib/handle";
 import { ru } from "@/lib/i18n";
@@ -62,6 +63,7 @@ export function ThreadView({
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [editingTranscriptMessageId, setEditingTranscriptMessageId] = useState<number | null>(null);
   const [editingTranslationMessageId, setEditingTranslationMessageId] = useState<number | null>(null);
+  const [cardOpen, setCardOpen] = useState(false);
   const initialScrollDoneRef = useRef(false);
   const isAdmin = role === "admin";
 
@@ -347,11 +349,18 @@ export function ThreadView({
     <PlaybackProvider messages={messages}>
     <div className="flex flex-col gap-1">
       <header className="sticky top-0 z-20 -mx-4 px-4 mb-3 py-3 border-b border-tg-text-hint/15 bg-tg-bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-tg-bg-header/80 flex items-center gap-3">
-        <Avatar size={48} name={studentDisplay} imageUrl={studentAvatarUrl} emoji={studentEmoji} bgClass={studentBg} />
-        <div className="min-w-0 flex-1 leading-tight">
-          <div className="font-semibold tracking-tight truncate">{studentDisplay}</div>
-          <div className="text-xs text-tg-text-hint">{ru.inbox.thread.studentRoleLabel}</div>
-        </div>
+        <button
+          type="button"
+          onClick={() => setCardOpen(true)}
+          aria-label={ru.inbox.thread.cardButtonAria}
+          className="flex items-center gap-3 min-w-0 flex-1 -mx-1 px-1 py-1 rounded-xl transition-colors active:bg-tg-bg-secondary/60"
+        >
+          <Avatar size={48} name={studentDisplay} imageUrl={studentAvatarUrl} emoji={studentEmoji} bgClass={studentBg} />
+          <div className="min-w-0 flex-1 leading-tight text-left">
+            <div className="font-semibold tracking-tight truncate">{studentDisplay}</div>
+            <div className="text-xs text-tg-text-hint">{ru.inbox.thread.studentRoleLabel}</div>
+          </div>
+        </button>
         {canInitiate && (
           <button
             type="button"
@@ -451,6 +460,13 @@ export function ThreadView({
         }}
       />
     )}
+    <StudentCardDialog
+      open={cardOpen}
+      jwt={jwt}
+      studentId={studentId}
+      studentLabel={studentDisplay}
+      onClose={() => setCardOpen(false)}
+    />
     </PlaybackProvider>
   );
 }
