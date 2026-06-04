@@ -97,6 +97,15 @@ export function AcquisitionSources({ jwt }: { jwt: string }) {
     }
   }
 
+  function openLink(url: string) {
+    const tg = window.Telegram?.WebApp;
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(url);
+    } else {
+      window.open(url, "_blank");
+    }
+  }
+
   return (
     <section className="mb-6">
       <header className="mb-3">
@@ -153,6 +162,13 @@ export function AcquisitionSources({ jwt }: { jwt: string }) {
             </code>
             <button
               type="button"
+              onClick={() => openLink(latest.url)}
+              className="shrink-0 h-9 px-3 rounded-full bg-tg-bg-secondary text-tg-text text-xs font-semibold transition-transform active:scale-95"
+            >
+              {ru.admin.acquisitionSources.openButton}
+            </button>
+            <button
+              type="button"
               onClick={() => void copyLink(latest.id, latest.url)}
               className="shrink-0 h-9 px-3 rounded-full bg-tg-button text-tg-button-text text-xs font-semibold transition-transform active:scale-95"
             >
@@ -206,6 +222,13 @@ export function AcquisitionSources({ jwt }: { jwt: string }) {
                         </span>
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => openLink(s.url)}
+                      className="shrink-0 text-xs text-tg-text-link transition-opacity active:opacity-60"
+                    >
+                      {ru.admin.acquisitionSources.openButton}
+                    </button>
                     <button
                       type="button"
                       onClick={() => void copyLink(s.id, s.url)}

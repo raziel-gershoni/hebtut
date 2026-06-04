@@ -17,8 +17,16 @@ export function parseRefPayload(payload: string | undefined | null): string | nu
   return token;
 }
 
+// TELEGRAM_BOT_USERNAME may arrive with a leading @ in some env setups —
+// strip it so the URL doesn't become https://t.me/@bot which silently
+// fails the bot-deeplink routing (lands on the t.me homepage instead of
+// opening the bot conversation).
+function normalizeBotUsername(raw: string): string {
+  return raw.replace(/^@/, "").trim();
+}
+
 export function buildReferralUrl(botUsername: string, token: string): string {
-  return `https://t.me/${botUsername}?start=${REF_PREFIX}${token}`;
+  return `https://t.me/${normalizeBotUsername(botUsername)}?start=${REF_PREFIX}${token}`;
 }
 
 /**
@@ -35,7 +43,7 @@ export function parseSrcPayload(payload: string | undefined | null): string | nu
 }
 
 export function buildAcquisitionUrl(botUsername: string, slug: string): string {
-  return `https://t.me/${botUsername}?start=${SRC_PREFIX}${slug}`;
+  return `https://t.me/${normalizeBotUsername(botUsername)}?start=${SRC_PREFIX}${slug}`;
 }
 
 /**
@@ -55,7 +63,7 @@ export function parseInvitePayload(payload: string | undefined | null): string |
 }
 
 export function buildInviteUrl(botUsername: string, token: string): string {
-  return `https://t.me/${botUsername}?start=${PAYLOAD_PREFIX}${token}`;
+  return `https://t.me/${normalizeBotUsername(botUsername)}?start=${PAYLOAD_PREFIX}${token}`;
 }
 
 /** SELECT-only validity check. Used to *decide* the welcome path. */

@@ -17,6 +17,11 @@ declare global {
         // callback — we don't depend on the result; the bot webhook is the
         // source of truth for billing state.
         openInvoice?: (url: string, callback?: (status: string) => void) => void;
+        // Force-opens a t.me link in the Telegram app instead of routing
+        // through the browser. Critical for testing deep links from inside
+        // the admin Mini App webview — without this, tapping a URL there
+        // dispatches to Safari which shows the t.me web page.
+        openTelegramLink?: (url: string) => void;
         BackButton?: {
           show: () => void;
           hide: () => void;

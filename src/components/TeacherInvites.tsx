@@ -85,6 +85,15 @@ export function TeacherInvites({ jwt }: { jwt: string }) {
     }
   }
 
+  function openLink(url: string) {
+    const tg = window.Telegram?.WebApp;
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(url);
+    } else {
+      window.open(url, "_blank");
+    }
+  }
+
   return (
     <section className="mb-6">
       <header className="flex items-baseline justify-between gap-3 mb-3">
@@ -107,6 +116,13 @@ export function TeacherInvites({ jwt }: { jwt: string }) {
             <code className="flex-1 min-w-0 text-xs break-all bg-tg-bg-secondary rounded-lg px-2 py-1.5 font-mono">
               {latest.url}
             </code>
+            <button
+              type="button"
+              onClick={() => openLink(latest.url)}
+              className="shrink-0 h-9 px-3 rounded-full bg-tg-bg-secondary text-tg-text text-xs font-semibold transition-transform active:scale-95"
+            >
+              {ru.admin.invites.openButton}
+            </button>
             <button
               type="button"
               onClick={() => void copyLink(latest.url)}
@@ -159,6 +175,13 @@ export function TeacherInvites({ jwt }: { jwt: string }) {
                     </div>
                     {i.state === "active" && (
                       <>
+                        <button
+                          type="button"
+                          onClick={() => openLink(i.url)}
+                          className="shrink-0 text-xs text-tg-text-link transition-opacity active:opacity-60"
+                        >
+                          {ru.admin.invites.openButton}
+                        </button>
                         <button
                           type="button"
                           onClick={() => void copyLink(i.url)}
