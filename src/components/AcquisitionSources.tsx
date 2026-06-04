@@ -105,15 +105,25 @@ export function AcquisitionSources({ jwt }: { jwt: string }) {
           type="text"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void createSource();
+            }
+          }}
           placeholder={ru.admin.acquisitionSources.labelPlaceholder}
           maxLength={80}
-          className="flex-1 min-w-0 h-9 px-3 rounded-full bg-tg-bg-section border border-tg-bg-secondary text-sm focus:outline-none focus:border-tg-button"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          className="flex-1 min-w-0 h-10 px-3 rounded-xl bg-tg-bg-secondary text-tg-text outline-none focus:ring-2 focus:ring-tg-button/40"
         />
         <button
           type="button"
           onClick={() => void createSource()}
           disabled={creating || !label.trim()}
-          className="shrink-0 h-9 px-3 rounded-full bg-tg-button text-tg-button-text text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
+          aria-busy={creating}
+          className="shrink-0 h-10 px-4 rounded-full bg-tg-button text-tg-button-text text-sm font-medium transition-transform active:scale-95 disabled:opacity-50 inline-flex items-center justify-center gap-1.5 min-w-[5rem]"
         >
           {creating && <Spinner size={12} />}
           <span>{ru.admin.acquisitionSources.createButton}</span>
