@@ -6,6 +6,7 @@ import { ru } from "@/lib/i18n";
 
 export interface SubscriptionInfo {
   status:
+    | "queued"
     | "trial"
     | "active"
     | "trial_expired"
@@ -229,6 +230,8 @@ function CurrentState({ subscription }: { subscription: SubscriptionInfo | null 
 
 function summary(s: SubscriptionInfo): string {
   switch (s.status) {
+    case "queued":
+      return ru.admin.subscription.summary.queued;
     case "trial":
       return ru.admin.subscription.summary.trial;
     case "active":
@@ -246,6 +249,8 @@ function summary(s: SubscriptionInfo): string {
 
 function detail(s: SubscriptionInfo): string {
   switch (s.status) {
+    case "queued":
+      return ru.admin.subscription.detail.queued;
     case "trial":
       return ru.admin.subscription.detail.trialUntil(fmtDate(s.trial_ends_at));
     case "active":

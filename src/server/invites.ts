@@ -144,11 +144,12 @@ export async function createStudent(args: {
   // machine has a place to live. Without this, `subscriptions` is null
   // for fresh students and the callback handler defaults state to
   // 'done_skipped' — which makes the very first "Начать" tap fire the
-  // "Кнопка устарела" toast. Defaults: status='trial' (3-day trial),
-  // onboarding_state='welcome' (matches the Step 1 message we just sent).
+  // "Кнопка устарела" toast. Defaults: status='queued' (no clock yet —
+  // trial starts fresh on first tutor link), onboarding_state='welcome'
+  // (matches the Step 1 message we just sent).
   await sb
     .from("subscriptions")
-    .upsert({ user_id: inserted.id }, { onConflict: "user_id" });
+    .upsert({ user_id: inserted.id, status: "queued" }, { onConflict: "user_id" });
   return inserted;
 }
 

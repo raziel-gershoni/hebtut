@@ -5,6 +5,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { readJsonBody } from "@/lib/http";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { recordAudit } from "@/server/audit";
+import { startTrialOnFirstLink } from "@/server/subscriptions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,11 +70,18 @@ export async function POST(req: NextRequest) {
     return new Response(error.message, { status: 400, headers: noStoreHeaders });
   }
 
+  const flip = await startTrialOnFirstLink(parsed.data.studentId);
+
   await recordAudit({
     action: "admin.link_create",
     actorId: user.id,
     subjectType: "link",
-    meta: { student_id: parsed.data.studentId, teacher_id: parsed.data.teacherId },
+    meta: {
+      student_id: parsed.data.studentId,
+      teacher_id: parsed.data.teacherId,
+      trial_started: flip.flipped,
+      ...(flip.trialEnd ? { trial_ends_at: flip.trialEnd.toISOString() } : {}),
+    },
   });
 
   return Response.json({ ok: true }, { headers: noStoreHeaders });

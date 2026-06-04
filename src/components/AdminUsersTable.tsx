@@ -450,6 +450,8 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
 function SubscriptionBadge({ sub }: { sub: SubscriptionInfo }) {
   const tone = (() => {
     switch (sub.status) {
+      case "queued":
+        return "bg-tg-bg-secondary text-tg-text-subtitle";
       case "active":
         return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400";
       case "trial":
@@ -466,6 +468,8 @@ function SubscriptionBadge({ sub }: { sub: SubscriptionInfo }) {
     const fmt = (iso: string) =>
       new Date(iso).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
     switch (sub.status) {
+      case "queued":
+        return ru.admin.users.subBadgeQueued;
       case "trial":
         return ru.admin.users.subBadgeTrial(fmt(sub.trial_ends_at));
       case "active":

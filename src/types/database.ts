@@ -11,6 +11,7 @@ export type MediaKind = "photo" | "video" | "audio";
 export type OnboardingVideoStep = "video1" | "video2" | "video3";
 export type MessageStatus = "pending" | "answered" | "expired" | "orphaned";
 export type SubscriptionStatus =
+  | "queued"
   | "trial"
   | "active"
   | "trial_expired"

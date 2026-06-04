@@ -68,6 +68,7 @@ export type SubscriptionRow = Database["public"]["Tables"]["subscriptions"]["Row
  * период • 1 день остался" vs "пробный период заканчивается завтра").
  */
 export type DerivedStatus =
+  | { kind: "queued" }
   | { kind: "trial"; daysLeft: number; endsAt: Date }
   | { kind: "trial_ending"; daysLeft: 0 | 1; endsAt: Date }
   | { kind: "active"; renewsInDays: number; endsAt: Date }
@@ -77,9 +78,10 @@ export type DerivedStatus =
   | { kind: "payment_failed" }
   | { kind: "frozen"; untilDate: Date };
 
-/** True for trial / trial_ending / active / renewing_soon — the states where the bot accepts media. */
+/** True for queued / trial / trial_ending / active / renewing_soon — the states where the bot accepts media. */
 export function canSendMedia(d: DerivedStatus): boolean {
   return (
+    d.kind === "queued" ||
     d.kind === "trial" ||
     d.kind === "trial_ending" ||
     d.kind === "active" ||
@@ -108,6 +110,8 @@ const TRIAL_ENDING_HOURS_TODAY = 18; // < 18h remaining → "заканчива�
 
 export function deriveStatus(row: SubscriptionRow, now: Date): DerivedStatus {
   switch (row.status as SubscriptionStatus) {
+    case "queued":
+      return { kind: "queued" };
     case "trial": {
       const ends = new Date(row.trial_ends_at);
       const ms = ends.getTime() - now.getTime();
@@ -495,6 +499,42 @@ export async function resetTrialForUser(input: {
 
   await dmStudent(input.userId, ru.bot.subscription.reset);
   return { trialEnd };
+}
+
+/**
+ * Flips a queued student to trial with a fresh clock. Called when the
+ * student gets their first tutor link via /api/admin/links. Idempotent
+ * by guard — only flips rows currently in 'queued'; later relinks are
+ * no-ops.
+ */
+export async function startTrialOnFirstLink(
+  userId: number,
+): Promise<{ flipped: boolean; trialEnd?: Date }> {
+  const sb = getServiceRoleClient();
+  const { data: row } = await sb
+    .from("subscriptions")
+    .select("status")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!row || row.status !== "queued") return { flipped: false };
+
+  const now = new Date();
+  const trialEnd = addDays(now, TRIAL_RESET_DAYS);
+  const { error } = await sb
+    .from("subscriptions")
+    .update({
+      status: "trial",
+      trial_started_at: now.toISOString(),
+      trial_ends_at: trialEnd.toISOString(),
+      updated_at: now.toISOString(),
+    })
+    .eq("user_id", userId)
+    .eq("status", "queued");
+  if (error) {
+    console.warn("startTrialOnFirstLink failed", { user_id: userId, reason: error.message });
+    return { flipped: false };
+  }
+  return { flipped: true, trialEnd };
 }
 
 /**

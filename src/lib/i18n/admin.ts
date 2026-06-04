@@ -159,6 +159,7 @@ const users = {
   confirmRoleBody:
     "Это действие может разорвать существующие связи ученик↔тренер. Продолжить?",
   // SubscriptionBadge labels
+  subBadgeQueued: "в очереди",
   subBadgeTrial: (date: string) => `trial → ${date}`,
   subBadgeActiveUntil: (date: string) => `до ${date}`,
   subBadgeActive: "активна",
@@ -193,6 +194,7 @@ const subscription = {
   currentPrefix: "Сейчас:",
   frozenUntil: (date: string) => `Заморозка до ${date}`,
   summary: {
+    queued: "В очереди",
     trial: "Пробный период",
     active: "Активна",
     trialExpired: "Пробный закончился",
@@ -201,6 +203,7 @@ const subscription = {
     frozen: "Заморожена",
   },
   detail: {
+    queued: "ждёт первого тренера",
     trialUntil: (date: string) => `до ${date}`,
     activeUntil: (date: string) => `до ${date}`,
     activeNoPeriod: "период не задан",

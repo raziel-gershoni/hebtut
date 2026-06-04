@@ -30,8 +30,18 @@ type ApiStatus =
   | ApiStatusBase<"payment_failed">
   | (ApiStatusBase<"frozen"> & { untilIso: string });
 
-function toApiStatus(d: DerivedStatus): ApiStatus {
+// Queued is an admin-facing pre-trial state. The student-side card keeps
+// the existing trial-countdown UX (the DB row's trial_ends_at defaults to
+// signup+3d), so we normalize queued → trial-shape here. Once a tutor
+// links, the row flips to status='trial' with a fresh 3-day clock.
+function toApiStatus(d: DerivedStatus, rawTrialEndsAt: string): ApiStatus {
   switch (d.kind) {
+    case "queued": {
+      const endsAt = new Date(rawTrialEndsAt);
+      const ms = endsAt.getTime() - Date.now();
+      const daysLeft = Math.max(1, Math.ceil(ms / 86_400_000));
+      return { kind: "trial", daysLeft, endsAtIso: endsAt.toISOString() };
+    }
     case "trial":
       return { kind: "trial", daysLeft: d.daysLeft, endsAtIso: d.endsAt.toISOString() };
     case "trial_ending":
@@ -95,7 +105,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       // the manually-set preferred_name (also written by onboarding step
       // 3.5), fall back to the TG-synced name.
       name: row?.preferred_name ?? row?.name ?? ru.bot.labels.studentFallback,
-      status: toApiStatus(sub.derived),
+      status: toApiStatus(sub.derived, sub.raw.trial_ends_at),
       practice: {
         used_seconds: used,
         remaining_seconds: remaining,
