@@ -24,9 +24,25 @@ interface SourceRow {
   revoked_at: string | null;
 }
 
+// Russian transliteration map — slug needs to be ASCII because it
+// rides in a Telegram start parameter (`?start=src_<slug>`), which only
+// accepts [A-Za-z0-9_-]. Without this, a label like «Инстаграм май 2026»
+// produces an empty slug after the ASCII filter and the endpoint 400s.
+const RU_TRANSLIT: Record<string, string> = {
+  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "yo",
+  ж: "zh", з: "z", и: "i", й: "y", к: "k", л: "l", м: "m",
+  н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u",
+  ф: "f", х: "h", ц: "ts", ч: "ch", ш: "sh", щ: "sch", ъ: "",
+  ы: "y", ь: "", э: "e", ю: "yu", я: "ya",
+};
+
 function slugify(input: string): string {
-  return input
+  const transliterated = input
     .toLowerCase()
+    .split("")
+    .map((ch) => RU_TRANSLIT[ch] ?? ch)
+    .join("");
+  return transliterated
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "") // strip diacritics
     .replace(/[^a-z0-9]+/g, "-")
