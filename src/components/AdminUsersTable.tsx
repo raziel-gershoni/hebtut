@@ -98,13 +98,14 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
       window.setTimeout(() => setProfileNudge(null), 3000);
       return;
     }
-    const tg = window.Telegram?.WebApp;
-    if (tg?.close) {
-      tg.close();
-    } else {
-      setProfileNudge(ru.admin.users.openTgProfileSentToBot);
-      window.setTimeout(() => setProfileNudge(null), 3500);
-    }
+    // Show the nudge for ~800ms so the transition reads as
+    // "tapped user → sent to bot → here's the bot chat" rather than
+    // an unexplained Mini App close.
+    setProfileNudge(ru.admin.users.openTgProfileSentToBot);
+    window.setTimeout(() => {
+      setProfileNudge(null);
+      window.Telegram?.WebApp?.close?.();
+    }, 800);
   }
   const [subscriptionUser, setSubscriptionUser] = useState<AdminUser | null>(null);
   const [editingNameUser, setEditingNameUser] = useState<AdminUser | null>(null);

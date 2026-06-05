@@ -54,11 +54,25 @@ export async function POST(
 
   const anonMode = await getDisplayAnonymousHandlesEnabled();
   const label = resolveDisplay(targetRes.data, anonMode).handle;
-  const text = `👤 <a href="tg://user?id=${targetRes.data.tg_user_id}">${escapeHtml(label)}</a>`;
+  const text = `👤 ${escapeHtml(label)}`;
 
   try {
+    // Inline-keyboard URL button with tg://user?id=… is the Bot-API-blessed
+    // way to spawn a "open user profile" button. Same mechanism as
+    // inputKeyboardButtonUserProfile — bigger tap target than an inline
+    // text-mention, and the affordance reads as a real action.
     await getBot().api.sendMessage(adminRes.data.tg_chat_id, text, {
       parse_mode: "HTML",
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "👤 Открыть профиль",
+              url: `tg://user?id=${targetRes.data.tg_user_id}`,
+            },
+          ],
+        ],
+      },
     });
   } catch (e) {
     console.warn("profile-link DM failed", {
