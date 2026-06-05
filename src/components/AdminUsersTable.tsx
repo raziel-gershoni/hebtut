@@ -58,22 +58,16 @@ function avatarUrl(jwt: string, u: { id: number; has_avatar: boolean }): string 
   return u.has_avatar ? `/api/avatar/${u.id}?token=${encodeURIComponent(jwt)}` : undefined;
 }
 
-// Opens the user's TG profile from the admin Mini App. Prefers the
-// public username link (works in TG + outside); falls back to the
-// `tg://user?id=…` deep link, which only resolves inside the TG app and
-// only for users in mutual chats — admins share the bot chat with every
-// user here, so it works for the no-username case too.
-function openTgProfile(u: { tg_username: string | null; tg_user_id: number }): void {
+// Opens the user's TG profile from the admin Mini App via the public
+// username link. Users without `tg_username` can't be opened this way
+// — Telegram's WebApp SDK only handles t.me URLs (no tg:// scheme),
+// and we have no other reliable route to a profile-by-id from outside
+// the bot's message context. Caller must gate the button on hasTgUsername.
+function openTgProfile(username: string): void {
   const tg = window.Telegram?.WebApp;
-  if (u.tg_username) {
-    const url = `https://t.me/${u.tg_username}`;
-    if (tg?.openTelegramLink) tg.openTelegramLink(url);
-    else window.open(url, "_blank");
-    return;
-  }
-  const deepLink = `tg://user?id=${u.tg_user_id}`;
-  if (tg?.openTelegramLink) tg.openTelegramLink(deepLink);
-  else window.open(deepLink, "_blank");
+  const url = `https://t.me/${username}`;
+  if (tg?.openTelegramLink) tg.openTelegramLink(url);
+  else window.open(url, "_blank");
 }
 
 export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTableProps) {
@@ -201,12 +195,18 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
           >
             <button
               type="button"
+              disabled={!u.tg_username}
               onClick={(e) => {
                 e.stopPropagation();
-                openTgProfile(u);
+                if (u.tg_username) openTgProfile(u.tg_username);
               }}
-              aria-label={ru.admin.users.openTgProfileAria}
-              className="flex items-center gap-3 min-w-0 flex-1 -mx-1 px-1 py-1 rounded-xl text-left transition-colors active:bg-tg-bg-secondary/60"
+              aria-label={
+                u.tg_username
+                  ? ru.admin.users.openTgProfileAria
+                  : ru.admin.users.openTgProfileNoUsername
+              }
+              title={u.tg_username ? undefined : ru.admin.users.openTgProfileNoUsername}
+              className="flex items-center gap-3 min-w-0 flex-1 -mx-1 px-1 py-1 rounded-xl text-left transition-colors active:bg-tg-bg-secondary/60 disabled:active:bg-transparent disabled:cursor-default"
             >
               <Avatar
                 name={u.name ?? String(u.tg_user_id)}

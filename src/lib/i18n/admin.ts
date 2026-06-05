@@ -159,6 +159,7 @@ const users = {
   confirmRoleBody:
     "Это действие может разорвать существующие связи ученик↔тренер. Продолжить?",
   openTgProfileAria: "Открыть профиль в Telegram",
+  openTgProfileNoUsername: "У пользователя нет публичного @username — профиль не открыть",
   // SubscriptionBadge labels
   subBadgeQueued: "в очереди",
   subBadgeTrial: (date: string) => `trial → ${date}`,
