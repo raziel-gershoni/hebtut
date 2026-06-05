@@ -4,6 +4,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { userHandle } from "@/lib/handle";
 import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
+import { refreshUserAvatar } from "@/server/avatars";
 import type { SubscriptionStatus } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -26,11 +27,26 @@ export async function GET(req: NextRequest) {
   const { data, error } = await sb
     .from("users")
     .select(
-      "id, tg_user_id, tg_username, name, preferred_name, display_handle, display_emoji, role, is_admin, status, created_at, role_changed_at, avatar_file_id",
+      "id, tg_user_id, tg_username, name, preferred_name, display_handle, display_emoji, role, is_admin, status, created_at, role_changed_at, avatar_file_id, avatar_fetched_at",
     )
     .order("created_at", { ascending: false });
   if (error) return new Response(error.message, { status: 500 });
   const userRows = data ?? [];
+
+  // Opportunistic avatar backfill: refresh up to N users per request who
+  // have never had their profile photo pulled. Otherwise users who set
+  // their TG photo after signup but never re-opened the Mini App show no
+  // avatar forever (refreshUserAvatar otherwise only runs on /start and
+  // the auth-session route). Fire-and-forget — admin response doesn't
+  // wait. Limited to 10 / request to stay under TG's flood limits.
+  const stale = userRows
+    .filter((u) => u.avatar_fetched_at == null)
+    .slice(0, 10);
+  if (stale.length > 0) {
+    void Promise.all(stale.map((u) => refreshUserAvatar(u.id, u.tg_user_id))).catch(
+      (e) => console.warn("avatar background refresh failed", e),
+    );
+  }
 
   // Pull subscriptions in one round-trip so the table can render the per-row
   // status badge without the supabase client's rate limit kicking in. Joining
