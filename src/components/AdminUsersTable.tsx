@@ -83,9 +83,11 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
       openTgProfileByUsername(u.tg_username);
       return;
     }
-    // No public username — ask the server to DM us a text-mention
-    // message in the bot chat. Tapping that mention is the only route
-    // to the profile.
+    // No public username — Telegram has no API to open such a profile
+    // directly. Workaround: ask the server to DM the admin a text-mention
+    // message via the bot, then close the Mini App so the admin lands
+    // back in the bot chat with the fresh mention waiting. One physical
+    // tap on the mention opens the profile.
     const r = await fetch(`/api/admin/users/${u.id}/profile-link`, {
       method: "POST",
       cache: "no-store",
@@ -96,8 +98,13 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
       window.setTimeout(() => setProfileNudge(null), 3000);
       return;
     }
-    setProfileNudge(ru.admin.users.openTgProfileSentToBot);
-    window.setTimeout(() => setProfileNudge(null), 3500);
+    const tg = window.Telegram?.WebApp;
+    if (tg?.close) {
+      tg.close();
+    } else {
+      setProfileNudge(ru.admin.users.openTgProfileSentToBot);
+      window.setTimeout(() => setProfileNudge(null), 3500);
+    }
   }
   const [subscriptionUser, setSubscriptionUser] = useState<AdminUser | null>(null);
   const [editingNameUser, setEditingNameUser] = useState<AdminUser | null>(null);
