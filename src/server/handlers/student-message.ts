@@ -54,7 +54,7 @@ export async function handleStudentMedia(ctx: Context): Promise<boolean> {
       })
       .select("id")
       .single();
-    if (inserted) void fanOutNewUserToAdmins(inserted.id, "media");
+    if (inserted) await fanOutNewUserToAdmins(inserted.id, "media");
     await ctx.reply(ru.bot.greetings.studentNew);
     return true;
   }

@@ -256,6 +256,7 @@ export async function fanOutNewUserToAdmins(
   newUserId: number,
   via: "start" | "invite" | "media",
 ): Promise<void> {
+  console.info("[new-user fan-out] start", { newUserId, via });
   const sb = getServiceRoleClient();
   const { data: user } = await sb
     .from("users")
@@ -264,7 +265,10 @@ export async function fanOutNewUserToAdmins(
     )
     .eq("id", newUserId)
     .single();
-  if (!user) return;
+  if (!user) {
+    console.warn("[new-user fan-out] user row not found, skipping", { newUserId });
+    return;
+  }
 
   const anonMode = await getDisplayAnonymousHandlesEnabled();
   const label = handleFromDisplay(user, anonMode);
@@ -277,10 +281,15 @@ export async function fanOutNewUserToAdmins(
     .from("users")
     .select("id, tg_chat_id")
     .eq("is_admin", true);
-  if (!admins?.length) return;
+  if (!admins?.length) {
+    console.warn("[new-user fan-out] no admin recipients found", { newUserId });
+    return;
+  }
 
   const url = `${serverEnv.APP_BASE_URL.replace(/\/$/, "")}/admin`;
   const bot = getBot();
+  let sent = 0;
+  let failed = 0;
   for (const admin of admins) {
     if (admin.id === newUserId) continue;
     try {
@@ -289,13 +298,16 @@ export async function fanOutNewUserToAdmins(
           inline_keyboard: [[{ text: ru.bot.labels.openInline, web_app: { url } }]],
         },
       });
+      sent += 1;
     } catch (e) {
-      console.warn("new-user admin DM failed", {
+      failed += 1;
+      console.warn("[new-user fan-out] admin DM failed", {
         chat_id: admin.tg_chat_id,
         reason: (e as Error).message,
       });
     }
   }
+  console.info("[new-user fan-out] done", { newUserId, via, sent, failed });
 }
 
 export async function editAllNotificationsForMessage(

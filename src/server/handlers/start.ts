@@ -96,7 +96,7 @@ export async function handleStart(ctx: Context): Promise<void> {
         subjectId: teacher.id,
         meta: { via: "invite", tg_user_id: from.id },
       });
-      void fanOutNewUserToAdmins(teacher.id, "invite");
+      await fanOutNewUserToAdmins(teacher.id, "invite");
       await welcomeNewTeacher(ctx);
       return;
     }
@@ -184,7 +184,7 @@ export async function handleStart(ctx: Context): Promise<void> {
         src_slug: srcSlug ?? null,
       },
     });
-    void fanOutNewUserToAdmins(student.id, "start");
+    await fanOutNewUserToAdmins(student.id, "start");
   }
   await welcomeNewStudent(ctx, student?.id ?? null);
 }
