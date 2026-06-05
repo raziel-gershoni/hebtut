@@ -7,6 +7,7 @@ import { authFromRequest, canTeachOrReadAsAdmin } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { getBot } from "@/lib/tg";
 import { serverEnv } from "@/lib/env";
+import { refreshUserAvatar } from "@/server/avatars";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest, { params }: { params: { userId: stri
   const sb = getServiceRoleClient();
   const { data: target } = await sb
     .from("users")
-    .select("id, role, avatar_file_id")
+    .select("id, role, avatar_file_id, tg_user_id")
     .eq("id", userId)
     .maybeSingle();
   if (!target) return new Response("not found", { status: 404 });
@@ -33,11 +34,27 @@ export async function GET(req: NextRequest, { params }: { params: { userId: stri
     return new Response("forbidden", { status: 403 });
   }
 
+  // Cached file_id can go stale when the user changes (or removes) their
+  // TG profile photo — getFile returns "file_id not found" forever after.
+  // On miss: refresh from TG, re-read, retry once. After that, give up.
   let file;
+  let currentFileId = target.avatar_file_id;
   try {
-    file = await getBot().api.getFile(target.avatar_file_id);
+    file = await getBot().api.getFile(currentFileId);
   } catch {
-    return new Response("file not found", { status: 404 });
+    await refreshUserAvatar(target.id, target.tg_user_id);
+    const { data: refreshed } = await sb
+      .from("users")
+      .select("avatar_file_id")
+      .eq("id", target.id)
+      .maybeSingle();
+    if (!refreshed?.avatar_file_id) return new Response("no avatar", { status: 404 });
+    currentFileId = refreshed.avatar_file_id;
+    try {
+      file = await getBot().api.getFile(currentFileId);
+    } catch {
+      return new Response("file not found", { status: 404 });
+    }
   }
   if (!file.file_path) return new Response("no path", { status: 502 });
 
