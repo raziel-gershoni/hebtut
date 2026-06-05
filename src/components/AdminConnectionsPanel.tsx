@@ -391,7 +391,7 @@ function ChipRow({
       </span>
       {ids.map((id) => {
         const u = usersById.get(id);
-        const name = u?.name ?? ru.admin.connections.fallbackName(id);
+        const name = u?.preferred_name ?? u?.name ?? ru.admin.connections.fallbackName(id);
         return (
           <button
             key={id}

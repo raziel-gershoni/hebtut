@@ -43,6 +43,7 @@ export function SearchableUserChecklist({
     if (!q) return users;
     return users.filter(
       (u) =>
+        (u.preferred_name ?? "").toLowerCase().includes(q) ||
         (u.name ?? "").toLowerCase().includes(q) ||
         (u.display_handle ?? "").toLowerCase().includes(q) ||
         (u.tg_username ?? "").toLowerCase().includes(q) ||
@@ -111,7 +112,7 @@ export function SearchableUserChecklist({
                   </span>
                   <Avatar
                     size={32}
-                    name={u.name ?? String(u.tg_user_id)}
+                    name={u.preferred_name ?? u.name ?? String(u.tg_user_id)}
                     imageUrl={
                       u.has_avatar
                         ? `/api/avatar/${u.id}?token=${encodeURIComponent(jwt)}`
@@ -119,7 +120,9 @@ export function SearchableUserChecklist({
                     }
                   />
                   <span className="min-w-0 flex-1 text-sm leading-tight">
-                    <span className="truncate block">{u.name ?? ru.admin.userChecklist.fallbackName(u.id)}</span>
+                    <span className="truncate block">
+                      {u.preferred_name ?? u.name ?? ru.admin.userChecklist.fallbackName(u.id)}
+                    </span>
                     {u.display_handle && (
                       <span className="text-[11px] text-tg-text-hint truncate block">
                         {u.display_emoji} {u.display_handle}
