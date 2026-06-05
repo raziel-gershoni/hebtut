@@ -158,6 +158,7 @@ const users = {
     `${name || "Ученик"} вернётся к экрану «Привет». При следующем /start бот снова покажет первое сообщение онбординга. Предпочитаемое имя и таймеры тоже очистятся.`,
   confirmRoleBody:
     "Это действие может разорвать существующие связи ученик↔тренер. Продолжить?",
+  openTgProfileAria: "Открыть профиль в Telegram",
   // SubscriptionBadge labels
   subBadgeQueued: "в очереди",
   subBadgeTrial: (date: string) => `trial → ${date}`,

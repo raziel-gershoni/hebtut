@@ -58,6 +58,24 @@ function avatarUrl(jwt: string, u: { id: number; has_avatar: boolean }): string 
   return u.has_avatar ? `/api/avatar/${u.id}?token=${encodeURIComponent(jwt)}` : undefined;
 }
 
+// Opens the user's TG profile from the admin Mini App. Prefers the
+// public username link (works in TG + outside); falls back to the
+// `tg://user?id=…` deep link, which only resolves inside the TG app and
+// only for users in mutual chats — admins share the bot chat with every
+// user here, so it works for the no-username case too.
+function openTgProfile(u: { tg_username: string | null; tg_user_id: number }): void {
+  const tg = window.Telegram?.WebApp;
+  if (u.tg_username) {
+    const url = `https://t.me/${u.tg_username}`;
+    if (tg?.openTelegramLink) tg.openTelegramLink(url);
+    else window.open(url, "_blank");
+    return;
+  }
+  const deepLink = `tg://user?id=${u.tg_user_id}`;
+  if (tg?.openTelegramLink) tg.openTelegramLink(deepLink);
+  else window.open(deepLink, "_blank");
+}
+
 export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTableProps) {
   const [pending, setPending] = useState<PendingChange | null>(null);
   const [filter, setFilter] = useState("");
@@ -181,21 +199,30 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
             key={u.id}
             className="rounded-2xl bg-tg-bg-section p-3 flex items-center gap-3"
           >
-            <Avatar
-              name={u.name ?? String(u.tg_user_id)}
-              isAdmin={u.is_admin}
-              imageUrl={avatarUrl(jwt, u)}
-            />
-            <div className="min-w-0 flex-1 leading-tight">
-              <div className="font-medium tracking-tight truncate flex items-center gap-2">
-                <span className="truncate">{u.preferred_name ?? u.name ?? "—"}</span>
-                {u.status === "suspended" && (
-                  <span className="shrink-0 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold">
-                    {ru.admin.users.suspendedBadge}
-                  </span>
-                )}
-              </div>
-              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-tg-text-hint min-w-0 flex-wrap">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openTgProfile(u);
+              }}
+              aria-label={ru.admin.users.openTgProfileAria}
+              className="flex items-center gap-3 min-w-0 flex-1 -mx-1 px-1 py-1 rounded-xl text-left transition-colors active:bg-tg-bg-secondary/60"
+            >
+              <Avatar
+                name={u.name ?? String(u.tg_user_id)}
+                isAdmin={u.is_admin}
+                imageUrl={avatarUrl(jwt, u)}
+              />
+              <div className="min-w-0 flex-1 leading-tight">
+                <div className="font-medium tracking-tight truncate flex items-center gap-2">
+                  <span className="truncate">{u.preferred_name ?? u.name ?? "—"}</span>
+                  {u.status === "suspended" && (
+                    <span className="shrink-0 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold">
+                      {ru.admin.users.suspendedBadge}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-tg-text-hint min-w-0 flex-wrap">
                 {u.preferred_name && u.name && (
                   <>
                     <span className="truncate" title={ru.admin.users.tgNameTitle}>
@@ -226,8 +253,9 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                     <SubscriptionBadge sub={u.subscription} />
                   </>
                 )}
+                </div>
               </div>
-            </div>
+            </button>
             {(() => {
               const def = u.role !== "pending" ? ROLE_DEFS[u.role] : null;
               const nextRole: AdminUser["role"] = u.role === "teacher" ? "student" : "teacher";
