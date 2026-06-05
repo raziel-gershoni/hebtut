@@ -3,6 +3,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { ru, formatDuration } from "@/lib/i18n";
 import { resolveDisplay } from "@/server/display";
 import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
+import { recordAudit } from "@/server/audit";
 import { serverEnv } from "@/lib/env";
 import { formatInTimeZone } from "date-fns-tz";
 
@@ -267,6 +268,12 @@ export async function fanOutNewUserToAdmins(
     .single();
   if (!user) {
     console.warn("[new-user fan-out] user row not found, skipping", { newUserId });
+    await recordAudit({
+      action: "notification.admin_new_user",
+      subjectType: "user",
+      subjectId: newUserId,
+      meta: { via, outcome: "user_row_missing" },
+    });
     return;
   }
 
@@ -283,6 +290,12 @@ export async function fanOutNewUserToAdmins(
     .eq("is_admin", true);
   if (!admins?.length) {
     console.warn("[new-user fan-out] no admin recipients found", { newUserId });
+    await recordAudit({
+      action: "notification.admin_new_user",
+      subjectType: "user",
+      subjectId: newUserId,
+      meta: { via, outcome: "no_admin_recipients" },
+    });
     return;
   }
 
@@ -290,6 +303,7 @@ export async function fanOutNewUserToAdmins(
   const bot = getBot();
   let sent = 0;
   let failed = 0;
+  const failures: { chat_id: number; reason: string }[] = [];
   for (const admin of admins) {
     if (admin.id === newUserId) continue;
     try {
@@ -301,13 +315,26 @@ export async function fanOutNewUserToAdmins(
       sent += 1;
     } catch (e) {
       failed += 1;
-      console.warn("[new-user fan-out] admin DM failed", {
-        chat_id: admin.tg_chat_id,
-        reason: (e as Error).message,
-      });
+      const reason = (e as Error).message;
+      failures.push({ chat_id: admin.tg_chat_id, reason });
+      console.warn("[new-user fan-out] admin DM failed", { chat_id: admin.tg_chat_id, reason });
     }
   }
   console.info("[new-user fan-out] done", { newUserId, via, sent, failed });
+  // Audit row survives Vercel log expiry — admin panel can pull it
+  // from /admin/audit for any time period. meta carries per-admin
+  // failure reasons so post-mortem doesn't need live logs.
+  await recordAudit({
+    action: "notification.admin_new_user",
+    subjectType: "user",
+    subjectId: newUserId,
+    meta: {
+      via,
+      sent,
+      failed,
+      ...(failures.length > 0 ? { failures } : {}),
+    },
+  });
 }
 
 export async function editAllNotificationsForMessage(

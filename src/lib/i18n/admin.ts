@@ -324,6 +324,7 @@ const audit = {
     "feedback.out": "Ответ админа",
     "feedback.claim_refresh": "Берёт обратную связь",
     "feedback.claim_expire": "Истёк клейм связи",
+    "notification.admin_new_user": "Пинг админам о регистрации",
   },
 };
 
