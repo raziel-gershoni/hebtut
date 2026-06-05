@@ -160,6 +160,9 @@ const users = {
     "Это действие может разорвать существующие связи ученик↔тренер. Продолжить?",
   openTgProfileAria: "Открыть профиль в Telegram",
   openTgProfileNoUsername: "У пользователя нет публичного @username — профиль не открыть",
+  openTgProfileSentToBot:
+    "Открой чат с ботом — там ссылка на профиль. Нажми на неё, и откроется профиль.",
+  openTgProfileSendFailed: "Не удалось отправить ссылку на профиль.",
   // SubscriptionBadge labels
   subBadgeQueued: "в очереди",
   subBadgeTrial: (date: string) => `trial → ${date}`,

@@ -59,27 +59,46 @@ function avatarUrl(jwt: string, u: { id: number; has_avatar: boolean }): string 
 }
 
 // Opens the user's TG profile from the admin Mini App.
-// - With @username: use the canonical t.me URL via openTelegramLink
-//   (works everywhere, opens inside TG when admin panel is also in TG).
-// - Without @username: fall back to the tg://user?id=… scheme via
-//   window.open — TG's WebApp SDK doesn't dispatch tg:// schemes, but
-//   iOS/Android route the protocol to the Telegram app directly. Profile
-//   resolves because admins share the bot chat with these users.
-function openTgProfile(u: { tg_username: string | null; tg_user_id: number }): void {
+// - With @username: canonical t.me URL via openTelegramLink — direct.
+// - Without @username: not navigable from a Mini App at all (Telegram
+//   docs flag tg://user?id= as "Bot API only"). The workaround is to
+//   ask the server to DM the admin a text-mention message; tapping
+//   that mention in the bot chat opens the profile. Caller handles
+//   the async flow and the closing nudge.
+function openTgProfileByUsername(username: string): void {
   const tg = window.Telegram?.WebApp;
-  if (u.tg_username) {
-    const url = `https://t.me/${u.tg_username}`;
-    if (tg?.openTelegramLink) tg.openTelegramLink(url);
-    else window.open(url, "_blank");
-    return;
-  }
-  window.open(`tg://user?id=${u.tg_user_id}`, "_blank");
+  const url = `https://t.me/${username}`;
+  if (tg?.openTelegramLink) tg.openTelegramLink(url);
+  else window.open(url, "_blank");
 }
 
 export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTableProps) {
   const [pending, setPending] = useState<PendingChange | null>(null);
   const [filter, setFilter] = useState("");
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [profileNudge, setProfileNudge] = useState<string | null>(null);
+
+  async function openProfile(u: AdminUser): Promise<void> {
+    if (u.tg_username) {
+      openTgProfileByUsername(u.tg_username);
+      return;
+    }
+    // No public username — ask the server to DM us a text-mention
+    // message in the bot chat. Tapping that mention is the only route
+    // to the profile.
+    const r = await fetch(`/api/admin/users/${u.id}/profile-link`, {
+      method: "POST",
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${jwt}` },
+    });
+    if (!r.ok) {
+      setProfileNudge(ru.admin.users.openTgProfileSendFailed);
+      window.setTimeout(() => setProfileNudge(null), 3000);
+      return;
+    }
+    setProfileNudge(ru.admin.users.openTgProfileSentToBot);
+    window.setTimeout(() => setProfileNudge(null), 3500);
+  }
   const [subscriptionUser, setSubscriptionUser] = useState<AdminUser | null>(null);
   const [editingNameUser, setEditingNameUser] = useState<AdminUser | null>(null);
   const [transcriptsUser, setTranscriptsUser] = useState<AdminUser | null>(null);
@@ -139,6 +158,14 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
 
   return (
     <section onClick={() => setOpenMenuId(null)}>
+      {profileNudge && (
+        <div
+          role="status"
+          className="fixed inset-x-3 bottom-3 z-50 rounded-2xl bg-tg-bg-section border border-tg-text-hint/15 shadow-xl px-4 py-3 text-sm text-tg-text"
+        >
+          {profileNudge}
+        </div>
+      )}
       <header className="flex items-baseline justify-between gap-3 mb-3">
         <h2 className="text-lg font-semibold tracking-tight">{ru.admin.users.sectionTitle}</h2>
         <button
@@ -203,7 +230,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                openTgProfile(u);
+                void openProfile(u);
               }}
               aria-label={ru.admin.users.openTgProfileAria}
               className="flex items-center gap-3 min-w-0 flex-1 -mx-1 px-1 py-1 rounded-xl text-left transition-colors active:bg-tg-bg-secondary/60"
