@@ -47,7 +47,7 @@ export function CollapsibleSection({
     <details
       open={open}
       onToggle={handleToggle}
-      className="group mb-3 rounded-2xl bg-tg-bg-section"
+      className="group/section mb-3 rounded-2xl bg-tg-bg-section"
     >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 select-none">
         <span className="text-lg font-semibold tracking-tight">{title}</span>
@@ -64,7 +64,7 @@ export function CollapsibleSection({
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="transition-transform duration-200 group-open:rotate-180"
+            className="transition-transform duration-200 group-open/section:rotate-180"
           >
             <path d="m6 9 6 6 6-6" />
           </svg>
