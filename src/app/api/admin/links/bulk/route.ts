@@ -5,6 +5,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { readJsonBody } from "@/lib/http";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { recordAudit } from "@/server/audit";
+import { startTrialOnFirstLink } from "@/server/subscriptions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,6 +56,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   let skipped = 0;
   let failed = 0;
   const failures: { student_id: number; teacher_id: number; reason: string }[] = [];
+  const studentsWithNewLink = new Set<number>();
 
   for (const sId of studentIds) {
     for (const tId of teacherIds) {
@@ -76,8 +78,18 @@ export async function POST(req: NextRequest): Promise<Response> {
         });
       } else {
         created++;
+        studentsWithNewLink.add(sId);
       }
     }
+  }
+
+  // Flip queued → trial for any student who just got their first link. The
+  // helper is idempotent (guards on status='queued'), so it's safe to call
+  // for students who were already in trial/active.
+  let trialsStarted = 0;
+  for (const sId of studentsWithNewLink) {
+    const { flipped } = await startTrialOnFirstLink(sId);
+    if (flipped) trialsStarted++;
   }
 
   await recordAudit({
@@ -90,6 +102,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       created,
       skipped,
       failed,
+      trials_started: trialsStarted,
       // Truncate to first 5 failures to keep audit row small.
       failures: failures.slice(0, 5),
     },
