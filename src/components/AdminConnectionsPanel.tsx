@@ -44,7 +44,7 @@ export function AdminConnectionsPanel({
     failed: number;
   } | null>(null);
 
-  const [mode, setMode] = useState<Mode>("student");
+  const [mode, setMode] = useState<Mode>("teacher");
   const [filter, setFilter] = useState("");
   const [unlinking, setUnlinking] = useState<Set<string>>(new Set());
 
