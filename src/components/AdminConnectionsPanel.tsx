@@ -373,9 +373,13 @@ export function AdminConnectionsPanel({
                   return (
                     <li
                       key={row.pairKey}
-                      className="flex items-center gap-3 py-1 text-sm"
+                      className="flex items-center gap-2 py-1 text-sm"
                     >
-                      <span className="text-tg-text-hint" aria-hidden>↳</span>
+                      <Avatar
+                        size={32}
+                        name={row.secondaryName}
+                        imageUrl={avatarUrlFor(row.secondaryId)}
+                      />
                       <span className="flex-1 truncate">{row.secondaryName}</span>
                       <button
                         type="button"
