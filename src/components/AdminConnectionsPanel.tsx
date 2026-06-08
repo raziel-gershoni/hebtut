@@ -223,8 +223,21 @@ export function AdminConnectionsPanel({
         <span className="text-xs text-tg-text-hint tabular-nums">{links.length}</span>
       </header>
 
-      {/* Bulk pairing UI */}
-      <div className="space-y-3 mb-4">
+      {/* Bulk pairing UI — collapsed by default so inspect-only admins see the
+          existing links right away. */}
+      <details className="group mb-4 rounded-2xl bg-tg-bg-secondary/40">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 select-none">
+          <span className="text-sm font-semibold tracking-tight">
+            {ru.admin.connections.bulkPairTitle}
+          </span>
+          <span
+            aria-hidden
+            className="text-tg-text-hint transition-transform group-open:rotate-180"
+          >
+            ▾
+          </span>
+        </summary>
+      <div className="px-3 pb-3 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <SearchableUserChecklist
             jwt={jwt}
@@ -301,6 +314,7 @@ export function AdminConnectionsPanel({
           </div>
         )}
       </div>
+      </details>
 
       {/* Existing-links view — toggle + filter + groups */}
       <div className="flex items-center gap-2 mb-3">

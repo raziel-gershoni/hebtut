@@ -103,6 +103,7 @@ const connections = {
   noLinks: "Пока нет связей.",
   noMatch: "Никого не нашлось.",
   unlinkLabel: "Удалить связь",
+  bulkPairTitle: "Создать связи",
   secondaryNounTeacher: "преп.",
   secondaryNounStudent: "уч.",
   fallbackName: (id: number) => `ID ${id}`,
