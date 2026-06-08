@@ -170,7 +170,7 @@ export function MessageBubble({
               {replyToSpeaker.name}
             </span>
             <span className="text-tg-text-hint shrink-0" aria-hidden>·</span>
-            <span aria-hidden className="shrink-0">{replyTo.kind === "voice" ? "🎙️" : "🟢"}</span>
+            <span aria-hidden className="shrink-0">{replyTo.kind === "voice" ? "🎙️" : "🎥"}</span>
             <span className="tabular-nums text-tg-text shrink-0">
               {formatDuration(replyTo.duration)}
             </span>
