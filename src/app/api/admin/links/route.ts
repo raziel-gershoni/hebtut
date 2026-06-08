@@ -20,8 +20,8 @@ interface JoinedLinkRow {
   student_id: number;
   teacher_id: number;
   created_at: string;
-  student: { name: string | null } | null;
-  teacher: { name: string | null } | null;
+  student: { name: string | null; preferred_name: string | null } | null;
+  teacher: { name: string | null; preferred_name: string | null } | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await sb
     .from("student_teachers")
     .select(
-      "student_id, teacher_id, created_at, student:student_id(name), teacher:teacher_id(name)",
+      "student_id, teacher_id, created_at, student:student_id(name, preferred_name), teacher:teacher_id(name, preferred_name)",
     )
     // Recency-first so the new bulk-pairing UI's existing-links view shows
     // the just-created links at the top after a "Связать" tap.
@@ -45,8 +45,8 @@ export async function GET(req: NextRequest) {
   const links = rows.map((r) => ({
     student_id: r.student_id,
     teacher_id: r.teacher_id,
-    student_name: r.student?.name ?? null,
-    teacher_name: r.teacher?.name ?? null,
+    student_name: r.student?.preferred_name ?? r.student?.name ?? null,
+    teacher_name: r.teacher?.preferred_name ?? r.teacher?.name ?? null,
     created_at: r.created_at,
   }));
   return Response.json({ links }, { headers: noStoreHeaders });
