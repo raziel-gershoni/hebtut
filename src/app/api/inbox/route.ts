@@ -4,6 +4,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { resolveDisplay } from "@/server/display";
 import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
+import { getSignedRemainingForManyToday } from "@/server/quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,6 +64,11 @@ interface InboxChat {
         is_self: boolean;
       }
     | null;
+  /**
+   * Signed seconds remaining on this student's daily voice/video-note quota.
+   * Negative = over by abs(value). Drives the tutor-facing <QuotaPill>.
+   */
+  quota_remaining_seconds: number;
 }
 
 // (Display resolution now lives in src/server/display.ts and is mode-aware:
@@ -204,6 +210,8 @@ export async function GET(req: NextRequest) {
     (studentRows ?? []).map((s) => [s.id, s]),
   );
 
+  const quotaRemainingByStudent = await getSignedRemainingForManyToday(studentIds);
+
   const chats: InboxChat[] = studentIds
     .map((sid): InboxChat => {
       const s = studentById.get(sid);
@@ -240,6 +248,7 @@ export async function GET(req: NextRequest) {
               is_self: claim.teacher_id === user.id,
             }
           : null,
+        quota_remaining_seconds: quotaRemainingByStudent.get(sid) ?? 0,
       };
     })
     // TG hides empty conversations from the chat list — match.
