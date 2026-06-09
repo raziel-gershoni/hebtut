@@ -9,6 +9,7 @@ import { MediaPicker } from "./MediaPicker";
 import { EditTranscriptDialog } from "./EditTranscriptDialog";
 import { EditTranslationDialog } from "./EditTranslationDialog";
 import { StudentCardDialog } from "./StudentCardDialog";
+import { QuotaPill } from "./QuotaPill";
 import { speakerColor, type SpeakerColorClasses } from "@/lib/speaker-color";
 import { bgFromHandle } from "@/lib/handle";
 import { ru } from "@/lib/i18n";
@@ -57,6 +58,7 @@ export function ThreadView({
   const [messages, setMessages] = useState<ApiMessage[]>([]);
   const [claim, setClaim] = useState<ClaimInfo | null>(null);
   const [student, setStudent] = useState<StudentMeta | null>(null);
+  const [quotaRemaining, setQuotaRemaining] = useState<number | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [initiateBusy, setInitiateBusy] = useState(false);
   const [initiateError, setInitiateError] = useState<string | null>(null);
@@ -80,10 +82,12 @@ export function ThreadView({
       messages: ApiMessage[];
       claim?: ClaimInfo | null;
       student?: StudentMeta | null;
+      quota_remaining_seconds?: number;
     };
     setMessages(d.messages);
     setClaim(d.claim ?? null);
     setStudent(d.student ?? null);
+    setQuotaRemaining(d.quota_remaining_seconds ?? null);
     setLoaded(true);
   }, [jwt, studentId]);
 
@@ -357,7 +361,10 @@ export function ThreadView({
         >
           <Avatar size={48} name={studentDisplay} imageUrl={studentAvatarUrl} emoji={studentEmoji} bgClass={studentBg} />
           <div className="min-w-0 flex-1 leading-tight text-left">
-            <div className="font-semibold tracking-tight truncate">{studentDisplay}</div>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold tracking-tight truncate">{studentDisplay}</span>
+              {quotaRemaining != null && <QuotaPill remainingSeconds={quotaRemaining} />}
+            </div>
             <div className="text-xs text-tg-text-hint">{ru.inbox.thread.studentRoleLabel}</div>
           </div>
         </button>
