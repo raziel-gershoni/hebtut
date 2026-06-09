@@ -109,6 +109,22 @@ const connections = {
   fallbackName: (id: number) => `ID ${id}`,
 };
 
+const tutorWork = {
+  sectionTitle: "Рабочее время тренеров",
+  rangeTodayBtn: "Сегодня",
+  rangeWeekBtn: "Эта неделя",
+  rangeMonthBtn: "Этот месяц",
+  customRangeFrom: "с",
+  customRangeTo: "по",
+  bucketActiveLabel: "актив",
+  bucketPlaybackLabel: "прослушка",
+  bucketRecordingLabel: "запись",
+  periodTotalLabel: "Всего:",
+  todayTotalLabel: "Сегодня:",
+  noActivity: "Нет активности",
+  loadError: "Не удалось загрузить",
+};
+
 const users = {
   sectionTitle: "Пользователи",
   refreshLabel: "Обновить список",
@@ -416,6 +432,7 @@ const pages = {
     mediaLibrary: "Медиа-библиотека",
     invites: "Приглашения тренеров",
     acquisitionSources: "Источники привлечения",
+    tutorWork: "Рабочее время тренеров",
     banned: "Заблокированные",
   },
   // /admin/feedback + /admin/feedback/[userId]
@@ -433,6 +450,7 @@ export const admin = {
   settings,
   tags,
   connections,
+  tutorWork,
   users,
   subscription,
   onboardingVideos,

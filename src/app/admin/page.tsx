@@ -15,6 +15,7 @@ import { AdminTagsManager } from "@/components/AdminTagsManager";
 import { AdminMediaLibrarySection } from "@/components/AdminMediaLibrarySection";
 import { AdminOnboardingVideos } from "@/components/AdminOnboardingVideos";
 import { AdminVersionFooter } from "@/components/AdminVersionFooter";
+import { AdminTutorWorkPanel } from "@/components/AdminTutorWorkPanel";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { ru } from "@/lib/i18n";
 
@@ -124,6 +125,9 @@ function AdminBody({ jwt }: { jwt: string }) {
       </CollapsibleSection>
       <CollapsibleSection id="banned" title={ru.admin.pages.sections.banned}>
         <BannedUsersPanel jwt={jwt} />
+      </CollapsibleSection>
+      <CollapsibleSection id="tutor-work" title={ru.admin.pages.sections.tutorWork}>
+        <AdminTutorWorkPanel jwt={jwt} />
       </CollapsibleSection>
       <AdminVersionFooter />
     </>
