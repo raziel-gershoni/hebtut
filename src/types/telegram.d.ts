@@ -28,6 +28,12 @@ declare global {
           onClick: (cb: () => void) => void;
           offClick: (cb: () => void) => void;
         };
+        // Bot API 8.0+ — true when this Mini App is the foreground one among
+        // currently open Mini Apps in the TG client. Drives the tutor work-time
+        // heartbeat: stops counting when another Mini App is selected.
+        isActive?: boolean;
+        onEvent?: (name: string, cb: () => void) => void;
+        offEvent?: (name: string, cb: () => void) => void;
       };
     };
   }

@@ -4,18 +4,6 @@ import { useEffect, useRef } from "react";
 const CADENCE_MS = 30_000;
 const IDLE_MS = 2 * 60 * 1000;
 
-interface TelegramWebApp {
-  isActive?: boolean;
-  onEvent?: (name: string, cb: () => void) => void;
-  offEvent?: (name: string, cb: () => void) => void;
-}
-
-declare global {
-  interface Window {
-    Telegram?: { WebApp?: TelegramWebApp };
-  }
-}
-
 /**
  * Heartbeat hook for tutor work-time tracking. Mounts in InboxList and
  * ThreadView. Posts to /api/tutor-work/heartbeat every 30s while:
