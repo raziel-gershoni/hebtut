@@ -629,6 +629,32 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["onboarding_videos"]["Insert"]>;
         Relationships: [];
       };
+      tutor_work_events: {
+        Row: {
+          id: number;
+          tutor_id: number;
+          kind: "active" | "playback" | "recording";
+          started_at: string;
+          ended_at: string;
+          ref_id: number | null;
+          source: string;
+          duration_s: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          tutor_id: number;
+          kind: "active" | "playback" | "recording";
+          started_at: string;
+          ended_at: string;
+          ref_id?: number | null;
+          source: string;
+          duration_s?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["tutor_work_events"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
