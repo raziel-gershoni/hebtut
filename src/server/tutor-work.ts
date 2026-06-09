@@ -17,7 +17,7 @@ export function mergeIntervals(raw: Interval[]): Interval[] {
   const filtered = raw.filter((i) => i.end > i.start);
   if (filtered.length === 0) return [];
   const sorted = [...filtered].sort((a, b) => a.start - b.start);
-  const out: Interval[] = [sorted[0]!];
+  const out: Interval[] = [{ ...sorted[0]! }];
   for (let i = 1; i < sorted.length; i++) {
     const cur = sorted[i]!;
     const last = out[out.length - 1]!;
@@ -91,6 +91,6 @@ export function applyDailyCap(buckets: WorkBuckets, capSeconds: number): WorkBuc
   const ratio = capSeconds / buckets.total_s;
   const recording_s = Math.round(buckets.recording_s * ratio);
   const playback_s = Math.round(buckets.playback_s * ratio);
-  const active_s = capSeconds - recording_s - playback_s;
+  const active_s = Math.max(0, capSeconds - recording_s - playback_s);
   return { recording_s, playback_s, active_s, total_s: capSeconds };
 }

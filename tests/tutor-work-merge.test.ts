@@ -39,6 +39,13 @@ describe("mergeIntervals", () => {
   it("zero-length interval → dropped", () => {
     expect(mergeIntervals([iv(5, 5), iv(0, 10)])).toEqual([iv(0, 10)]);
   });
+  it("does not mutate input", () => {
+    const a = iv(0, 5);
+    const b = iv(3, 8);
+    mergeIntervals([a, b]);
+    expect(a).toEqual({ start: 0, end: 5 });
+    expect(b).toEqual({ start: 3, end: 8 });
+  });
 });
 
 describe("subtractIntervals", () => {
@@ -149,5 +156,13 @@ describe("applyDailyCap", () => {
     expect(r.recording_s).toBe(500);
     expect(r.playback_s).toBe(1000);
     expect(r.active_s).toBe(3500);
+  });
+  it("never returns negative active_s on rounding edge", () => {
+    const r = applyDailyCap(
+      { recording_s: 1000, playback_s: 1000, active_s: 0, total_s: 2000 },
+      1999,
+    );
+    expect(r.active_s).toBeGreaterThanOrEqual(0);
+    expect(r.total_s).toBe(1999);
   });
 });
