@@ -23,6 +23,14 @@ const row = {
   newClaimAction: "+ Написать пользователю",
 };
 
+const quotaPill = {
+  warning: (sec: number) => `⏱ Почти лимит · ${sec}с`,
+  over: "⏰ Лимит достигнут",
+  overBy: (sec: number) => `⏰ Превышен · +${sec}с`,
+  warningAria: "Скоро лимит на сегодня",
+  overAria: "Лимит на сегодня исчерпан",
+};
+
 const inboxPage = {
   pageTitle: "Входящие",
   empty: "Пока ничего нет. Сюда придут сообщения от твоих пользователей.",
@@ -224,6 +232,7 @@ const appShellRoleLabels = {
 export const inbox = {
   dateSeparator,
   row,
+  quotaPill,
   inboxPage,
   thread,
   studentCard,
