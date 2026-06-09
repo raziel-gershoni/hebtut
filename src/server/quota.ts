@@ -7,6 +7,19 @@ export function computeRemaining(usedSeconds: number, budgetSeconds: number): nu
   return Math.max(0, budgetSeconds - usedSeconds);
 }
 
+/**
+ * Like computeRemaining, but signed — returns NEGATIVE when usage > budget.
+ * Used by the tutor-facing quota pill which needs to display over-by amounts.
+ * The existing computeRemaining clamps to ≥ 0 (other callers depend on that),
+ * so this is a separate function rather than a behavior change.
+ */
+export function computeSignedRemaining(
+  usedSeconds: number,
+  budgetSeconds: number,
+): number {
+  return budgetSeconds - usedSeconds;
+}
+
 export interface QuotaInput {
   usedToday: number;
   dailyQuota: number;
@@ -72,6 +85,61 @@ export async function getUsedForToday(studentId: number, tz: string): Promise<nu
 export async function getRemainingForToday(studentId: number, tz: string): Promise<number> {
   const used = await getUsedForToday(studentId, tz);
   return computeRemaining(used, serverEnv.DAILY_QUOTA_SECONDS);
+}
+
+/**
+ * Tutor-facing helper. Returns signed remaining seconds today for many users
+ * in one shot, batching the quota_usage SELECT per unique timezone. Missing
+ * tz → defaults to UTC. Users with no quota_usage row today → full cap.
+ * Negative values indicate over-quota by abs(value).
+ */
+export async function getSignedRemainingForManyToday(
+  userIds: number[],
+): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  if (userIds.length === 0) return out;
+
+  const sb = getServiceRoleClient();
+
+  const { data: tzRows } = await sb
+    .from("users")
+    .select("id, tz")
+    .in("id", userIds);
+  const tzByUser = new Map<number, string>(
+    (tzRows ?? []).map((r) => [r.id, r.tz ?? "UTC"]),
+  );
+
+  const idsByTz = new Map<string, number[]>();
+  for (const id of userIds) {
+    const tz = tzByUser.get(id) ?? "UTC";
+    const bucket = idsByTz.get(tz) ?? [];
+    bucket.push(id);
+    idsByTz.set(tz, bucket);
+  }
+
+  const usedByUser = new Map<number, number>();
+  for (const [tz, ids] of idsByTz) {
+    const date = localDateInTz(new Date(), tz);
+    const { data } = await sb
+      .from("quota_usage")
+      .select("student_id, seconds_used")
+      .in("student_id", ids)
+      .eq("date", date);
+    for (const r of data ?? []) {
+      usedByUser.set(r.student_id, r.seconds_used);
+    }
+  }
+
+  for (const id of userIds) {
+    out.set(
+      id,
+      computeSignedRemaining(
+        usedByUser.get(id) ?? 0,
+        serverEnv.DAILY_QUOTA_SECONDS,
+      ),
+    );
+  }
+  return out;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeRemaining, decideQuota } from "@/server/quota";
+import { computeRemaining, decideQuota, computeSignedRemaining } from "@/server/quota";
 
 describe("computeRemaining", () => {
   it("returns full budget when no usage", () => {
@@ -117,5 +117,20 @@ describe("decideQuota", () => {
         messageDuration: 60,
       }),
     ).toEqual({ ok: false, reason: "no-room", remainingIncludingGrace: 50 });
+  });
+});
+
+describe("computeSignedRemaining", () => {
+  it("returns full cap when no usage", () => {
+    expect(computeSignedRemaining(0, 300)).toBe(300);
+  });
+  it("subtracts used seconds (positive remaining)", () => {
+    expect(computeSignedRemaining(120, 300)).toBe(180);
+  });
+  it("returns zero when usage equals cap", () => {
+    expect(computeSignedRemaining(300, 300)).toBe(0);
+  });
+  it("returns NEGATIVE when over (no clamping — unlike computeRemaining)", () => {
+    expect(computeSignedRemaining(345, 300)).toBe(-45);
   });
 });
