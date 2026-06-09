@@ -353,7 +353,7 @@ export function ThreadView({
   }
 
   return (
-    <PlaybackProvider messages={messages}>
+    <PlaybackProvider messages={messages} jwt={jwt}>
     <div className="flex flex-col gap-1">
       <header className="sticky top-0 z-20 -mx-4 px-4 mb-3 py-3 border-b border-tg-text-hint/15 bg-tg-bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-tg-bg-header/80 flex items-center gap-3">
         <button

@@ -45,14 +45,17 @@ const PlaybackContext = createContext<PlaybackContextValue | null>(null);
 
 export function PlaybackProvider({
   messages,
+  jwt,
   children,
 }: {
   messages: PlayableMessage[];
+  jwt: string;
   children: ReactNode;
 }) {
   const [currentMessageId, setCurrentMessageId] = useState<number | null>(null);
   const [lastEndedAt, setLastEndedAt] = useState<number | null>(null);
   const previousMaxIdRef = useRef<number>(0);
+  const playStartRef = useRef<{ id: number; startedAt: number } | null>(null);
 
   // Filtered + sorted playable list. Used to pick "next after current" on
   // natural end, and to detect newly-arrived messages for fresh-arrival
@@ -84,6 +87,7 @@ export function PlaybackProvider({
   }, [playable, currentMessageId, lastEndedAt]);
 
   const startPlay = useCallback((id: number) => {
+    playStartRef.current = { id, startedAt: Date.now() };
     setCurrentMessageId(id);
   }, []);
 
@@ -97,12 +101,34 @@ export function PlaybackProvider({
   const endPlay = useCallback(
     (id: number) => {
       setLastEndedAt(Date.now());
+      // Flush playback event server-side. Fail-soft — UX doesn't depend on it.
+      const start = playStartRef.current;
+      if (start && start.id === id) {
+        const startedAt = new Date(start.startedAt).toISOString();
+        const endedAt = new Date().toISOString();
+        playStartRef.current = null;
+        void fetch("/api/tutor-work/playback", {
+          method: "POST",
+          cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${jwt}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messageId: id,
+            started_at: startedAt,
+            ended_at: endedAt,
+          }),
+        }).catch(() => {
+          // Network errors are dropped — the playback signal is best-effort
+        });
+      }
       const idx = playable.findIndex((p) => p.id === id);
       const next =
         idx >= 0 && idx < playable.length - 1 ? playable[idx + 1]! : null;
       setCurrentMessageId(next ? next.id : null);
     },
-    [playable],
+    [playable, jwt],
   );
 
   const value = useMemo<PlaybackContextValue>(
