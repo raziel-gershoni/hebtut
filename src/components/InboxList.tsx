@@ -6,6 +6,7 @@ import { StudentPicker } from "./StudentPicker";
 import { AssignTeacherDialog } from "./AssignTeacherDialog";
 import { QuotaPill } from "./QuotaPill";
 import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
+import { useWorkHeartbeat } from "@/hooks/useWorkHeartbeat";
 import { formatDuration, ru } from "@/lib/i18n";
 import { bgFromHandle } from "@/lib/handle";
 import { PAUSE_INACTIVITY_MS } from "@/lib/time";
@@ -63,6 +64,8 @@ export function InboxList({
   const [loaded, setLoaded] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [assigningStudentId, setAssigningStudentId] = useState<number | null>(null);
+
+  useWorkHeartbeat(role === "teacher", jwt);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/inbox", {

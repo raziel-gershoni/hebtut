@@ -10,6 +10,7 @@ import { EditTranscriptDialog } from "./EditTranscriptDialog";
 import { EditTranslationDialog } from "./EditTranslationDialog";
 import { StudentCardDialog } from "./StudentCardDialog";
 import { QuotaPill } from "./QuotaPill";
+import { useWorkHeartbeat } from "@/hooks/useWorkHeartbeat";
 import { speakerColor, type SpeakerColorClasses } from "@/lib/speaker-color";
 import { bgFromHandle } from "@/lib/handle";
 import { ru } from "@/lib/i18n";
@@ -68,6 +69,8 @@ export function ThreadView({
   const [cardOpen, setCardOpen] = useState(false);
   const initialScrollDoneRef = useRef(false);
   const isAdmin = role === "admin";
+
+  useWorkHeartbeat(role === "teacher", jwt);
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/threads/${studentId}`, {
