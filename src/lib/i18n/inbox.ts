@@ -19,13 +19,13 @@ const row = {
   },
   noTeacherBadge: "без тренера",
   unansweredAria: "ждёт ответа",
-  studentInactiveAria: "ученик давно не отвечает",
-  newClaimAction: "+ Написать ученику",
+  studentInactiveAria: "пользователь давно не отвечает",
+  newClaimAction: "+ Написать пользователю",
 };
 
 const inboxPage = {
   pageTitle: "Входящие",
-  empty: "Пока ничего нет. Сюда придут сообщения от твоих учеников.",
+  empty: "Пока ничего нет. Сюда придут сообщения от твоих пользователей.",
   teachersOnly: "Только для тренеров.",
 };
 
@@ -37,26 +37,26 @@ const feedbackPage = {
 
 const thread = {
   takingByOtherFn: (teacher: string) => `Берёт ${teacher}`,
-  studentRoleLabel: "ученик",
-  studentFallbackName: "Ученик",
+  studentRoleLabel: "пользователь",
+  studentFallbackName: "Пользователь",
   teacherFallbackName: "Тренер",
   selfName: "Ты",
   attachMediaAriaLabel: "Прикрепить медиа из библиотеки",
   attachMediaTitle: "Медиа-библиотека",
   initiateButton: "+ Написать",
   cardButton: "Карточка",
-  cardButtonAria: "Открыть карточку ученика",
-  activeSessionHint: "Активная сессия с этим учеником — отвечай в чате.",
+  cardButtonAria: "Открыть карточку пользователя",
+  activeSessionHint: "Активная сессия с этим пользователем — отвечай в чате.",
   noMessages: "Сообщений ещё нет.",
   initiateErrors: {
-    takenByOther: "Другой тренер сейчас работает с этим учеником",
-    notAllowed: "Связь с этим учеником утрачена",
+    takenByOther: "Другой тренер сейчас работает с этим пользователем",
+    notAllowed: "Связь с этим пользователем утрачена",
     generic: "Не удалось — попробуй ещё раз",
   },
 };
 
 const studentCard = {
-  dialogTitle: "Карточка ученика",
+  dialogTitle: "Карточка пользователя",
   statusHeading: "Подписка",
   originHeading: "Откуда пришёл",
   originDirect: "Прямая регистрация",
@@ -83,7 +83,7 @@ const studentCard = {
 
 const assignTeacher = {
   dialogTitle: "Назначить тренера",
-  studentLabel: "Ученик:",
+  studentLabel: "Пользователь:",
   noTeachers: "В системе пока нет тренеров.",
   closeButton: "Закрыть",
   assignButton: (n: number) => `Назначить (${n})`,
@@ -113,14 +113,14 @@ const message = {
   editTranscriptAria: "Изменить расшифровку",
   transcriptDialogTitle: "Расшифровка",
   transcriptDialogHint:
-    "Если бот расслышал не точно — поправь текст. Ученику в Telegram придёт исправление.",
+    "Если бот расслышал не точно — поправь текст. Пользователю в Telegram придёт исправление.",
   transcriptSaveButton: "Сохранить",
   transcriptCancelButton: "Отмена",
   transcriptSaveError: "Не получилось сохранить — попробуй ещё раз.",
   editTranslationAria: "Изменить перевод",
   translationDialogTitle: "Перевод",
   translationDialogHint:
-    "Если перевод неточный — поправь текст. Ученику в Telegram придёт исправление.",
+    "Если перевод неточный — поправь текст. Пользователю в Telegram придёт исправление.",
   translationSaveButton: "Сохранить",
   translationCancelButton: "Отмена",
   translationSaveError: "Не получилось сохранить — попробуй ещё раз.",
@@ -148,7 +148,7 @@ const mediaPicker = {
   storageUploadFailed: (msg: string) => `не удалось загрузить в хранилище: ${msg}`,
   storageMissed: "загрузка в хранилище не дошла — попробуй ещё раз",
   registerFailed: (body: string) => `не удалось зарегистрировать загрузку: ${body}`,
-  sendNoAccess: "нет доступа к ученику",
+  sendNoAccess: "нет доступа к пользователю",
   sendError: "не удалось отправить",
   deleteForbidden: "только загрузивший или админ",
   deleteError: "не удалось удалить",
@@ -183,8 +183,8 @@ const claim = {
 };
 
 const studentPicker = {
-  errorTakenByOther: "Другой тренер сейчас работает с этим учеником",
-  errorNotAllowed: "Связь с этим учеником утрачена",
+  errorTakenByOther: "Другой тренер сейчас работает с этим пользователем",
+  errorNotAllowed: "Связь с этим пользователем утрачена",
   errorGeneric: "Не удалось — попробуй ещё раз",
   closeAriaLabel: "Закрыть",
   title: "Кому написать?",
@@ -217,7 +217,7 @@ const feedbackChat = {
 
 const appShellRoleLabels = {
   pending: "ожидание",
-  student: "ученик",
+  student: "пользователь",
   teacher: "тренер",
 };
 

@@ -107,7 +107,7 @@ export function StudentPicker({ jwt, onClose }: StudentPickerProps) {
 
           {loaded && students.length === 0 && (
             <div className="px-3 py-6 text-center text-sm text-tg-text-hint">
-              За тобой пока не закреплены ученики.
+              За тобой пока не закреплены пользователи.
             </div>
           )}
 

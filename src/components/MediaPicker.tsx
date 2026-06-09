@@ -661,7 +661,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
           pendingDelete ? (
             <>
               Файл «{pendingDelete.title?.trim() || pendingDelete.original_filename}» будет удалён
-              из библиотеки. Уже отправленные ученикам сообщения сохранятся.
+              из библиотеки. Уже отправленные пользователям сообщения сохранятся.
             </>
           ) : null
         }

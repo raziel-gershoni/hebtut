@@ -49,7 +49,7 @@ export async function handleOnboardingCallback(ctx: Context): Promise<void> {
       .answerCallbackQuery({
         text: !user
           ? "Не нашёл твою регистрацию — нажми /start заново"
-          : "Это шаги онбординга для ученика, а ты не ученик",
+          : "Это шаги онбординга для пользователя, а ты не пользователь",
         show_alert: true,
       })
       .catch(() => {});

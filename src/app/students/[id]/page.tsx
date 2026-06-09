@@ -17,7 +17,7 @@ export default function StudentThreadPage({ params }: { params: { id: string } }
         if (!Number.isInteger(studentId)) {
           return (
             <div className="rounded-2xl bg-tg-bg-section p-6 text-sm text-tg-text-destructive">
-              Неверный идентификатор ученика.
+              Неверный идентификатор пользователя.
             </div>
           );
         }

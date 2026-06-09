@@ -195,7 +195,7 @@ const onboarding = {
 };
 
 const labels = {
-  studentFallback: "Ученик",
+  studentFallback: "Пользователь",
   adminFallback: "Админ",
   voiceLower: "голосовое",
   videoNoteLower: "круглое видео",
@@ -203,7 +203,7 @@ const labels = {
   voiceUpper: "Голосовое",
   videoNoteUpper: "Круглое видео",
   openInline: "Открыть",
-  roleStudent: "ученик",
+  roleStudent: "пользователь",
   roleTeacher: "тренер",
   viaInviteSuffix: " (по инвайту)",
 };
@@ -220,16 +220,16 @@ const transcripts = {
 
 const notifications = {
   teacherReplyMissingContext:
-    "Чтобы ответить ученику, открой мини-приложение, нажми «Ответить» рядом с его сообщением, и потом свайпни по подсказке.",
-  teacherReplyDelivered: "✅ Ответ отправлен ученику.",
+    "Чтобы ответить пользователю, открой мини-приложение, нажми «Ответить» рядом с его сообщением, и потом свайпни по подсказке.",
+  teacherReplyDelivered: "✅ Ответ отправлен пользователю.",
   teacherReplyDeliveredWithTranscript: (transcript: string) =>
-    `✅ Ответ отправлен ученику.\n\n${transcript}`,
+    `✅ Ответ отправлен пользователю.\n\n${transcript}`,
   teacherReplyDeliveredWithBoth: (transcript: string, translation: string) =>
-    `✅ Ответ отправлен ученику.\n\n${transcript}\n\n${translation}`,
+    `✅ Ответ отправлен пользователю.\n\n${transcript}\n\n${translation}`,
   editTranscriptButton: "Изменить расшифровку",
   editTranslationButton: "Изменить перевод",
   teacherReplyScheduled: (time: string) =>
-    `✅ Запланировано. Ученик получит сообщение в ${time} — он попросил приходить только в это время.`,
+    `✅ Запланировано. Пользователь получит сообщение в ${time} — он попросил приходить только в это время.`,
   teacherReplyFailed: "Не удалось отправить ответ. Попробуй ещё раз через мини-приложение.",
   teacherClaimPrompt: (studentName: string, dur: string, when: string) =>
     `📩 От: ${studentName}. Голосовое ${dur}, отправлено ${when}. Свайпни влево по этому сообщению и запиши голосовое или круглое видео.`,
@@ -240,7 +240,7 @@ const notifications = {
   adminFeedbackPing: (userLabel: string, snippet: string) =>
     `💬 От ${userLabel}: «${snippet}». Открой админку, чтобы ответить.`,
   adminUnassignedPing: (userLabel: string, kindLabel: string) =>
-    `📥 ${kindLabel} от ${userLabel} — ученик пока не закреплён ни за одним тренером. Назначь тренера, чтобы ответ пошёл.`,
+    `📥 ${kindLabel} от ${userLabel} — пользователь пока не закреплён ни за одним тренером. Назначь тренера, чтобы ответ пошёл.`,
   adminNewUserPing: (label: string, roleLabel: string, viaLabel: string) =>
     `👤 Новый пользователь: ${label} — ${roleLabel}${viaLabel}. Открой админку, чтобы посмотреть.`,
   userFeedbackReplyPing:

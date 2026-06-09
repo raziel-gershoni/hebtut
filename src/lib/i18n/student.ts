@@ -30,7 +30,7 @@ const menu = {
 
 const transcriptsPage = {
   pageTitle: "Расшифровки и перевод",
-  studentsOnly: "Только для учеников.",
+  studentsOnly: "Только для пользователей.",
   transcriptsTitle: "Расшифровка",
   transcriptsBody:
     "Текст того, что сказал тренер, приходит отдельным сообщением после голосового.",
@@ -75,7 +75,7 @@ const summary = {
 
 const freeze = {
   pageTitle: "Заморозка",
-  studentsOnly: "Только для учеников.",
+  studentsOnly: "Только для пользователей.",
   howItWorksHeader: "Как работает",
   budgetLine: (cap: number) =>
     `Можно заморозить доступ до ${cap} дней в месяц.`,
@@ -100,7 +100,7 @@ const freeze = {
 
 const referrals = {
   pageTitle: "Рефералы",
-  studentsOnly: "Только для учеников.",
+  studentsOnly: "Только для пользователей.",
   lockedHeader: "Рефералы недоступны",
   lockedBody:
     "Реферальная программа откроется, когда закончится пробный период.",
@@ -124,7 +124,7 @@ const referrals = {
 
 const responseWindow = {
   pageTitle: "Время ответа",
-  studentsOnly: "Только для учеников.",
+  studentsOnly: "Только для пользователей.",
   whenHeader: "Когда тренеру можно начинать диалог",
   whenBody: [
     "Если тренер пишет первым — сообщение придёт только в выбранное время.",
@@ -144,7 +144,7 @@ const responseWindow = {
 const home = {
   roleLabels: {
     pending: "ждём подтверждения",
-    student: "ученик",
+    student: "пользователь",
     teacher: "тренер",
   },
   adminTag: "АДМИН",
@@ -154,13 +154,13 @@ const home = {
   adminHint:
     "Ты администратор. Если хочешь ещё и принимать ответы — назначь себе роль «teacher» в админке.",
   inboxTitle: "Входящие",
-  inboxSubtitleTeacher: "Сообщения от твоих учеников",
+  inboxSubtitleTeacher: "Сообщения от твоих пользователей",
   inboxSubtitleAdmin: "Просмотр всех диалогов (только чтение)",
   feedbackTitle: "Обратная связь",
   feedbackSubtitleAdmin: "Сообщения от пользователей в админ-пул",
   feedbackSubtitleUser: "Связаться с админом",
   adminPanelTitle: "Админка",
-  adminPanelSubtitle: "Пользователи и связи ученик↔тренер",
+  adminPanelSubtitle: "Пользователи и связи пользователь↔тренер",
 };
 
 export const student = {
