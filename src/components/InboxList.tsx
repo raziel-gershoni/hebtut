@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Avatar } from "./Avatar";
 import { StudentPicker } from "./StudentPicker";
 import { AssignTeacherDialog } from "./AssignTeacherDialog";
+import { QuotaPill } from "./QuotaPill";
 import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
 import { formatDuration, ru } from "@/lib/i18n";
 import { bgFromHandle } from "@/lib/handle";
@@ -41,6 +42,12 @@ interface Chat {
     teacher_has_avatar: boolean;
     is_self: boolean;
   } | null;
+  /**
+   * Mirror of /api/inbox `quota_remaining_seconds`. Optional on the client
+   * so an old server response (without the field) doesn't blow up — treated
+   * as no-pill in that case.
+   */
+  quota_remaining_seconds?: number;
 }
 
 export function InboxList({
@@ -258,8 +265,15 @@ function ChatRow({
                 {ru.inbox.row.noTeacherBadge}
               </button>
             )}
+            {chat.quota_remaining_seconds != null && (
+              <span className="ml-auto shrink-0">
+                <QuotaPill remainingSeconds={chat.quota_remaining_seconds} />
+              </span>
+            )}
             {time && (
-              <span className="ml-auto shrink-0 text-[11px] tabular-nums text-tg-text-hint">
+              <span
+                className={`${chat.quota_remaining_seconds != null ? "" : "ml-auto "}shrink-0 text-[11px] tabular-nums text-tg-text-hint`}
+              >
                 {time}
               </span>
             )}
