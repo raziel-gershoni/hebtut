@@ -9,6 +9,7 @@ export interface AuthedUser {
   role: UserRole;
   isAdmin: boolean;
   name: string | null;
+  tz: string | null;
 }
 
 let cachedJwks: ReturnType<typeof createRemoteJWKSet> | null = null;
@@ -45,7 +46,7 @@ export async function authFromRequest(req: Request): Promise<AuthedUser | null> 
   const sb = getServiceRoleClient();
   const { data } = await sb
     .from("users")
-    .select("id, tg_user_id, role, is_admin, name")
+    .select("id, tg_user_id, role, is_admin, name, tz")
     .eq("tg_user_id", tgUserId)
     .maybeSingle();
   if (!data) return null;
@@ -55,6 +56,7 @@ export async function authFromRequest(req: Request): Promise<AuthedUser | null> 
     role: data.role,
     isAdmin: data.is_admin,
     name: data.name,
+    tz: data.tz,
   };
 }
 
