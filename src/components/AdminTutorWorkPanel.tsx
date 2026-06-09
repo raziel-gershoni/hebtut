@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Avatar } from "./Avatar";
 import { Spinner } from "./Spinner";
 import { ru } from "@/lib/i18n";
-import { addDays, format, parseISO, startOfWeek, startOfMonth } from "date-fns";
+import { format, startOfWeek, startOfMonth } from "date-fns";
 
 interface DayBucket {
   date: string;
