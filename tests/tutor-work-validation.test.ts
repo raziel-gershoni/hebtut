@@ -53,7 +53,6 @@ describe("validatePlayback", () => {
   it("rejects when message kind is text (not voice/video_note)", () => {
     const r = validatePlayback({
       ...validInput,
-      // @ts-expect-error — testing runtime guard
       message: { ...baseMessage, kind: "text" },
     });
     expect(r).toEqual({ ok: false, reason: "not-playable" });
