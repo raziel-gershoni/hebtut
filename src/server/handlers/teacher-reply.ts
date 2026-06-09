@@ -154,6 +154,24 @@ export async function handleTeacherReply(ctx: Context): Promise<boolean> {
   const fileId = (voice?.file_id ?? note?.file_id) as string;
   const duration = (voice?.duration ?? note?.duration ?? 0) as number;
 
+  // Record the recording-work event. Sized by the file duration from the
+  // TG webhook (server-authoritative — tutor can't tamper). Fires here,
+  // before the immediate/scheduled branching, so scheduled outbound also
+  // credits the recording work to "now" (when it happened) rather than
+  // delivery time.
+  if (duration > 0) {
+    const recEnd = new Date();
+    const recStart = new Date(recEnd.getTime() - duration * 1000);
+    await sb.from("tutor_work_events").insert({
+      tutor_id: teacher.id,
+      kind: "recording",
+      started_at: recStart.toISOString(),
+      ended_at: recEnd.toISOString(),
+      ref_id: prompt.student_id,
+      source: "tg_webhook",
+    });
+  }
+
   // Response-window gate. Replies to a student-initiated thread (`original`
   // is set) deliver immediately — the conversational expectation is "now."
   // Pure initiation (`original === null`) is held until the student's
