@@ -4,6 +4,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { resolveDisplay } from "@/server/display";
 import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
+import { getSignedRemainingForManyToday } from "@/server/quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -186,5 +187,11 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
     };
   }
 
-  return Response.json({ messages, claim, student }, { headers: noStoreHeaders });
+  const quotaMap = await getSignedRemainingForManyToday([studentId]);
+  const quota_remaining_seconds = quotaMap.get(studentId) ?? 0;
+
+  return Response.json(
+    { messages, claim, student, quota_remaining_seconds },
+    { headers: noStoreHeaders },
+  );
 }
