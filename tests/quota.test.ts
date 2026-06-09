@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { computeRemaining, decideQuota, computeSignedRemaining } from "@/server/quota";
+import {
+  computeRemaining,
+  decideQuota,
+  computeSignedRemaining,
+  groupUserIdsByTz,
+  computeSignedRemainingMap,
+} from "@/server/quota";
 
 describe("computeRemaining", () => {
   it("returns full budget when no usage", () => {
@@ -132,5 +138,69 @@ describe("computeSignedRemaining", () => {
   });
   it("returns NEGATIVE when over (no clamping — unlike computeRemaining)", () => {
     expect(computeSignedRemaining(345, 300)).toBe(-45);
+  });
+});
+
+describe("groupUserIdsByTz", () => {
+  it("returns empty map for empty input", () => {
+    expect(groupUserIdsByTz([], new Map())).toEqual(new Map());
+  });
+
+  it("groups all ids under a single tz when all share it", () => {
+    const tzByUser = new Map([
+      [1, "Europe/Moscow"],
+      [2, "Europe/Moscow"],
+      [3, "Europe/Moscow"],
+    ]);
+    const result = groupUserIdsByTz([1, 2, 3], tzByUser);
+    expect(result.size).toBe(1);
+    expect(result.get("Europe/Moscow")).toEqual([1, 2, 3]);
+  });
+
+  it("creates one bucket per distinct tz", () => {
+    const tzByUser = new Map([
+      [1, "Europe/Moscow"],
+      [2, "Asia/Tokyo"],
+      [3, "Europe/Moscow"],
+      [4, "Asia/Tokyo"],
+    ]);
+    const result = groupUserIdsByTz([1, 2, 3, 4], tzByUser);
+    expect(result.size).toBe(2);
+    expect(result.get("Europe/Moscow")).toEqual([1, 3]);
+    expect(result.get("Asia/Tokyo")).toEqual([2, 4]);
+  });
+
+  it("defaults missing tz entries to UTC", () => {
+    const tzByUser = new Map([[1, "Europe/Moscow"]]);
+    const result = groupUserIdsByTz([1, 2, 3], tzByUser);
+    expect(result.get("Europe/Moscow")).toEqual([1]);
+    expect(result.get("UTC")).toEqual([2, 3]);
+  });
+});
+
+describe("computeSignedRemainingMap", () => {
+  it("returns full cap for users with no usage entry", () => {
+    const result = computeSignedRemainingMap([1, 2], new Map(), 300);
+    expect(result.get(1)).toBe(300);
+    expect(result.get(2)).toBe(300);
+  });
+
+  it("subtracts known usage", () => {
+    const usedByUser = new Map([[1, 100]]);
+    const result = computeSignedRemainingMap([1, 2], usedByUser, 300);
+    expect(result.get(1)).toBe(200);
+    expect(result.get(2)).toBe(300);
+  });
+
+  it("returns negative when usage > cap (over)", () => {
+    const usedByUser = new Map([[1, 345]]);
+    const result = computeSignedRemainingMap([1], usedByUser, 300);
+    expect(result.get(1)).toBe(-45);
+  });
+
+  it("returns exactly 0 when usage equals cap", () => {
+    const usedByUser = new Map([[1, 300]]);
+    const result = computeSignedRemainingMap([1], usedByUser, 300);
+    expect(result.get(1)).toBe(0);
   });
 });

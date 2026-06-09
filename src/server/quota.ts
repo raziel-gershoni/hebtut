@@ -88,6 +88,38 @@ export async function getRemainingForToday(studentId: number, tz: string): Promi
 }
 
 /**
+ * Pure: group user ids by their tz, defaulting missing entries to UTC.
+ */
+export function groupUserIdsByTz(
+  userIds: number[],
+  tzByUser: Map<number, string>,
+): Map<string, number[]> {
+  const idsByTz = new Map<string, number[]>();
+  for (const id of userIds) {
+    const tz = tzByUser.get(id) ?? "UTC";
+    const bucket = idsByTz.get(tz) ?? [];
+    bucket.push(id);
+    idsByTz.set(tz, bucket);
+  }
+  return idsByTz;
+}
+
+/**
+ * Pure: compute the final user→signedRemaining map from a usage lookup.
+ */
+export function computeSignedRemainingMap(
+  userIds: number[],
+  usedByUser: Map<number, number>,
+  budgetSeconds: number,
+): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const id of userIds) {
+    out.set(id, computeSignedRemaining(usedByUser.get(id) ?? 0, budgetSeconds));
+  }
+  return out;
+}
+
+/**
  * Tutor-facing helper. Returns signed remaining seconds today for many users
  * in one shot, batching the quota_usage SELECT per unique timezone. Missing
  * tz → defaults to UTC. Users with no quota_usage row today → full cap.
@@ -96,11 +128,11 @@ export async function getRemainingForToday(studentId: number, tz: string): Promi
 export async function getSignedRemainingForManyToday(
   userIds: number[],
 ): Promise<Map<number, number>> {
-  const out = new Map<number, number>();
-  if (userIds.length === 0) return out;
+  if (userIds.length === 0) return new Map();
 
   const sb = getServiceRoleClient();
 
+  // 1. Fetch tz for all requested users.
   const { data: tzRows } = await sb
     .from("users")
     .select("id, tz")
@@ -109,14 +141,10 @@ export async function getSignedRemainingForManyToday(
     (tzRows ?? []).map((r) => [r.id, r.tz ?? "UTC"]),
   );
 
-  const idsByTz = new Map<string, number[]>();
-  for (const id of userIds) {
-    const tz = tzByUser.get(id) ?? "UTC";
-    const bucket = idsByTz.get(tz) ?? [];
-    bucket.push(id);
-    idsByTz.set(tz, bucket);
-  }
+  // 2. Group ids by tz.
+  const idsByTz = groupUserIdsByTz(userIds, tzByUser);
 
+  // 3. Query quota_usage once per tz, accumulate usage.
   const usedByUser = new Map<number, number>();
   for (const [tz, ids] of idsByTz) {
     const date = localDateInTz(new Date(), tz);
@@ -130,16 +158,8 @@ export async function getSignedRemainingForManyToday(
     }
   }
 
-  for (const id of userIds) {
-    out.set(
-      id,
-      computeSignedRemaining(
-        usedByUser.get(id) ?? 0,
-        serverEnv.DAILY_QUOTA_SECONDS,
-      ),
-    );
-  }
-  return out;
+  // 4. Compute and return the final signed-remaining map.
+  return computeSignedRemainingMap(userIds, usedByUser, serverEnv.DAILY_QUOTA_SECONDS);
 }
 
 /**
