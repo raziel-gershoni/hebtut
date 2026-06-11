@@ -15,7 +15,7 @@ import {
 } from "@/server/invites";
 import { recordAudit } from "@/server/audit";
 import { fanOutNewUserToAdmins } from "@/server/notifications";
-import { getQuotaChatNotificationsEnabled } from "@/server/settings";
+import { getQuotaChatNotificationsEnabled, getReferralsEnabled } from "@/server/settings";
 import { sendStep1Welcome, resendCurrentOnboardingStep } from "@/server/onboarding";
 
 export async function handleStart(ctx: Context): Promise<void> {
@@ -116,7 +116,7 @@ export async function handleStart(ctx: Context): Promise<void> {
     // Referral attribution: only valid for fresh signups, never re-attribution
     // for an existing student. Look up the referrer by token; ignore unknown
     // tokens silently (don't reveal whether a token exists).
-    if (refToken) {
+    if (refToken && (await getReferralsEnabled())) {
       const { data: referrer } = await sb
         .from("users")
         .select("id")
