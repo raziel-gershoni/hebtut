@@ -9,6 +9,7 @@ interface Settings {
   media_uploads_teachers_enabled: boolean;
   transcripts_enabled: boolean;
   translation_enabled: boolean;
+  referrals_enabled: boolean;
 }
 
 type ToggleKey = keyof Settings;
@@ -27,6 +28,7 @@ const TOGGLES: readonly ToggleSpec[] = [
   { key: "media_uploads_teachers_enabled", ...ru.admin.settings.toggles.mediaUploadsTeachers },
   { key: "transcripts_enabled", ...ru.admin.settings.toggles.transcripts },
   { key: "translation_enabled", ...ru.admin.settings.toggles.translation },
+  { key: "referrals_enabled", ...ru.admin.settings.toggles.referrals },
 ];
 
 export function AdminSettingsPanel({ jwt }: { jwt: string }) {
