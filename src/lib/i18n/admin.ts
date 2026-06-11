@@ -164,9 +164,6 @@ const users = {
   roleSwitchAriaLabel: (toLower: string) => `Сделать ${toLower}`,
   roleSwitchUnassignedTitle: "Не назначено",
   roleSwitchUnassignedAriaLabel: "Роль не назначена",
-  // Admin chip
-  adminTitleOn: "Снять права админа",
-  adminTitleOff: "Сделать админом",
   // Kebab menu
   actionsAriaLabel: "Действия",
   menuEditName: "Изменить имя",
@@ -177,14 +174,11 @@ const users = {
   menuDelete: "Удалить",
   menuBanForever: "Заблокировать навсегда",
   // ConfirmDialog titles
-  confirmAdminOffTitle: "Снять права админа?",
   confirmDeleteTitle: "Удалить пользователя?",
   confirmBanTitle: "Заблокировать навсегда?",
   confirmResetOnboardingTitle: "Сбросить онбординг?",
   confirmRoleTitle: "Подтвердить смену роли",
   // ConfirmDialog bodies
-  confirmAdminOffBody:
-    "Без прав админа этот пользователь больше не сможет управлять пользователями и связями.",
   confirmBanBody: (name: string) =>
     `${name || "Пользователь"} не сможет зарегистрироваться заново. Все его сообщения будут удалены.`,
   confirmDeleteBody: (name: string) =>

@@ -42,7 +42,6 @@ const ROLE_DEFS: Record<
 
 type PendingChange =
   | { kind: "role"; id: number; role: AdminUser["role"] }
-  | { kind: "admin"; id: number; is_admin: boolean }
   | { kind: "delete"; id: number; name: string; ban: boolean }
   | { kind: "reset-onboarding"; id: number; name: string };
 
@@ -111,7 +110,7 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
   const [editingNameUser, setEditingNameUser] = useState<AdminUser | null>(null);
   const [transcriptsUser, setTranscriptsUser] = useState<AdminUser | null>(null);
 
-  async function patchRole(id: number, body: { role?: AdminUser["role"]; is_admin?: boolean }) {
+  async function patchRole(id: number, body: { role?: AdminUser["role"] }) {
     await fetch(`/api/admin/users/${id}/role`, {
       method: "PATCH",
       cache: "no-store",
@@ -245,7 +244,6 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
             >
               <Avatar
                 name={u.name ?? String(u.tg_user_id)}
-                isAdmin={u.is_admin}
                 imageUrl={avatarUrl(jwt, u)}
               />
               <div className="min-w-0 flex-1 leading-tight">
@@ -314,25 +312,6 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
                 </button>
               );
             })()}
-            <button
-              type="button"
-              title={u.is_admin ? ru.admin.users.adminTitleOn : ru.admin.users.adminTitleOff}
-              aria-label={u.is_admin ? ru.admin.users.adminTitleOn : ru.admin.users.adminTitleOff}
-              aria-pressed={u.is_admin}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (u.is_admin)
-                  setPending({ kind: "admin", id: u.id, is_admin: false });
-                else void patchRole(u.id, { is_admin: true });
-              }}
-              className={`shrink-0 w-7 h-7 inline-flex items-center justify-center rounded-lg text-base transition-transform active:scale-95 ${
-                u.is_admin
-                  ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                  : "bg-tg-bg-secondary text-tg-text-hint/60"
-              }`}
-            >
-              <span aria-hidden>{u.is_admin ? "👑" : "👤"}</span>
-            </button>
             <div className="relative shrink-0">
               <button
                 type="button"
@@ -470,32 +449,27 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
       <ConfirmDialog
         open={!!pending}
         title={
-          pending?.kind === "admin"
-            ? ru.admin.users.confirmAdminOffTitle
-            : pending?.kind === "delete"
-              ? pending.ban
-                ? ru.admin.users.confirmBanTitle
-                : ru.admin.users.confirmDeleteTitle
-              : pending?.kind === "reset-onboarding"
-                ? ru.admin.users.confirmResetOnboardingTitle
-                : ru.admin.users.confirmRoleTitle
+          pending?.kind === "delete"
+            ? pending.ban
+              ? ru.admin.users.confirmBanTitle
+              : ru.admin.users.confirmDeleteTitle
+            : pending?.kind === "reset-onboarding"
+              ? ru.admin.users.confirmResetOnboardingTitle
+              : ru.admin.users.confirmRoleTitle
         }
         body={
-          pending?.kind === "admin"
-            ? ru.admin.users.confirmAdminOffBody
-            : pending?.kind === "delete"
-              ? pending.ban
-                ? ru.admin.users.confirmBanBody(pending.name)
-                : ru.admin.users.confirmDeleteBody(pending.name)
-              : pending?.kind === "reset-onboarding"
-                ? ru.admin.users.confirmResetOnboardingBody(pending.name)
-                : ru.admin.users.confirmRoleBody
+          pending?.kind === "delete"
+            ? pending.ban
+              ? ru.admin.users.confirmBanBody(pending.name)
+              : ru.admin.users.confirmDeleteBody(pending.name)
+            : pending?.kind === "reset-onboarding"
+              ? ru.admin.users.confirmResetOnboardingBody(pending.name)
+              : ru.admin.users.confirmRoleBody
         }
         onCancel={() => setPending(null)}
         onConfirm={async () => {
           if (!pending) return;
           if (pending.kind === "role") await patchRole(pending.id, { role: pending.role });
-          else if (pending.kind === "admin") await patchRole(pending.id, { is_admin: pending.is_admin });
           else if (pending.kind === "delete") await deleteUser(pending.id, pending.ban);
           else if (pending.kind === "reset-onboarding") await resetOnboarding(pending.id);
           setPending(null);
