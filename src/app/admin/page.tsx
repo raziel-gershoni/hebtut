@@ -16,13 +16,14 @@ import { AdminMediaLibrarySection } from "@/components/AdminMediaLibrarySection"
 import { AdminOnboardingVideos } from "@/components/AdminOnboardingVideos";
 import { AdminVersionFooter } from "@/components/AdminVersionFooter";
 import { AdminTutorWorkPanel } from "@/components/AdminTutorWorkPanel";
+import { AdminAdminsPanel } from "@/components/AdminAdminsPanel";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { ru } from "@/lib/i18n";
 
 export default function AdminPage() {
   return (
     <AppShell title={ru.admin.pages.pageTitle} back="/">
-      {({ jwt, isAdmin }) => {
+      {({ jwt, isAdmin, userId }) => {
         if (!isAdmin) {
           return (
             <div className="rounded-2xl bg-tg-bg-section p-6 text-sm text-tg-text-hint">
@@ -30,7 +31,7 @@ export default function AdminPage() {
             </div>
           );
         }
-        return <AdminBody jwt={jwt} />;
+        return <AdminBody jwt={jwt} selfId={userId} />;
       }}
     </AppShell>
   );
@@ -40,7 +41,7 @@ export default function AdminPage() {
  * Owns the shared `users` and `links` lists so the pending inbox, role
  * table, and connections panel all stay in sync without page reloads.
  */
-function AdminBody({ jwt }: { jwt: string }) {
+function AdminBody({ jwt, selfId }: { jwt: string; selfId: number }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [links, setLinks] = useState<Connection[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -98,6 +99,9 @@ function AdminBody({ jwt }: { jwt: string }) {
       </div>
       <CollapsibleSection id="users" title={ru.admin.pages.sections.users}>
         <AdminUsersTable jwt={jwt} users={users} loaded={loaded} refetch={refetch} />
+      </CollapsibleSection>
+      <CollapsibleSection id="admins" title={ru.admin.pages.sections.admins}>
+        <AdminAdminsPanel jwt={jwt} selfId={selfId} users={users} loaded={loaded} refetch={refetch} />
       </CollapsibleSection>
       <CollapsibleSection id="connections" title={ru.admin.pages.sections.connections}>
         <AdminConnectionsPanel jwt={jwt} users={users} links={links} refetch={refetch} />
