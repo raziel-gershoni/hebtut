@@ -162,3 +162,18 @@ export function diffFlagStates(existing: ExistingFlag[], desired: DesiredFlag[])
   }
   return out;
 }
+
+/**
+ * Tutor-waiting comparison, shared shape with motivation.ts's
+ * teacherWaitingForReply — which is deliberately THRESHOLDLESS (motivation
+ * copy shows as soon as the teacher is waiting). The engagement flag adds
+ * the gap threshold so only sustained silence alerts the admin.
+ */
+export function isGhosting(
+  latestOutMs: number,
+  latestInMs: number,
+  nowMs: number,
+  thresholdMs: number,
+): boolean {
+  return latestInMs > 0 && latestOutMs > latestInMs && nowMs - latestOutMs >= thresholdMs;
+}

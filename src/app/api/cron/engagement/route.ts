@@ -6,6 +6,7 @@ import { ru } from "@/lib/i18n";
 import { recordAudit } from "@/server/audit";
 import { localDateInTz } from "@/lib/time";
 import type { Json } from "@/types/database";
+import { engagementMetricLine } from "@/lib/engagement-format";
 import {
   GHOSTING_HOURS,
   GHOSTING_LOOKBACK_DAYS,
@@ -16,6 +17,7 @@ import {
   diffFlagStates,
   evaluatePlateau,
   evaluateSlump,
+  isGhosting,
   type DesiredFlag,
   type ExistingFlag,
   type Transition,
@@ -46,7 +48,7 @@ async function handler(req: NextRequest): Promise<Response> {
   // 1. Monitored population: students, not suspended, raw sub status
   // trial/active, trial not yet past its end (the hourly subscriptions
   // cron flips those; we just skip not-yet-flipped rows), not frozen.
-  const { data: rows } = await sb
+  const { data: rows, error: rowsError } = await sb
     .from("users")
     .select(
       "id, tz, name, preferred_name, created_at, subscriptions!inner(status, trial_started_at, trial_ends_at, frozen_until)",
@@ -54,6 +56,10 @@ async function handler(req: NextRequest): Promise<Response> {
     .eq("role", "student")
     .eq("status", "active")
     .in("subscriptions.status", ["trial", "active"]);
+  if (rowsError) {
+    console.error("[engagement] population query failed", rowsError.message);
+    return Response.json({ error: "load_failed" }, { status: 500 });
+  }
 
   const studentsRaw: MonitoredStudent[] = (rows ?? [])
     .filter((r) => {
@@ -85,10 +91,14 @@ async function handler(req: NextRequest): Promise<Response> {
   const monitoredIds = new Set(students.map((s) => s.id));
 
   // 2. Open flags (for everyone, incl. students who left the population).
-  const { data: openFlags } = await sb
+  const { data: openFlags, error: openFlagsError } = await sb
     .from("student_flags")
     .select("student_id, kind, tier")
     .is("resolved_at", null);
+  if (openFlagsError) {
+    console.error("[engagement] open-flags query failed", openFlagsError.message);
+    return Response.json({ error: "load_failed" }, { status: 500 });
+  }
   const openByStudent = new Map<number, ExistingFlag[]>();
   for (const f of openFlags ?? []) {
     const arr = openByStudent.get(f.student_id) ?? [];
@@ -194,17 +204,16 @@ async function handler(req: NextRequest): Promise<Response> {
         { onConflict: "student_id,kind" },
       );
     } else {
-      await sb.from("student_flags").upsert(
-        {
-          student_id: studentId,
-          kind: t.kind,
+      await sb
+        .from("student_flags")
+        .update({
           tier: t.tier,
-          last_evaluated_at: nowIso,
-          resolved_at: null,
           meta: t.meta as Json,
-        },
-        { onConflict: "student_id,kind" },
-      );
+          last_evaluated_at: nowIso,
+        })
+        .eq("student_id", studentId)
+        .eq("kind", t.kind)
+        .is("resolved_at", null);
     }
     if (t.type === "open") opened++;
     else escalated++;
@@ -262,7 +271,7 @@ async function handler(req: NextRequest): Promise<Response> {
 
       const inT = latestIn.get(s.id) ?? 0;
       const outT = latestOut.get(s.id) ?? 0;
-      if (inT > 0 && outT > inT && now.getTime() - outT >= GHOSTING_HOURS * 3600_000) {
+      if (isGhosting(outT, inT, now.getTime(), GHOSTING_HOURS * 3600_000)) {
         desired.push({
           kind: "ghosting",
           tier: null,
@@ -289,7 +298,7 @@ async function handler(req: NextRequest): Promise<Response> {
         await applyTransition(s.id, t);
         if (t.type === "open" || t.type === "escalate") {
           const name = s.preferred_name ?? s.name ?? `#${s.id}`;
-          newFlagLines.push(`${ru.bot.engagementDigest.newPrefix}${name} — ${metricLine(t)}`);
+          newFlagLines.push(`${ru.bot.engagementDigest.newPrefix}${name} — ${engagementMetricLine(t.kind, t.meta)}`);
         }
       }
       // Touch last_evaluated_at + refresh meta on unchanged open flags.
@@ -315,7 +324,15 @@ async function handler(req: NextRequest): Promise<Response> {
   for (const [studentId, flags] of openByStudent) {
     if (monitoredIds.has(studentId)) continue;
     for (const f of flags) {
-      await applyTransition(studentId, { type: "resolve", kind: f.kind, reason: "excluded" });
+      try {
+        await applyTransition(studentId, { type: "resolve", kind: f.kind, reason: "excluded" });
+      } catch (e) {
+        console.warn("[engagement] excluded-resolve failed", {
+          student_id: studentId,
+          kind: f.kind,
+          reason: (e as Error).message,
+        });
+      }
     }
   }
 
@@ -365,29 +382,6 @@ async function handler(req: NextRequest): Promise<Response> {
   return Response.json({ students: students.length, opened, escalated, resolved, digested });
 }
 
-function metricLine(t: { kind: string; tier?: string | null; meta: Record<string, unknown> }): string {
-  switch (t.kind) {
-    case "inactive":
-      return ru.admin.engagement.metricInactive(Number(t.meta.days_silent ?? 0));
-    case "slump": {
-      const cur = Number(t.meta.current_week_s ?? 0);
-      const prior = Number(t.meta.prior_week_s ?? 1);
-      return ru.admin.engagement.metricSlump(Math.round((1 - cur / Math.max(1, prior)) * 100));
-    }
-    case "plateau":
-      return ru.admin.engagement.metricPlateau(
-        Number(t.meta.streak ?? 0),
-        Math.round(Number(t.meta.median7_s ?? 0)),
-      );
-    case "ghosting":
-      return ru.admin.engagement.metricGhosting(Number(t.meta.gap_hours ?? 0));
-    case "tutor_sla":
-      return ru.admin.engagement.metricTutorSla(Number(t.meta.pending_hours ?? 0));
-    default:
-      return "";
-  }
-}
-
 function buildDigestText(
   newLines: string[],
   open: { student_id: number; kind: string; tier: string | null; meta: unknown; users: unknown }[],
@@ -400,12 +394,10 @@ function buildDigestText(
 
   // Ongoing = students who had a flag before this run AND still have one open.
   // Dedup by student id (not by name string) to avoid double-counting escalates.
-  const postRunStudentIds = new Set(open.map((f) => f.student_id));
   const seenOngoing = new Set<number>();
   const ongoingNames: string[] = [];
   for (const f of open) {
     if (!preRunFlaggedIds.has(f.student_id)) continue;
-    if (!postRunStudentIds.has(f.student_id)) continue;
     if (seenOngoing.has(f.student_id)) continue;
     seenOngoing.add(f.student_id);
     if (ongoingNames.length >= 15) continue;

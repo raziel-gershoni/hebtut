@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Avatar } from "./Avatar";
 import { Spinner } from "./Spinner";
 import { ru } from "@/lib/i18n";
+import { engagementMetricLine } from "@/lib/engagement-format";
 
 interface FlagRow {
   student_id: number;
@@ -20,27 +21,6 @@ const GROUPS: { severity: FlagRow["severity"]; title: string; dot: string }[] = 
   { severity: "yellow", title: ru.admin.engagement.groupSliding, dot: "🟡" },
   { severity: "grey", title: ru.admin.engagement.groupPlateau, dot: "⚪" },
 ];
-
-function metricLine(f: FlagRow): string {
-  switch (f.kind) {
-    case "inactive":
-      return ru.admin.engagement.metricInactive(Number(f.meta.days_silent ?? 0));
-    case "slump": {
-      const cur = Number(f.meta.current_week_s ?? 0);
-      const prior = Math.max(1, Number(f.meta.prior_week_s ?? 1));
-      return ru.admin.engagement.metricSlump(Math.round((1 - cur / prior) * 100));
-    }
-    case "plateau":
-      return ru.admin.engagement.metricPlateau(
-        Number(f.meta.streak ?? 0),
-        Math.round(Number(f.meta.median7_s ?? 0)),
-      );
-    case "ghosting":
-      return ru.admin.engagement.metricGhosting(Number(f.meta.gap_hours ?? 0));
-    case "tutor_sla":
-      return ru.admin.engagement.metricTutorSla(Number(f.meta.pending_hours ?? 0));
-  }
-}
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
@@ -118,7 +98,7 @@ export function AdminEngagementPanel({ jwt }: { jwt: string }) {
                   <div className="min-w-0 flex-1 leading-tight">
                     <div className="font-medium tracking-tight truncate">{f.name}</div>
                     <div className="mt-0.5 text-[11px] text-tg-text-hint truncate">
-                      {metricLine(f)}
+                      {engagementMetricLine(f.kind, f.meta)}
                     </div>
                   </div>
                   <span className="shrink-0 text-[11px] text-tg-text-hint tabular-nums">

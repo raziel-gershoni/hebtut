@@ -6,6 +6,7 @@ import {
   median,
   computePracticeSignals,
   diffFlagStates,
+  isGhosting,
   type ExistingFlag,
   type DesiredFlag,
 } from "@/server/engagement";
@@ -170,5 +171,19 @@ describe("diffFlagStates", () => {
     // dormant → at_risk is a downgrade but the contract says any tier change = escalate.
     const t = diffFlagStates([open("inactive", "dormant")], [want("inactive", "at_risk")]);
     expect(t).toEqual([{ type: "escalate", kind: "inactive", tier: "at_risk", meta: {} }]);
+  });
+});
+
+describe("isGhosting", () => {
+  it("fires when tutor replied and student hasn't replied past the threshold", () => {
+    // outT=100ms, inT=50ms (tutor last), gap=60ms >= threshold 50ms
+    expect(isGhosting(100, 50, 160, 50)).toBe(true);
+  });
+  it("suppressed when student has never replied (inT=0)", () => {
+    expect(isGhosting(100, 0, 200, 50)).toBe(false);
+  });
+  it("suppressed when gap is below the threshold", () => {
+    // gap = 160 - 100 = 60ms, threshold = 70ms
+    expect(isGhosting(100, 50, 160, 70)).toBe(false);
   });
 });
