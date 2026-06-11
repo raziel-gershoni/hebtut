@@ -354,6 +354,7 @@ const audit = {
     links: "Связи",
     registration: "Регистрация",
     feedback: "Связь",
+    engagement: "Активность",
     unknown: "?",
   },
   actions: {

@@ -32,6 +32,10 @@ const ACTION_DEFS: Record<string, ActionDef> = {
   "translation.failed": { label: A["translation.failed"], tone: "bg-rose-500/15 text-rose-700 dark:text-rose-400", group: G.messages },
   "client.media_error": { label: A["client.media_error"], tone: "bg-rose-500/15 text-rose-700 dark:text-rose-400", group: G.messages },
   "media.fallback_served": { label: A["media.fallback_served"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.messages },
+  "engagement.flag_open": { label: A["engagement.flag_open"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.engagement },
+  "engagement.flag_escalate": { label: A["engagement.flag_escalate"], tone: "bg-rose-500/15 text-rose-700 dark:text-rose-400", group: G.engagement },
+  "engagement.flag_resolve": { label: A["engagement.flag_resolve"], tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", group: G.engagement },
+  "engagement.digest_sent": { label: A["engagement.digest_sent"], tone: "bg-tg-bg-secondary text-tg-text-hint", group: G.engagement },
   "admin.role_change": { label: A["admin.role_change"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.admin },
   "admin.is_admin_change": { label: A["admin.is_admin_change"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.admin },
   "admin.status_change": { label: A["admin.status_change"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.admin },
@@ -135,6 +139,16 @@ function metaSummary(action: string, meta: Record<string, unknown>): string {
   }
   if (action === "claim.expire") {
     return `T#${meta.teacher_id ?? "?"}`;
+  }
+  if (action.startsWith("engagement.flag_")) {
+    const kind = meta.kind ? String(meta.kind) : "";
+    const tier = meta.tier ? `→${meta.tier}` : "";
+    const days = typeof meta.days_silent === "number" ? ` · ${meta.days_silent}д` : "";
+    const reason = meta.reason ? ` (${meta.reason})` : "";
+    return `${kind}${tier}${days}${reason}`;
+  }
+  if (action === "engagement.digest_sent") {
+    return `${meta.open_flags ?? "?"} флагов · ${meta.admins_sent ?? "?"} админам`;
   }
   return "";
 }
