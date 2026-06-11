@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { formatDuration, ru } from "@/lib/i18n";
 import { mediaPublicUrl } from "./MediaPreview";
 import { reportClientMediaError } from "@/lib/diag";
@@ -7,7 +7,7 @@ import { Spinner } from "./Spinner";
 import { Avatar } from "./Avatar";
 import type { SpeakerColorClasses } from "@/lib/speaker-color";
 import { usePlaybackSpeed, formatSpeed } from "@/hooks/usePlaybackSpeed";
-import { isOggOpusSupported } from "@/lib/audio-support";
+import { loadVoiceObjectUrl, voiceProxyUrl } from "@/lib/voice-source";
 import { usePlayback } from "./PlaybackProvider";
 
 export type ThreadMsg = {
@@ -101,11 +101,7 @@ export function MessageBubble({
   const bubble = isIn
     ? `${speakerColors.bubbleBg} border-l-[3px] ${speakerColors.border}`
     : `${speakerColors.bubbleBg} border-r-[3px] ${speakerColors.border}`;
-  // Voice is OGG/Opus, which pre-18.4 WebKit can't decode — those clients
-  // request the server's lossless CAF remux instead (see /api/media route).
-  const cafSuffix =
-    msg.kind === "voice" && !isOggOpusSupported() ? "&format=caf" : "";
-  const src = `/api/media/${msg.id}?token=${encodeURIComponent(jwt)}${cafSuffix}`;
+  const src = `/api/media/${msg.id}?token=${encodeURIComponent(jwt)}`;
   const time = new Date(msg.created_at).toLocaleTimeString("ru-RU", {
     hour: "2-digit",
     minute: "2-digit",
@@ -183,7 +179,7 @@ export function MessageBubble({
         )}
 
         {msg.kind === "voice" ? (
-          <VoicePlayer src={src} totalSeconds={msg.duration} messageId={msg.id} jwt={jwt} />
+          <VoicePlayer totalSeconds={msg.duration} messageId={msg.id} jwt={jwt} />
         ) : msg.kind === "video_note" ? (
           <VideoNote src={src} totalSeconds={msg.duration} messageId={msg.id} jwt={jwt} />
         ) : msg.kind === "text" ? (
@@ -283,21 +279,93 @@ function TextContent({ text }: { text: string }) {
 
 /** TG-style voice player: round play/pause + thin progress bar + duration. */
 function VoicePlayer({
-  src,
   totalSeconds,
   messageId,
   jwt,
 }: {
-  src: string;
   totalSeconds: number;
   messageId: number;
   jwt: string;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [current, setCurrent] = useState(0);
   const { speed, cycle } = usePlaybackSpeed();
-  const { isMyTurn, startPlay, endPlay, userPaused } = usePlayback(messageId);
+  const { isMyTurn, currentMessageId, startPlay, endPlay, userPaused } =
+    usePlayback(messageId);
+  const objectUrlRef = useRef<string | null>(null);
+  const sourcePromiseRef = useRef<Promise<void> | null>(null);
+  const usedProxyRef = useRef(false);
+  const disposedRef = useRef(false);
+  // Mirror of the provider's active id, readable inside async continuations.
+  // Deferring play() behind a fetch opened a race the old synchronous code
+  // didn't have: a stale continuation could steal the turn from a bubble the
+  // user tapped meanwhile. Every deferred play re-checks this first.
+  const currentIdRef = useRef<number | null>(currentMessageId);
+  useEffect(() => {
+    currentIdRef.current = currentMessageId;
+  }, [currentMessageId]);
+
+  // Revoke the blob URL only on unmount — WebKit pulls blob media lazily
+  // via range requests, so revoking earlier (e.g. on 'ended') silently
+  // kills replays.
+  useEffect(() => {
+    disposedRef.current = false; // StrictMode remount
+    return () => {
+      disposedRef.current = true;
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    };
+  }, []);
+
+  // Lazily attach a source on first play intent (keeps the preload="none"
+  // economy: nothing downloads on thread mount). Primary path: direct TG
+  // fetch + local blob — zero media bytes through our server, immune to
+  // the TG-CDN serving quirks that broke the native loader. Fallback: the
+  // server proxy, so playback survives if TG ever drops CORS.
+  const ensureSource = useCallback((): Promise<void> => {
+    const a = audioRef.current;
+    if (!a) return Promise.resolve();
+    if (a.src) return sourcePromiseRef.current ?? Promise.resolve();
+    if (!sourcePromiseRef.current) {
+      sourcePromiseRef.current = (async () => {
+        setLoading(true);
+        try {
+          const url = await loadVoiceObjectUrl(messageId, jwt);
+          if (disposedRef.current) {
+            // Unmounted mid-fetch: the unmount cleanup already ran with
+            // nothing to revoke — revoke here or the blob leaks for the
+            // whole SPA session.
+            URL.revokeObjectURL(url);
+            return;
+          }
+          objectUrlRef.current = url;
+          a.src = url;
+        } catch (e) {
+          usedProxyRef.current = true;
+          void reportClientMediaError(
+            "preview-load",
+            e instanceof Error ? e : new Error(String(e)),
+            { message_id: messageId, surface: "voice-direct-fetch" },
+            jwt,
+          );
+          if (!disposedRef.current) a.src = voiceProxyUrl(messageId, jwt);
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }
+    return sourcePromiseRef.current;
+  }, [messageId, jwt]);
+
+  // Deferred play with the staleness guard: only start if this bubble still
+  // holds the turn when the source is ready.
+  const ensureAndPlay = useCallback((): Promise<void> => {
+    return ensureSource().then(() => {
+      if (currentIdRef.current !== messageId) return;
+      return audioRef.current?.play();
+    });
+  }, [ensureSource, messageId]);
 
   // Mirror the cycle-button choice onto the live element. Browsers honour
   // playbackRate mutation on a playing element, so cycling mid-play takes
@@ -315,19 +383,40 @@ function VoicePlayer({
     const a = audioRef.current;
     if (!a) return;
     if (isMyTurn && a.paused) {
-      void a.play().catch(() => {
+      void ensureAndPlay().catch(() => {
         /* autoplay blocked by browser without a prior user gesture — fine */
       });
     } else if (!isMyTurn && !a.paused) {
       a.pause();
     }
-  }, [isMyTurn]);
+  }, [isMyTurn, ensureAndPlay]);
 
   function toggle() {
     const a = audioRef.current;
     if (!a) return;
-    if (playing) a.pause();
-    else void a.play();
+    if (playing) {
+      a.pause();
+      return;
+    }
+    // Claim the turn at gesture time (mirrors what onPlay would do) so a
+    // sibling that finishes loading later can't steal it, and so the
+    // staleness guard in ensureAndPlay lets THIS bubble through. The ref is
+    // written synchronously too: with a cached source the continuation runs
+    // on a microtask, BEFORE React re-renders and the effect mirror catches
+    // up — without this line a replay-after-pause would self-block.
+    startPlay();
+    currentIdRef.current = messageId;
+    void ensureAndPlay().catch((e) => {
+      // play() rejections (NotAllowedError after a slow first load ate the
+      // activation window, etc.) never fire the element's error event —
+      // report them so a silent no-op tap is at least visible in the journal.
+      void reportClientMediaError(
+        "preview-load",
+        e instanceof Error ? e : new Error(String(e)),
+        { message_id: messageId, surface: "voice-play" },
+        jwt,
+      );
+    });
   }
 
   const elapsedDisplay = playing
@@ -340,8 +429,9 @@ function VoicePlayer({
       <button
         type="button"
         onClick={toggle}
+        disabled={loading}
         aria-label={playing ? ru.inbox.message.pauseAriaLabel : ru.inbox.message.playAriaLabel}
-        className="shrink-0 w-10 h-10 rounded-full bg-tg-button text-tg-button-text flex items-center justify-center transition-transform active:scale-95"
+        className="shrink-0 w-10 h-10 rounded-full bg-tg-button text-tg-button-text flex items-center justify-center transition-transform active:scale-95 disabled:opacity-60"
       >
         {playing ? <PauseIcon /> : <PlayIcon />}
       </button>
@@ -372,11 +462,8 @@ function VoicePlayer({
       </button>
       <audio
         ref={audioRef}
-        src={src}
-        // none, not metadata: the duration shown comes from msg.duration
-        // (DB), and now that voice is proxied (not 302'd to the TG CDN) a
-        // metadata preload would fire a full download per bubble on thread
-        // mount. play() loads on demand, including the auto-advance chain.
+        // No src until first play intent — see ensureSource. Duration shown
+        // comes from msg.duration (DB), so nothing is lost by not loading.
         preload="none"
         onPlay={() => {
           setPlaying(true);
@@ -394,9 +481,30 @@ function VoicePlayer({
           endPlay();
         }}
         onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
-        onError={(e) =>
-          reportMessageMediaError("voice", e.currentTarget.error, messageId, jwt)
-        }
+        onError={(e) => {
+          reportMessageMediaError("voice", e.currentTarget.error, messageId, jwt);
+          // One-shot rescue: if the local blob failed to DECODE (an engine
+          // that overpromised in canPlayType), retry via the server proxy.
+          // usedProxyRef guards against an error→proxy→error loop.
+          // Capture the element synchronously — React nulls currentTarget
+          // after dispatch. Setting src runs the load algorithm, which
+          // silently flips paused=true WITHOUT a pause event — so we must
+          // either resume playback ourselves or unwedge `playing` and
+          // release the provider queue, else the bubble is dead until
+          // remount and auto-advance stalls on it.
+          const el = e.currentTarget;
+          if (!usedProxyRef.current) {
+            usedProxyRef.current = true;
+            el.src = voiceProxyUrl(messageId, jwt);
+            void el.play().catch(() => {
+              setPlaying(false);
+              userPaused();
+            });
+          } else {
+            setPlaying(false);
+            userPaused();
+          }
+        }}
       />
     </div>
   );

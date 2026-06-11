@@ -3,13 +3,13 @@ import { authFromRequest, canTeachOrReadAsAdmin } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { getBot } from "@/lib/tg";
 import { serverEnv } from "@/lib/env";
-import { oggOpusToCaf, OggCafError } from "@/server/ogg-to-caf";
+import { oggOpusToCaf, OggCafError } from "@/lib/ogg-to-caf";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// Voice files are proxied (downloaded + served) inside this invocation;
-// same ceiling rationale as /api/webhook — default 10s can be tight on a
-// slow TG CDN fetch, 60 is the Pro ceiling, no-op on Hobby.
+// The ?proxy=1 fallback downloads + serves voice bytes inside this
+// invocation; same ceiling rationale as /api/webhook — default 10s can be
+// tight on a slow TG CDN fetch, 60 is the Pro ceiling, no-op on Hobby.
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest, { params }: { params: { messageId: string } }) {
@@ -47,19 +47,32 @@ export async function GET(req: NextRequest, { params }: { params: { messageId: s
   if (!file.file_path) return new Response("no path", { status: 502 });
   const tgUrl = `https://api.telegram.org/file/bot${serverEnv.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
 
-  // VOICE: same-origin byte proxy instead of a 302. WebKit's AVFoundation
-  // rejects Ogg behind a cross-origin redirect with an unhelpful
-  // Content-Type (SRC_NOT_SUPPORTED), while MP4 survives because its ftyp
-  // box gets sniffed — that asymmetry is exactly why video notes played
-  // and voice didn't. Serving the bytes ourselves with an explicit
-  // `audio/ogg` + working Range support fixes modern WebKit (iOS 18.4+ /
-  // macOS 15.4+) and Chromium. For OLDER WebKit — which cannot decode Ogg
-  // at all — the client requests ?format=caf and we losslessly remux the
-  // Opus packets into Apple's CAF container (playable since iOS 11).
-  // Voice files are tiny (Opus mono, ~25-30 kbps), so whole-file buffering
-  // is fine. Bonus: the bot token no longer appears in any URL the client
-  // sees (the old route was flagged PoC-SHORTCUT for exactly that).
-  if (msg.kind === "voice") {
+  // VOICE — two modes:
+  //
+  // DEFAULT (302): the client fetch()es through this redirect and builds a
+  // local blob with a self-declared Content-Type (see src/lib/voice-source).
+  // That sidesteps the root cause entirely — WebKit's AVFoundation rejects
+  // Ogg served with an unsniffed Content-Type (TG's CDN sends
+  // octet-stream; MP4 video notes survive because ftyp gets sniffed), and
+  // TG's mid-May 2026 nginx swap made the native-loader path fail. Bytes
+  // flow TG→client directly: zero media traffic through this function (the
+  // PoC's deliberate design). TG's CORS (`*`) makes the cross-origin fetch
+  // readable; the Authorization header is stripped by the browser on the
+  // cross-origin redirect hop, so it never reaches TG.
+  //
+  // ?proxy=1 (fallback): full byte proxy with explicit audio/ogg + Range
+  // support, plus ?format=caf for pre-18.4 WebKit (lossless Opus→CAF
+  // remux). The client falls back here automatically if its direct fetch
+  // fails — e.g. if TG ever drops CORS the way it just changed its
+  // serving behavior. Voice files are tiny (Opus mono ~25-30 kbps), so
+  // whole-file buffering is fine.
+  // The q.has("token") leg is deploy-window compat: the pre-blob client
+  // bundle authenticated voice via ?token= and expected proxied bytes —
+  // without it, sessions open across the deploy would get a 302 their
+  // native loader can't play. The new client fetches with an Authorization
+  // header and no query params. Removable once old bundles have aged out.
+  const q = new URL(req.url).searchParams;
+  if (msg.kind === "voice" && (q.get("proxy") === "1" || q.has("token"))) {
     let bytes: Uint8Array<ArrayBuffer>;
     try {
       const upstream = await fetch(tgUrl);
@@ -76,7 +89,7 @@ export async function GET(req: NextRequest, { params }: { params: { messageId: s
     }
     let contentType = "audio/ogg";
 
-    if (new URL(req.url).searchParams.get("format") === "caf") {
+    if (q.get("format") === "caf") {
       try {
         bytes = oggOpusToCaf(bytes);
         contentType = "audio/x-caf";
@@ -93,10 +106,15 @@ export async function GET(req: NextRequest, { params }: { params: { messageId: s
     return rangeResponse(req, bytes, contentType);
   }
 
-  // Other kinds (video_note, photo relays) keep the redirect — they play
-  // fine through it and proxying large videos through the function buys
-  // nothing. The token-in-URL concern is tracked for these separately.
-  return Response.redirect(tgUrl, 302);
+  // Voice default + all other kinds (video_note plays fine natively through
+  // the redirect — MP4 gets sniffed). The token-in-URL exposure to trusted
+  // teachers is the PoC's accepted trade-off. Cacheable for the same window
+  // TG guarantees file_path validity (≥1h) so a replay skips the
+  // auth+getFile round-trip; Response.redirect() can't carry headers.
+  return new Response(null, {
+    status: 302,
+    headers: { Location: tgUrl, "Cache-Control": "private, max-age=3600" },
+  });
 }
 
 /**

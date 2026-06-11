@@ -5,7 +5,7 @@ import {
   samplesPerPacket,
   encodeVarint,
   OggCafError,
-} from "@/server/ogg-to-caf";
+} from "@/lib/ogg-to-caf";
 
 /* ------------------------------------------------------------------ *
  * Synthetic Ogg-Opus builder — structure only, no real audio. The
