@@ -57,8 +57,11 @@ type StatusKind =
 /**
  * Per-item visibility rules driven by subscription status:
  *   /student/freeze    — only when status is `active` (server also enforces).
- *   /student/referrals — only AFTER the trial ends (any kind except trial /
- *                        trial_ending), regardless of pay status.
+ *   /student/referrals — only when the referral program is enabled AND
+ *                        AFTER the trial ends (any kind except trial /
+ *                        trial_ending), regardless of pay status. While the
+ *                        summary fetch is in flight the flag is false, so the
+ *                        item stays hidden (fail-closed).
  *
  * While the status fetch is pending we hide the gated items — better
  * to under-show briefly than flash-then-hide. The /feedback and

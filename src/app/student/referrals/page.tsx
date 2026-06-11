@@ -41,7 +41,8 @@ export default function ReferralsPage() {
 
 function Body({ jwt }: { jwt: string }) {
   const [data, setData] = useState<ReferralsData | null>(null);
-  // null while loading, "locked" before trial ends, "open" once trial is over.
+  // "loading" while fetching, "locked" before trial ends, "open" once the
+  // trial is over, "disabled" when the referral program is globally off.
   const [gate, setGate] = useState<"loading" | "locked" | "open" | "disabled">("loading");
   const [copied, setCopied] = useState(false);
 
