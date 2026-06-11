@@ -11,7 +11,7 @@ import { serverEnv } from "@/lib/env";
 import { getStatus, type DerivedStatus } from "@/server/subscriptions";
 import { computeStreak } from "@/server/streak";
 import { pickMotivationForUser } from "@/server/motivation";
-import { getBillingStarsEnabled } from "@/server/settings";
+import { getBillingStarsEnabled, getReferralsEnabled } from "@/server/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -98,6 +98,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     usedSeconds: used,
   });
   const starsEnabled = await getBillingStarsEnabled();
+  const referralsEnabled = await getReferralsEnabled();
 
   return Response.json(
     {
@@ -122,6 +123,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       // affordance to /feedback (manual billing); when true, to the
       // Telegram Stars invoice via openInvoice.
       billing: { stars_enabled: starsEnabled },
+      referrals_enabled: referralsEnabled,
     },
     { headers: noStoreHeaders },
   );
