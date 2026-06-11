@@ -27,6 +27,9 @@ const ACTION_DEFS: Record<string, ActionDef> = {
   "claim.expire": { label: A["claim.expire"], tone: "bg-tg-bg-secondary text-tg-text-hint", group: G.sessions },
   "message.in": { label: A["message.in"], tone: "bg-sky-500/15 text-sky-700 dark:text-sky-400", group: G.messages },
   "message.out": { label: A["message.out"], tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", group: G.messages },
+  "message.scheduled": { label: A["message.scheduled"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.messages },
+  "transcript.failed": { label: A["transcript.failed"], tone: "bg-rose-500/15 text-rose-700 dark:text-rose-400", group: G.messages },
+  "translation.failed": { label: A["translation.failed"], tone: "bg-rose-500/15 text-rose-700 dark:text-rose-400", group: G.messages },
   "admin.role_change": { label: A["admin.role_change"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.admin },
   "admin.is_admin_change": { label: A["admin.is_admin_change"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.admin },
   "admin.status_change": { label: A["admin.status_change"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.admin },
@@ -93,6 +96,16 @@ function metaSummary(action: string, meta: Record<string, unknown>): string {
     const dur = typeof meta.duration === "number" ? `${meta.duration}s` : "";
     const reply = meta.reply_to_id ? `↩#${meta.reply_to_id}` : "";
     return [meta.kind, dur, reply].filter(Boolean).join(" ");
+  }
+  if (action === "message.scheduled") {
+    const dur = typeof meta.duration === "number" ? `${meta.duration}s` : "";
+    const at = meta.deliver_at
+      ? `→ ${new Date(meta.deliver_at as string).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`
+      : "";
+    return [meta.kind, dur, at].filter(Boolean).join(" ");
+  }
+  if (action === "transcript.failed" || action === "translation.failed") {
+    return [meta.kind, meta.stage].filter(Boolean).join(" ");
   }
   if (action === "admin.role_change" || action === "admin.status_change" || action === "admin.is_admin_change") {
     return `${meta.from} → ${meta.to}`;
