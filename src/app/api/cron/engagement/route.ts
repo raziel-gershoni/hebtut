@@ -48,10 +48,13 @@ async function handler(req: NextRequest): Promise<Response> {
   // 1. Monitored population: students, not suspended, raw sub status
   // trial/active, trial not yet past its end (the hourly subscriptions
   // cron flips those; we just skip not-yet-flipped rows), not frozen.
+  // The !user_id hint is load-bearing: subscriptions references users twice
+  // (user_id AND referred_by_user_id), so PostgREST rejects an unhinted
+  // embed as ambiguous at runtime — the first prod run failed exactly here.
   const { data: rows, error: rowsError } = await sb
     .from("users")
     .select(
-      "id, tz, name, preferred_name, created_at, subscriptions!inner(status, trial_started_at, trial_ends_at, frozen_until)",
+      "id, tz, name, preferred_name, created_at, subscriptions!user_id!inner(status, trial_started_at, trial_ends_at, frozen_until)",
     )
     .eq("role", "student")
     .eq("status", "active")
