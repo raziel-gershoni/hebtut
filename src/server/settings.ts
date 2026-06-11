@@ -114,6 +114,16 @@ export function getTranslationEnabled(): Promise<boolean> {
   return getBoolSetting("translation_enabled");
 }
 
+/**
+ * Referral program master switch. Default OFF (absent key reads false).
+ * When off, the whole referral flow is frozen — student UI hidden, ref_
+ * signups not attributed, and the first-payment bonus not granted to
+ * either side. Existing tokens / attributions stay in the DB, dormant.
+ */
+export function getReferralsEnabled(): Promise<boolean> {
+  return getBoolSetting("referrals_enabled");
+}
+
 export function invalidateSettingsCache(): void {
   // Expire in place rather than clear(): the entries double as the
   // last-known-good fallback for errored reads (see resolveSettingRead).
