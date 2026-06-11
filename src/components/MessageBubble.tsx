@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { formatDuration, ru } from "@/lib/i18n";
-import { videoPublicUrl } from "./MediaPreview";
+import { mediaPublicUrl } from "./MediaPreview";
 import { reportClientMediaError } from "@/lib/diag";
 import { Spinner } from "./Spinner";
 import { Avatar } from "./Avatar";
@@ -555,6 +555,38 @@ function VideoNote({
  * cross-bubble PlaybackProvider intentionally does NOT consume these —
  * library audio doesn't autoplay-chain).
  */
+// Shared onError reporter for library media elements — a silent media
+// failure in the webview is undiagnosable otherwise (this exact gap hid
+// the library-audio playback bug).
+function reportLibraryMediaError(
+  kind: "video" | "audio",
+  err: MediaError | null,
+  libraryId: number,
+  lib: ThreadMsg["media_library"],
+  jwt: string,
+): void {
+  const codes: Record<number, string> = {
+    1: "ABORTED",
+    2: "NETWORK",
+    3: "DECODE",
+    4: "SRC_NOT_SUPPORTED",
+  };
+  void reportClientMediaError(
+    "preview-load",
+    new Error(
+      `library ${kind} load failed: ${
+        err ? `${codes[err.code] ?? "UNKNOWN"} · ${err.message || ""}` : "no error obj"
+      }`,
+    ),
+    {
+      library_id: libraryId,
+      storage_path: lib?.storage_path ?? undefined,
+      surface: "thread-bubble",
+    },
+    jwt,
+  );
+}
+
 function LibraryMediaBlock({
   kind,
   jwt,
@@ -613,39 +645,31 @@ function LibraryMediaBlock({
           // because iOS WebKit (TG Mini App webview) is flaky with
           // `<video>` + 302 + cross-origin range requests. Bucket is
           // public, no auth needed. Same trick the onboarding panel uses.
-          src={lib?.storage_path ? videoPublicUrl(lib.storage_path) : previewUrl}
+          src={lib?.storage_path ? mediaPublicUrl(lib.storage_path) : previewUrl}
           controls
           playsInline
           preload="metadata"
-          onError={(e) => {
-            const err = e.currentTarget.error;
-            const codes: Record<number, string> = {
-              1: "ABORTED",
-              2: "NETWORK",
-              3: "DECODE",
-              4: "SRC_NOT_SUPPORTED",
-            };
-            void reportClientMediaError(
-              "preview-load",
-              new Error(
-                `library video load failed: ${
-                  err ? `${codes[err.code] ?? "UNKNOWN"} · ${err.message || ""}` : "no error obj"
-                }`,
-              ),
-              {
-                library_id: libraryId,
-                storage_path: lib?.storage_path ?? undefined,
-                surface: "thread-bubble",
-              },
-              jwt,
-            );
-          }}
+          onError={(e) =>
+            reportLibraryMediaError("video", e.currentTarget.error, libraryId, lib, jwt)
+          }
           className="block w-full max-h-72 rounded-xl bg-black"
         />
       )}
 
       {kind === "audio" && (
-        <audio src={previewUrl} controls preload="metadata" className="block w-full" />
+        <audio
+          // Same WebKit workaround as video above: `<audio>` ALSO does
+          // cross-origin range requests after the redirect and silently
+          // reads zero bytes in the TG webview — library audio wouldn't
+          // play at all while videos (already fixed) worked.
+          src={lib?.storage_path ? mediaPublicUrl(lib.storage_path) : previewUrl}
+          controls
+          preload="metadata"
+          onError={(e) =>
+            reportLibraryMediaError("audio", e.currentTarget.error, libraryId, lib, jwt)
+          }
+          className="block w-full"
+        />
       )}
 
       <div className="text-xs leading-snug">
