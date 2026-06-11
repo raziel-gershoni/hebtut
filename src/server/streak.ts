@@ -2,7 +2,7 @@ import { addDays, format, parseISO } from "date-fns";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { localDateInTz } from "@/lib/time";
 
-const PRACTICE_THRESHOLD_SECONDS = 30;
+export const PRACTICE_THRESHOLD_SECONDS = 30;
 const LOOKBACK_DAYS = 30;
 
 /**
