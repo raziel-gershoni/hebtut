@@ -231,6 +231,16 @@ const transcripts = {
   correctionPrefix: "📝 Поправка: ",
 };
 
+// Daily engagement digest DM'd to admins by /api/cron/engagement.
+const engagementDigest = {
+  header: (newCount: number, total: number) =>
+    `📊 Активность: ${newCount} новых, ${total} всего`,
+  headerNoNew: (total: number) => `📊 Активность: ${total} на контроле`,
+  newPrefix: "🆕 ",
+  ongoingPrefix: "Всё ещё: ",
+  openPanelButton: "Открыть панель",
+};
+
 const notifications = {
   teacherReplyMissingContext:
     "Чтобы ответить пользователю, открой мини-приложение, нажми «Ответить» рядом с его сообщением, и потом свайпни по подсказке.",
@@ -299,5 +309,6 @@ export const bot = {
   notifications,
   labels,
   transcripts,
+  engagementDigest,
   profileLink,
 };

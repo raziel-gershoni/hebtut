@@ -7,6 +7,8 @@
  * component. See CLAUDE.md.
  */
 
+import { pluralDay } from "./common";
+
 const settings = {
   sectionTitle: "Настройки",
   buttonOn: "ВКЛ",
@@ -127,6 +129,25 @@ const tutorWork = {
   periodTotalLabel: "Всего:",
   todayTotalLabel: "Сегодня:",
   noActivity: "Нет активности",
+  loadError: "Не удалось загрузить",
+};
+
+const engagement = {
+  emptyState: "Все занимаются 🎉",
+  groupNeedsAttention: "Требуют внимания",
+  groupSliding: "Скользят",
+  groupPlateau: "Плато",
+  sinceDate: (date: string) => `с ${date}`,
+  metricInactive: (days: number) =>
+    `молчит ${days} ${pluralDay(days)}`,
+  metricSlump: (pct: number) => `минус ${pct}% за неделю`,
+  metricPlateau: (streak: number, medianS: number) =>
+    `серия ${streak} ${pluralDay(streak)}, по ~${medianS}с в день`,
+  metricGhosting: (hours: number) => {
+    const days = Math.round(hours / 24);
+    return `тренер ждёт ответа ${days} ${pluralDay(days)}`;
+  },
+  metricTutorSla: (hours: number) => `ответ тренера висит ${hours} ч`,
   loadError: "Не удалось загрузить",
 };
 
@@ -366,6 +387,10 @@ const audit = {
     "feedback.claim_refresh": "Берёт обратную связь",
     "feedback.claim_expire": "Истёк клейм связи",
     "notification.admin_new_user": "Пинг админам о регистрации",
+    "engagement.flag_open": "Флаг активности",
+    "engagement.flag_escalate": "Эскалация флага",
+    "engagement.flag_resolve": "Флаг снят",
+    "engagement.digest_sent": "Дайджест активности",
   },
 };
 
@@ -448,6 +473,7 @@ const pages = {
   navFeedback: "→ Обратная связь",
   navAudit: "→ Журнал действий",
   sections: {
+    engagement: "Активность",
     users: "Пользователи",
     admins: "Админы",
     connections: "Связи",
@@ -476,6 +502,7 @@ export const admin = {
   tags,
   connections,
   tutorWork,
+  engagement,
   users,
   admins,
   subscription,
