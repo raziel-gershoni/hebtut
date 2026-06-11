@@ -125,6 +125,24 @@ const tutorWork = {
   loadError: "Не удалось загрузить",
 };
 
+const admins = {
+  addButton: "Добавить админа",
+  pickerTitle: "Новый админ",
+  searchPlaceholder: "Поиск по имени или @username",
+  pickerEmpty: "Никого не нашлось",
+  emptyList: "Админов нет",
+  confirmGrantTitle: "Сделать админом?",
+  confirmGrantBody: (name: string) =>
+    `${name || "Пользователь"} получит полный доступ к админке: пользователи, связи, настройки, рассылки.`,
+  confirmRevokeTitle: "Снять права админа?",
+  confirmRevokeBody: (name: string) =>
+    `${name || "Пользователь"} потеряет доступ к админке.`,
+  confirmRevokeSelfBody:
+    "Это твои собственные права — ты потеряешь доступ к админке сразу после подтверждения.",
+  revokeAria: (name: string) => `Снять права админа у ${name}`,
+  saveError: "Не удалось сохранить — попробуй ещё раз",
+};
+
 const users = {
   sectionTitle: "Пользователи",
   refreshLabel: "Обновить список",
@@ -428,6 +446,7 @@ const pages = {
   navAudit: "→ Журнал действий",
   sections: {
     users: "Пользователи",
+    admins: "Админы",
     connections: "Связи",
     settings: "Настройки",
     onboardingVideos: "Видео онбординга",
@@ -455,6 +474,7 @@ export const admin = {
   connections,
   tutorWork,
   users,
+  admins,
   subscription,
   onboardingVideos,
   audit,
