@@ -343,6 +343,7 @@ const audit = {
     "message.scheduled": "Отложено",
     "transcript.failed": "Сбой расшифровки",
     "translation.failed": "Сбой перевода",
+    "client.media_error": "Сбой медиа у клиента",
     "admin.role_change": "Смена роли",
     "admin.is_admin_change": "Права админа",
     "admin.status_change": "Статус",

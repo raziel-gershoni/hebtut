@@ -30,6 +30,7 @@ const ACTION_DEFS: Record<string, ActionDef> = {
   "message.scheduled": { label: A["message.scheduled"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.messages },
   "transcript.failed": { label: A["transcript.failed"], tone: "bg-rose-500/15 text-rose-700 dark:text-rose-400", group: G.messages },
   "translation.failed": { label: A["translation.failed"], tone: "bg-rose-500/15 text-rose-700 dark:text-rose-400", group: G.messages },
+  "client.media_error": { label: A["client.media_error"], tone: "bg-rose-500/15 text-rose-700 dark:text-rose-400", group: G.messages },
   "admin.role_change": { label: A["admin.role_change"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.admin },
   "admin.is_admin_change": { label: A["admin.is_admin_change"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.admin },
   "admin.status_change": { label: A["admin.status_change"], tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400", group: G.admin },
@@ -106,6 +107,16 @@ function metaSummary(action: string, meta: Record<string, unknown>): string {
   }
   if (action === "transcript.failed" || action === "translation.failed") {
     return [meta.kind, meta.stage].filter(Boolean).join(" ");
+  }
+  if (action === "client.media_error") {
+    // Meta shape from reportClientMediaError: {step, err, ctx, env}. The
+    // surface (e.g. voice-direct-fetch = zero-traffic path failed, proxy
+    // fallback engaged) + platform tell the story at a glance.
+    const ctx = (meta.ctx ?? {}) as Record<string, unknown>;
+    const env = (meta.env ?? {}) as Record<string, unknown>;
+    const err = (meta.err ?? {}) as Record<string, unknown>;
+    const msg = typeof err.message === "string" ? err.message.slice(0, 60) : "";
+    return [ctx.surface ?? meta.step, env.tg_platform, msg].filter(Boolean).join(" · ");
   }
   if (action === "admin.role_change" || action === "admin.status_change" || action === "admin.is_admin_change") {
     return `${meta.from} → ${meta.to}`;
