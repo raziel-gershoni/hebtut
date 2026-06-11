@@ -64,12 +64,18 @@ type StatusKind =
  * to under-show briefly than flash-then-hide. The /feedback and
  * /student/response-window items have no gate; they're always visible.
  */
-function isItemVisible(href: string, kind: StatusKind | null): boolean {
+function isItemVisible(
+  href: string,
+  kind: StatusKind | null,
+  referralsEnabled: boolean,
+): boolean {
   switch (href) {
     case "/student/freeze":
       return kind === "active";
     case "/student/referrals":
-      return kind != null && kind !== "trial" && kind !== "trial_ending";
+      return (
+        referralsEnabled && kind != null && kind !== "trial" && kind !== "trial_ending"
+      );
     default:
       return true;
   }
@@ -77,6 +83,7 @@ function isItemVisible(href: string, kind: StatusKind | null): boolean {
 
 export function MiniAppMenu({ jwt }: { jwt: string }) {
   const [kind, setKind] = useState<StatusKind | null>(null);
+  const [referralsEnabled, setReferralsEnabled] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,9 +92,15 @@ export function MiniAppMenu({ jwt }: { jwt: string }) {
       headers: { Authorization: `Bearer ${jwt}` },
     })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { status?: { kind?: StatusKind } } | null) => {
-        if (!cancelled && d?.status?.kind) setKind(d.status.kind);
-      })
+      .then(
+        (
+          d: { status?: { kind?: StatusKind }; referrals_enabled?: boolean } | null,
+        ) => {
+          if (cancelled) return;
+          if (d?.status?.kind) setKind(d.status.kind);
+          setReferralsEnabled(d?.referrals_enabled === true);
+        },
+      )
       .catch(() => {
         // Network hiccup — gated items stay hidden, ungated stay visible.
       });
@@ -96,7 +109,7 @@ export function MiniAppMenu({ jwt }: { jwt: string }) {
     };
   }, [jwt]);
 
-  const visibleItems = ITEMS.filter((it) => isItemVisible(it.href, kind));
+  const visibleItems = ITEMS.filter((it) => isItemVisible(it.href, kind, referralsEnabled));
 
   return (
     <div className="space-y-3">

@@ -42,7 +42,7 @@ export default function ReferralsPage() {
 function Body({ jwt }: { jwt: string }) {
   const [data, setData] = useState<ReferralsData | null>(null);
   // null while loading, "locked" before trial ends, "open" once trial is over.
-  const [gate, setGate] = useState<"loading" | "locked" | "open">("loading");
+  const [gate, setGate] = useState<"loading" | "locked" | "open" | "disabled">("loading");
   const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
@@ -51,7 +51,12 @@ function Body({ jwt }: { jwt: string }) {
       headers: { Authorization: `Bearer ${jwt}` },
     });
     if (!r.ok) return;
-    setData((await r.json()) as ReferralsData);
+    const json = (await r.json()) as ReferralsData | { enabled: false };
+    if ("enabled" in json && json.enabled === false) {
+      setGate("disabled");
+      return;
+    }
+    setData(json as ReferralsData);
   }, [jwt]);
 
   // Independent fetch of the subscription summary purely for the gate.
@@ -119,6 +124,19 @@ function Body({ jwt }: { jwt: string }) {
       <div className="space-y-4 animate-pulse">
         <div className="h-24 rounded-2xl bg-tg-bg-secondary" />
         <div className="h-12 rounded-2xl bg-tg-bg-secondary" />
+      </div>
+    );
+  }
+
+  if (gate === "disabled") {
+    return (
+      <div className="rounded-2xl bg-tg-bg-section p-5 space-y-2">
+        <p className="text-xs uppercase tracking-widest text-tg-text-hint">
+          {ru.student.referrals.unavailableHeader}
+        </p>
+        <p className="text-sm text-tg-text-subtitle">
+          {ru.student.referrals.unavailableBody}
+        </p>
       </div>
     );
   }

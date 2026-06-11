@@ -104,6 +104,8 @@ const referrals = {
   lockedHeader: "Рефералы недоступны",
   lockedBody:
     "Реферальная программа откроется, когда закончится пробный период.",
+  unavailableHeader: "Недоступно",
+  unavailableBody: "Реферальная программа сейчас отключена.",
   inviteFriendsHeader: "Приглашай друзей",
   friendsBodyPrefix: "Когда друг оплатит подписку, обоим прибавим",
   bonusBold: "+30 дней",
