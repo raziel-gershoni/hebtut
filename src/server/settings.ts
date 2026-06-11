@@ -9,19 +9,44 @@ const TTL_MS = 30_000;
 // their next cache miss (≤ 30s lag).
 const cache = new Map<string, { value: boolean; at: number }>();
 
+/**
+ * Pure decision core for a settings read, extracted for testability.
+ *
+ * A transient read ERROR must not masquerade as "toggle off": that exact
+ * confusion silently disabled auto-transcription in prod (the false got
+ * cached for the full TTL, so a single Supabase blip muted a feature for
+ * 30s with zero trace). On error we serve the stale cached value when one
+ * exists — and never cache, so the next call retries immediately. Only an
+ * error with a stone-cold cache fails closed to `false`.
+ */
+export function resolveSettingRead(
+  staleValue: boolean | undefined,
+  data: { value: unknown } | null,
+  error: { message: string } | null,
+): { value: boolean; cacheable: boolean } {
+  if (error) return { value: staleValue ?? false, cacheable: false };
+  return { value: data?.value === true, cacheable: true };
+}
+
 async function getBoolSetting(key: string): Promise<boolean> {
   const now = Date.now();
   const hit = cache.get(key);
   if (hit && now - hit.at < TTL_MS) return hit.value;
   const sb = getServiceRoleClient();
-  const { data } = await sb
+  const { data, error } = await sb
     .from("app_settings")
     .select("value")
     .eq("key", key)
     .maybeSingle();
-  const value = data?.value === true;
-  cache.set(key, { value, at: now });
-  return value;
+  if (error) {
+    console.warn("[settings] read failed; serving fallback", {
+      key,
+      err: error.message,
+    });
+  }
+  const result = resolveSettingRead(hit?.value, data, error);
+  if (result.cacheable) cache.set(key, { value: result.value, at: now });
+  return result.value;
 }
 
 /**
