@@ -115,5 +115,12 @@ export function getTranslationEnabled(): Promise<boolean> {
 }
 
 export function invalidateSettingsCache(): void {
-  cache.clear();
+  // Expire in place rather than clear(): the entries double as the
+  // last-known-good fallback for errored reads (see resolveSettingRead).
+  // at: 0 forces a fresh DB read on the next access — an admin flip still
+  // takes effect immediately — without dropping outage resilience for
+  // every other key in this instance.
+  for (const [key, entry] of cache) {
+    cache.set(key, { ...entry, at: 0 });
+  }
 }

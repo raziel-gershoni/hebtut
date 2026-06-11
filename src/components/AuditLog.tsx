@@ -99,9 +99,9 @@ function metaSummary(action: string, meta: Record<string, unknown>): string {
   }
   if (action === "message.scheduled") {
     const dur = typeof meta.duration === "number" ? `${meta.duration}s` : "";
-    const at = meta.deliver_at
-      ? `→ ${new Date(meta.deliver_at as string).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`
-      : "";
+    // formatTime appends the date when delivery isn't today — scheduled
+    // sends routinely land next morning, so bare HH:MM would be ambiguous.
+    const at = meta.deliver_at ? `→ ${formatTime(meta.deliver_at as string)}` : "";
     return [meta.kind, dur, at].filter(Boolean).join(" ");
   }
   if (action === "transcript.failed" || action === "translation.failed") {

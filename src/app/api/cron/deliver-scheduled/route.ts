@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { serverEnv } from "@/lib/env";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { getBot } from "@/lib/tg";
+import { ru } from "@/lib/i18n";
 import { recordAudit } from "@/server/audit";
 import { nextWindowOpen } from "@/server/response-window";
 import {
@@ -16,6 +17,20 @@ export const revalidate = 0;
 // are up to 25s each) — the default 10s cap would kill it. Mirrors the
 // /api/webhook ceiling.
 export const maxDuration = 60;
+
+// Soft deadlines against the 60s wall, measured from handler start. Past
+// DELIVERY_DEADLINE_MS we stop CLAIMING rows — an unclaimed row stays
+// 'queued' and the next minute tick picks it up for free, whereas a claimed
+// row the platform kills mid-flight strands in 'sending' forever (audio
+// possibly sent, no messages row, nothing re-fetches it). Past
+// TRANSCRIBE_DEADLINE_MS we stop STARTING transcriptions — a worst-case
+// item (25s transcribe + 25s translate) can't be guaranteed to fit
+// regardless, so the guard turns the overload case into an explicit,
+// journaled skip instead of a silent platform kill that bypasses every
+// catch block. (Structural alternative if scheduled volume ever grows:
+// per-row QStash fan-out, or Railway, where there is no 60s wall.)
+const DELIVERY_DEADLINE_MS = 40_000;
+const TRANSCRIBE_DEADLINE_MS = 30_000;
 
 /**
  * Drains queued teacher-initiated messages whose response window has now
@@ -32,6 +47,7 @@ async function handler(req: NextRequest): Promise<Response> {
     return new Response("forbidden", { status: 403 });
   }
   const sb = getServiceRoleClient();
+  const startedAt = Date.now();
   const nowIso = new Date().toISOString();
 
   const { data: due } = await sb
@@ -41,7 +57,9 @@ async function handler(req: NextRequest): Promise<Response> {
     .lte("deliver_at", nowIso)
     .limit(100);
 
-  if (!due?.length) return Response.json({ delivered: 0, failed: 0, skipped: 0 });
+  if (!due?.length) {
+    return Response.json({ delivered: 0, failed: 0, skipped: 0, transcribed: 0 });
+  }
 
   const bot = getBot();
   let delivered = 0;
@@ -54,6 +72,7 @@ async function handler(req: NextRequest): Promise<Response> {
   const toTranscribe: TranscriptDeliveryInput[] = [];
 
   for (const row of due) {
+    if (Date.now() - startedAt > DELIVERY_DEADLINE_MS) break;
     // Defensive recheck against the live subscription window. The
     // PATCH-side cascade in /api/student/response-window is the primary
     // mechanism that keeps deliver_at in sync, but anything that
@@ -191,6 +210,37 @@ async function handler(req: NextRequest): Promise<Response> {
   // called the transcriber.
   let transcribed = 0;
   for (const input of toTranscribe) {
+    if (Date.now() - startedAt > TRANSCRIBE_DEADLINE_MS) {
+      // No retry exists for these — the row is already 'delivered' and
+      // nothing re-scans null transcript_text. Journal the skip and keep
+      // the student-facing contract (the immediate path's failure notice)
+      // so the missing transcript doesn't read like bot brokenness.
+      await recordAudit({
+        action: "transcript.failed",
+        actorId: input.teacherId,
+        subjectType: "message",
+        subjectId: input.messageId,
+        meta: {
+          student_id: input.studentId,
+          kind: input.kind,
+          stage: "cron-budget",
+        },
+      });
+      await bot.api
+        .sendMessage(input.studentChatId, ru.bot.transcripts.failureNotice, {
+          reply_parameters: {
+            message_id: input.audioTgMessageId as number,
+            allow_sending_without_reply: true,
+          },
+        })
+        .catch((e) =>
+          console.warn(
+            "[deliver-scheduled] budget-skip notice failed",
+            (e as Error).message,
+          ),
+        );
+      continue;
+    }
     const result = await transcribeAndDeliverFor(input);
     if (result) transcribed++;
   }

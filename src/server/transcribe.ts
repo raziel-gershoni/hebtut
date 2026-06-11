@@ -32,7 +32,15 @@ export async function transcribeTgAudio(
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
   try {
-    const file = await getBot().api.getFile(fileId);
+    // Pass the abort signal so a hung TG API call can't outlive the 25s
+    // budget — grammY's own default timeout is 500s, far past any caller's
+    // maxDuration. The cast bridges grammY's `abort-controller` shim type;
+    // a native AbortSignal is runtime-compatible (it goes straight to fetch).
+    const api = getBot().api;
+    const file = await api.getFile(
+      fileId,
+      ac.signal as unknown as Parameters<typeof api.getFile>[1],
+    );
     if (!file.file_path) return null;
     const url = `https://api.telegram.org/file/bot${serverEnv.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
 
