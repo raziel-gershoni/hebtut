@@ -1,7 +1,12 @@
 # Voice playback: client-side blob loading — design
 
 **Date:** 2026-06-11
-**Status:** approved (root-cause follow-up to 76548c9)
+**Status:** SUPERSEDED same day — prod evidence (media.fallback_served:
+acao=null) proved TG file responses send no CORS header at all, so the
+client-side fetch can never read the bytes on any platform. Voice is
+served proxy-only (the ?proxy=1 path became the only path); the
+zero-traffic follow-up under consideration is store-once-in-Supabase
+(decision deferred to w/c 2026-06-15, reminder scheduled).
 
 ## Root cause recap (forensically established)
 

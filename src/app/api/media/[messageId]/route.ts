@@ -4,7 +4,6 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { getBot } from "@/lib/tg";
 import { serverEnv } from "@/lib/env";
 import { oggOpusToCaf, OggCafError } from "@/lib/ogg-to-caf";
-import { recordAudit } from "@/server/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,67 +47,27 @@ export async function GET(req: NextRequest, { params }: { params: { messageId: s
   if (!file.file_path) return new Response("no path", { status: 502 });
   const tgUrl = `https://api.telegram.org/file/bot${serverEnv.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
 
-  // VOICE — two modes:
-  //
-  // DEFAULT (302): the client fetch()es through this redirect and builds a
-  // local blob with a self-declared Content-Type (see src/lib/voice-source).
-  // That sidesteps the root cause entirely — WebKit's AVFoundation rejects
-  // Ogg served with an unsniffed Content-Type (TG's CDN sends
-  // octet-stream; MP4 video notes survive because ftyp gets sniffed), and
-  // TG's mid-May 2026 nginx swap made the native-loader path fail. Bytes
-  // flow TG→client directly: zero media traffic through this function (the
-  // PoC's deliberate design). TG's CORS (`*`) makes the cross-origin fetch
-  // readable; the Authorization header is stripped by the browser on the
-  // cross-origin redirect hop, so it never reaches TG.
-  //
-  // ?proxy=1 (fallback): full byte proxy with explicit audio/ogg + Range
-  // support, plus ?format=caf for pre-18.4 WebKit (lossless Opus→CAF
-  // remux). The client falls back here automatically if its direct fetch
-  // fails — e.g. if TG ever drops CORS the way it just changed its
-  // serving behavior. Voice files are tiny (Opus mono ~25-30 kbps), so
-  // whole-file buffering is fine.
-  // The q.has("token") leg is deploy-window compat: the pre-blob client
-  // bundle authenticated voice via ?token= and expected proxied bytes —
-  // without it, sessions open across the deploy would get a 302 their
-  // native loader can't play. The new client also uses ?token= (query auth
-  // keeps the cross-origin redirect hop a simple CORS request) but adds
-  // &redirect=1 to opt back into the 302. Compat leg removable once old
-  // bundles have aged out.
+  // VOICE: always proxied. The zero-traffic alternatives are PROVEN dead:
+  // - native <audio> on the 302 fails — TG's CDN serves voice as
+  //   application/octet-stream and WebKit's AVFoundation won't sniff Ogg
+  //   (MP4 video notes survive the same redirect because ftyp IS sniffed);
+  // - client-side fetch of the bytes fails — TG file responses carry NO
+  //   Access-Control-Allow-Origin at all (journal-verified in prod,
+  //   2026-06-11: media.fallback_served meta showed acao=null), so a
+  //   browser can never read them cross-origin.
+  // So we serve the bytes ourselves: explicit audio/ogg + Range support,
+  // plus ?format=caf for pre-18.4 WebKit (lossless Opus→CAF remux —
+  // those engines can't decode Ogg in any form). Voice files are tiny
+  // (Opus mono ~25-30 kbps), so whole-file buffering is fine. The planned
+  // zero-Vercel-traffic follow-up is store-once-in-Supabase (decision
+  // pending — see docs/superpowers/specs/2026-06-11-voice-client-blob-design.md).
   const q = new URL(req.url).searchParams;
-  if (
-    msg.kind === "voice" &&
-    q.get("redirect") !== "1" &&
-    (q.get("proxy") === "1" || q.has("token"))
-  ) {
+  if (msg.kind === "voice") {
     let bytes: Uint8Array<ArrayBuffer>;
     try {
       const upstream = await fetch(tgUrl);
       if (!upstream.ok) return new Response("upstream failed", { status: 502 });
       bytes = new Uint8Array(await upstream.arrayBuffer());
-      // proxy=1 means the CLIENT's zero-traffic direct fetch failed and this
-      // is the rescue play. Snapshot what TG actually serves so the journal
-      // explains WHY the direct path failed (missing CORS header? changed
-      // content-type?) without anyone having to reproduce with curl.
-      if (q.get("proxy") === "1") {
-        const h = upstream.headers;
-        await recordAudit({
-          action: "media.fallback_served",
-          actorId: user.id,
-          subjectType: "message",
-          subjectId: messageId,
-          meta: {
-            tg_headers: {
-              content_type: h.get("content-type"),
-              acao: h.get("access-control-allow-origin"),
-              acah: h.get("access-control-allow-headers"),
-              aceh: h.get("access-control-expose-headers"),
-              accept_ranges: h.get("accept-ranges"),
-              server: h.get("server"),
-            },
-            bytes: bytes.length,
-          },
-        });
-      }
     } catch (e) {
       // Network-level rejection (DNS, reset, mid-body abort) — same 502 as
       // a non-ok response instead of an opaque Next 500.
@@ -137,11 +96,11 @@ export async function GET(req: NextRequest, { params }: { params: { messageId: s
     return rangeResponse(req, bytes, contentType);
   }
 
-  // Voice default + all other kinds (video_note plays fine natively through
-  // the redirect — MP4 gets sniffed). The token-in-URL exposure to trusted
-  // teachers is the PoC's accepted trade-off. Cacheable for the same window
-  // TG guarantees file_path validity (≥1h) so a replay skips the
-  // auth+getFile round-trip; Response.redirect() can't carry headers.
+  // Non-voice kinds (video_note plays fine natively through the redirect —
+  // MP4 gets sniffed). The token-in-URL exposure to trusted teachers is the
+  // PoC's accepted trade-off. Cacheable for the same window TG guarantees
+  // file_path validity (≥1h) so a replay skips the auth+getFile round-trip;
+  // Response.redirect() can't carry headers.
   return new Response(null, {
     status: 302,
     headers: { Location: tgUrl, "Cache-Control": "private, max-age=3600" },

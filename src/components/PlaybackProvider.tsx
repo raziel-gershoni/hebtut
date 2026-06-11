@@ -143,9 +143,6 @@ export function PlaybackProvider({
 
 export function usePlayback(messageId: number): {
   isMyTurn: boolean;
-  /** The provider's active message id — consumers that defer play() behind
-   * async work re-check this so a stale continuation can't steal the turn. */
-  currentMessageId: number | null;
   startPlay: () => void;
   endPlay: () => void;
   userPaused: () => void;
@@ -154,7 +151,6 @@ export function usePlayback(messageId: number): {
   if (!ctx) {
     return {
       isMyTurn: false,
-      currentMessageId: null,
       startPlay: () => {},
       endPlay: () => {},
       userPaused: () => {},
@@ -162,7 +158,6 @@ export function usePlayback(messageId: number): {
   }
   return {
     isMyTurn: ctx.currentMessageId === messageId,
-    currentMessageId: ctx.currentMessageId,
     startPlay: () => ctx.startPlay(messageId),
     endPlay: () => ctx.endPlay(messageId),
     userPaused: () => ctx.userPaused(messageId),
