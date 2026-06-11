@@ -9,6 +9,7 @@ import { getMediaUploadsTeachersEnabled } from "@/server/settings";
 import {
   ALLOWED_MIME_TYPES,
   MAX_BYTES,
+  MAX_TITLE_LEN,
   inferKindOrThrow,
 } from "@/lib/media";
 
@@ -125,7 +126,7 @@ const Body = z.object({
   mime_type: z.string(),
   original_filename: z.string().min(1).max(255),
   bytes: z.number().int().positive().max(MAX_BYTES),
-  title: z.string().max(80).nullable().optional(),
+  title: z.string().max(MAX_TITLE_LEN).nullable().optional(),
   description: z.string().max(500).nullable().optional(),
   tag_ids: z.array(z.number().int().positive()).optional(),
   duration_seconds: z.number().int().positive().nullable().optional(),

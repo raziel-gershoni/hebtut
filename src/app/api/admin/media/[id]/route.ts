@@ -5,6 +5,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { readJsonBody } from "@/lib/http";
 import { recordAudit } from "@/server/audit";
+import { MAX_TITLE_LEN } from "@/lib/media";
 import type { Database } from "@/types/database";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -15,7 +16,7 @@ export const revalidate = 0;
 const BUCKET = "media-library";
 
 const PatchBody = z.object({
-  title: z.union([z.string().max(80), z.null()]).optional(),
+  title: z.union([z.string().max(MAX_TITLE_LEN), z.null()]).optional(),
   description: z.union([z.string().max(500), z.null()]).optional(),
   tag_ids: z.array(z.number().int().positive()).optional(),
 });

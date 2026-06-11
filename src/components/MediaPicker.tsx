@@ -7,7 +7,14 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { MediaPreview, type MediaLibraryListItem } from "./MediaPreview";
 import { TagPicker, type TagOption } from "./TagPicker";
 import { EditMediaItemDialog } from "./EditMediaItemDialog";
-import { ALLOWED_MIME_TYPES, MAX_BYTES, MIME_TO_KIND, formatBytes } from "@/lib/media";
+import {
+  ALLOWED_MIME_TYPES,
+  MAX_BYTES,
+  MAX_TITLE_LEN,
+  MIME_TO_KIND,
+  deriveTitleFromFilename,
+  formatBytes,
+} from "@/lib/media";
 import {
   COMPRESS_TRIGGER_BYTES,
   LIBRARY_MAX_DURATION_SEC,
@@ -159,7 +166,7 @@ export function MediaPicker({ open, jwt, studentId, onClose, onSent }: Props) {
       return;
     }
     setUploadStaging(f);
-    setUploadTitle(stripExt(f.name));
+    setUploadTitle(deriveTitleFromFilename(f.name));
     setUploadDescription("");
     setUploadTagIds([]);
   }
@@ -759,7 +766,7 @@ function UploadConfirmDialog({
             type="text"
             value={title}
             onChange={(e) => onTitleChange(e.target.value)}
-            maxLength={80}
+            maxLength={MAX_TITLE_LEN}
             className="w-full h-10 px-3 rounded-xl bg-tg-bg-secondary text-tg-text outline-none focus:ring-2 focus:ring-tg-button/40"
           />
         </label>
@@ -854,7 +861,3 @@ function KebabSheet({
   );
 }
 
-function stripExt(name: string): string {
-  const dot = name.lastIndexOf(".");
-  return dot > 0 ? name.slice(0, dot) : name;
-}

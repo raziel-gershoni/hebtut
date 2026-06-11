@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Spinner } from "./Spinner";
 import { TagPicker } from "./TagPicker";
 import { previewUrl, type MediaLibraryListItem } from "./MediaPreview";
-import { formatBytes } from "@/lib/media";
+import { formatBytes, MAX_TITLE_LEN } from "@/lib/media";
 
 interface Props {
   open: boolean;
@@ -14,7 +14,7 @@ interface Props {
   onSaved: () => Promise<void>;
 }
 
-const TITLE_MAX = 80;
+const TITLE_MAX = MAX_TITLE_LEN;
 const DESC_MAX = 500;
 
 export function EditMediaItemDialog({ open, jwt, item, onClose, onSaved }: Props) {
