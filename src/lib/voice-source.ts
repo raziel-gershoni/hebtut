@@ -53,10 +53,18 @@ export async function loadVoiceObjectUrl(messageId: number, jwt: string): Promis
     typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
       ? AbortSignal.timeout(15_000)
       : undefined;
-  const r = await fetch(`/api/media/${messageId}`, {
-    headers: { Authorization: `Bearer ${jwt}` },
-    signal,
-  });
+  // Auth via ?token=, NOT an Authorization header: a custom header survives
+  // (or is inconsistently stripped) across the cross-origin redirect hop in
+  // some WebKit builds, turning the TG request into a preflighted CORS
+  // request that Telegram's nginx won't answer ('Load failed' on macOS TG).
+  // With query auth the redirected hop is a textbook simple GET needing
+  // only TG's ACAO:*. &redirect=1 tells the route we want the 302 even
+  // though a token query is present (which otherwise marks old-bundle
+  // requests that need proxied bytes).
+  const r = await fetch(
+    `/api/media/${messageId}?token=${encodeURIComponent(jwt)}&redirect=1`,
+    { signal },
+  );
   if (!r.ok) throw new Error(`voice fetch failed: ${r.status}`);
   const raw = new Uint8Array(await r.arrayBuffer());
   const prepared = prepareVoiceBytes(raw, isOggOpusSupported());

@@ -344,6 +344,7 @@ const audit = {
     "transcript.failed": "Сбой расшифровки",
     "translation.failed": "Сбой перевода",
     "client.media_error": "Сбой медиа у клиента",
+    "media.fallback_served": "Голос через прокси",
     "admin.role_change": "Смена роли",
     "admin.is_admin_change": "Права админа",
     "admin.status_change": "Статус",

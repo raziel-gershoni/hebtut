@@ -4,6 +4,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { getBot } from "@/lib/tg";
 import { serverEnv } from "@/lib/env";
 import { oggOpusToCaf, OggCafError } from "@/lib/ogg-to-caf";
+import { recordAudit } from "@/server/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,15 +70,45 @@ export async function GET(req: NextRequest, { params }: { params: { messageId: s
   // The q.has("token") leg is deploy-window compat: the pre-blob client
   // bundle authenticated voice via ?token= and expected proxied bytes —
   // without it, sessions open across the deploy would get a 302 their
-  // native loader can't play. The new client fetches with an Authorization
-  // header and no query params. Removable once old bundles have aged out.
+  // native loader can't play. The new client also uses ?token= (query auth
+  // keeps the cross-origin redirect hop a simple CORS request) but adds
+  // &redirect=1 to opt back into the 302. Compat leg removable once old
+  // bundles have aged out.
   const q = new URL(req.url).searchParams;
-  if (msg.kind === "voice" && (q.get("proxy") === "1" || q.has("token"))) {
+  if (
+    msg.kind === "voice" &&
+    q.get("redirect") !== "1" &&
+    (q.get("proxy") === "1" || q.has("token"))
+  ) {
     let bytes: Uint8Array<ArrayBuffer>;
     try {
       const upstream = await fetch(tgUrl);
       if (!upstream.ok) return new Response("upstream failed", { status: 502 });
       bytes = new Uint8Array(await upstream.arrayBuffer());
+      // proxy=1 means the CLIENT's zero-traffic direct fetch failed and this
+      // is the rescue play. Snapshot what TG actually serves so the journal
+      // explains WHY the direct path failed (missing CORS header? changed
+      // content-type?) without anyone having to reproduce with curl.
+      if (q.get("proxy") === "1") {
+        const h = upstream.headers;
+        await recordAudit({
+          action: "media.fallback_served",
+          actorId: user.id,
+          subjectType: "message",
+          subjectId: messageId,
+          meta: {
+            tg_headers: {
+              content_type: h.get("content-type"),
+              acao: h.get("access-control-allow-origin"),
+              acah: h.get("access-control-allow-headers"),
+              aceh: h.get("access-control-expose-headers"),
+              accept_ranges: h.get("accept-ranges"),
+              server: h.get("server"),
+            },
+            bytes: bytes.length,
+          },
+        });
+      }
     } catch (e) {
       // Network-level rejection (DNS, reset, mid-body abort) — same 502 as
       // a non-ok response instead of an opaque Next 500.
