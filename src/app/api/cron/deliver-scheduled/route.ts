@@ -4,10 +4,18 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { getBot } from "@/lib/tg";
 import { recordAudit } from "@/server/audit";
 import { nextWindowOpen } from "@/server/response-window";
+import {
+  transcribeAndDeliverFor,
+  type TranscriptDeliveryInput,
+} from "@/server/transcript-delivery";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+// Transcription runs inline after the sends (Gemini transcribe + translate
+// are up to 25s each) — the default 10s cap would kill it. Mirrors the
+// /api/webhook ceiling.
+export const maxDuration = 60;
 
 /**
  * Drains queued teacher-initiated messages whose response window has now
@@ -39,6 +47,11 @@ async function handler(req: NextRequest): Promise<Response> {
   let delivered = 0;
   let failed = 0;
   let skipped = 0;
+  // Transcription is deferred until every due row is delivered — getting
+  // the audio out is the critical path; transcripts are best-effort. If
+  // the function dies mid-transcription, deliveries are already committed
+  // and only the tail transcripts are lost.
+  const toTranscribe: TranscriptDeliveryInput[] = [];
 
   for (const row of due) {
     // Defensive recheck against the live subscription window. The
@@ -142,6 +155,17 @@ async function handler(req: NextRequest): Promise<Response> {
           scheduled_id: row.id,
         },
       });
+      if (outRow?.id != null) {
+        toTranscribe.push({
+          messageId: outRow.id,
+          studentId: row.student_id,
+          teacherId: row.teacher_id,
+          studentChatId: row.tg_chat_id,
+          audioTgMessageId: tgMessageId,
+          fileId: newFileId,
+          kind: row.kind === "voice" ? "voice" : "video_note",
+        });
+      }
       delivered++;
     } catch (e) {
       failed++;
@@ -160,7 +184,18 @@ async function handler(req: NextRequest): Promise<Response> {
     }
   }
 
-  return Response.json({ delivered, failed, skipped });
+  // Same post-delivery tail as the immediate webhook path: transcript +
+  // translation DM'd to the student, persisted on the messages row,
+  // failures journaled. Never throws. Before this, scheduled messages
+  // shipped permanently without transcripts — the cron simply never
+  // called the transcriber.
+  let transcribed = 0;
+  for (const input of toTranscribe) {
+    const result = await transcribeAndDeliverFor(input);
+    if (result) transcribed++;
+  }
+
+  return Response.json({ delivered, failed, skipped, transcribed });
 }
 
 export { handler as GET, handler as POST };
