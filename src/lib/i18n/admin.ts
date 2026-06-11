@@ -192,6 +192,8 @@ const users = {
   openTgProfileSentToBot:
     "Открой чат с ботом — там ссылка на профиль. Нажми на неё, и откроется профиль.",
   openTgProfileSendFailed: "Не удалось отправить ссылку на профиль.",
+  openTgProfilePrivacy:
+    "У пользователя закрыт профиль настройками приватности. В чате с ботом — его ID для поиска.",
   // SubscriptionBadge labels
   subBadgeQueued: "в очереди",
   subBadgeTrial: (date: string) => `trial → ${date}`,

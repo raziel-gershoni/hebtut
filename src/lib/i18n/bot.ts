@@ -208,6 +208,19 @@ const labels = {
   viaInviteSuffix: " (по инвайту)",
 };
 
+// Admin-facing "open this user's profile" DM, used when the target has no
+// public @username and can only be reached via a tg://user?id= affordance.
+// `label` is pre-escaped for parse_mode=HTML by the caller.
+const profileLink = {
+  button: "👤 Открыть профиль",
+  message: (label: string) => `👤 ${label}`,
+  // Fallback when Telegram refuses the profile button because the target
+  // locked profile-linking in their privacy settings — no tappable link is
+  // possible, so we hand the admin the numeric id to search by instead.
+  privacyFallback: (label: string, tgUserId: number) =>
+    `👤 ${label}\nID: ${tgUserId}\n\nУ пользователя закрыт профиль настройками приватности — открыть напрямую нельзя. Найди его в админке по этому ID.`,
+};
+
 const transcripts = {
   // Sent (threaded as reply to the audio) when Gemini Flash transcription
   // failed or timed out. Audio itself was already delivered.
@@ -286,4 +299,5 @@ export const bot = {
   notifications,
   labels,
   transcripts,
+  profileLink,
 };

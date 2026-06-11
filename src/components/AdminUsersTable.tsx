@@ -97,14 +97,24 @@ export function AdminUsersTable({ jwt, users, loaded, refetch }: AdminUsersTable
       window.setTimeout(() => setProfileNudge(null), 3000);
       return;
     }
-    // Show the nudge for ~800ms so the transition reads as
+    // The target may have locked profile-linking in their privacy settings;
+    // the server then DMs a no-button fallback carrying their numeric id.
+    // Surface a distinct nudge (held a touch longer) so the admin knows to
+    // look for the id rather than a tappable link.
+    const data = (await r.json().catch(() => null)) as { fallback?: string } | null;
+    const isPrivacy = data?.fallback === "privacy";
+    // Show the nudge briefly so the transition reads as
     // "tapped user → sent to bot → here's the bot chat" rather than
     // an unexplained Mini App close.
-    setProfileNudge(ru.admin.users.openTgProfileSentToBot);
+    setProfileNudge(
+      isPrivacy
+        ? ru.admin.users.openTgProfilePrivacy
+        : ru.admin.users.openTgProfileSentToBot,
+    );
     window.setTimeout(() => {
       setProfileNudge(null);
       window.Telegram?.WebApp?.close?.();
-    }, 800);
+    }, isPrivacy ? 1600 : 800);
   }
   const [subscriptionUser, setSubscriptionUser] = useState<AdminUser | null>(null);
   const [editingNameUser, setEditingNameUser] = useState<AdminUser | null>(null);

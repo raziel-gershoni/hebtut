@@ -3,6 +3,8 @@ import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { getBot } from "@/lib/tg";
+import { isButtonPrivacyError } from "@/lib/tg-errors";
+import { ru } from "@/lib/i18n";
 import { recordAudit } from "@/server/audit";
 import { resolveDisplay } from "@/server/display";
 import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
@@ -54,31 +56,61 @@ export async function POST(
 
   const anonMode = await getDisplayAnonymousHandlesEnabled();
   const label = resolveDisplay(targetRes.data, anonMode).handle;
-  const text = `👤 ${escapeHtml(label)}`;
+  const safeLabel = escapeHtml(label);
+  const tgUserId = targetRes.data.tg_user_id;
+  const adminChatId = adminRes.data.tg_chat_id;
 
   try {
     // Inline-keyboard URL button with tg://user?id=… is the Bot-API-blessed
     // way to spawn a "open user profile" button. Same mechanism as
     // inputKeyboardButtonUserProfile — bigger tap target than an inline
     // text-mention, and the affordance reads as a real action.
-    await getBot().api.sendMessage(adminRes.data.tg_chat_id, text, {
+    await getBot().api.sendMessage(adminChatId, ru.bot.profileLink.message(safeLabel), {
       parse_mode: "HTML",
       reply_markup: {
         inline_keyboard: [
-          [
-            {
-              text: "👤 Открыть профиль",
-              url: `tg://user?id=${targetRes.data.tg_user_id}`,
-            },
-          ],
+          [{ text: ru.bot.profileLink.button, url: `tg://user?id=${tgUserId}` }],
         ],
       },
     });
   } catch (e) {
+    const reason = (e as Error).message;
+    // The target locked profile-linking in their privacy settings, so
+    // Telegram refuses the button (BUTTON_USER_PRIVACY_RESTRICTED). No
+    // tappable link is possible for them — fall back to a plain DM carrying
+    // the numeric id so the admin can still find the user via search. Seeing
+    // this error also confirms the id we sent was a valid TG id, not the
+    // internal users.id.
+    if (isButtonPrivacyError(reason)) {
+      try {
+        await getBot().api.sendMessage(
+          adminChatId,
+          ru.bot.profileLink.privacyFallback(safeLabel, tgUserId),
+          { parse_mode: "HTML" },
+        );
+      } catch (e2) {
+        console.warn("profile-link privacy-fallback DM failed", {
+          admin_chat_id: adminChatId,
+          target_id: targetId,
+          target_tg_user_id: tgUserId,
+          reason: (e2 as Error).message,
+        });
+        return new Response("tg send failed", { status: 502, headers: noStoreHeaders });
+      }
+      await recordAudit({
+        action: "admin.user_profile_link",
+        actorId: me.id,
+        subjectType: "user",
+        subjectId: targetId,
+        meta: { fallback: "privacy" },
+      });
+      return Response.json({ ok: true, fallback: "privacy" }, { headers: noStoreHeaders });
+    }
     console.warn("profile-link DM failed", {
-      admin_chat_id: adminRes.data.tg_chat_id,
+      admin_chat_id: adminChatId,
       target_id: targetId,
-      reason: (e as Error).message,
+      target_tg_user_id: tgUserId,
+      reason,
     });
     return new Response("tg send failed", { status: 502, headers: noStoreHeaders });
   }
