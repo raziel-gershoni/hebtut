@@ -45,6 +45,13 @@ export type OnboardingTimerKind =
   | "survey"
   | "churn_followup"
   | "video_sequence_next";
+export type StudentFlagKind =
+  | "inactive"
+  | "slump"
+  | "plateau"
+  | "ghosting"
+  | "tutor_sla";
+export type StudentFlagTier = "sliding" | "at_risk" | "dormant";
 
 export interface Database {
   public: {
@@ -453,6 +460,28 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["onboarding_timers"]["Insert"]>;
         Relationships: [];
       };
+      student_flags: {
+        Row: {
+          student_id: number;
+          kind: StudentFlagKind;
+          tier: StudentFlagTier | null;
+          opened_at: string;
+          last_evaluated_at: string;
+          resolved_at: string | null;
+          meta: Json;
+        };
+        Insert: {
+          student_id: number;
+          kind: StudentFlagKind;
+          tier?: StudentFlagTier | null;
+          opened_at?: string;
+          last_evaluated_at?: string;
+          resolved_at?: string | null;
+          meta?: Json;
+        };
+        Update: Partial<Database["public"]["Tables"]["student_flags"]["Insert"]>;
+        Relationships: [];
+      };
       scheduled_outbound: {
         Row: {
           id: number;
@@ -675,3 +704,5 @@ export interface Database {
     CompositeTypes: Record<string, never>;
   };
 }
+
+export type StudentFlagRow = Database["public"]["Tables"]["student_flags"]["Row"];
