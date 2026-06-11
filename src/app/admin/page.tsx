@@ -17,6 +17,7 @@ import { AdminOnboardingVideos } from "@/components/AdminOnboardingVideos";
 import { AdminVersionFooter } from "@/components/AdminVersionFooter";
 import { AdminTutorWorkPanel } from "@/components/AdminTutorWorkPanel";
 import { AdminAdminsPanel } from "@/components/AdminAdminsPanel";
+import { AdminEngagementPanel } from "@/components/AdminEngagementPanel";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { ru } from "@/lib/i18n";
 
@@ -97,6 +98,9 @@ function AdminBody({ jwt, selfId }: { jwt: string; selfId: number }) {
           {ru.admin.pages.navAudit}
         </Link>
       </div>
+      <CollapsibleSection id="engagement" title={ru.admin.pages.sections.engagement}>
+        <AdminEngagementPanel jwt={jwt} />
+      </CollapsibleSection>
       <CollapsibleSection id="users" title={ru.admin.pages.sections.users}>
         <AdminUsersTable jwt={jwt} users={users} loaded={loaded} refetch={refetch} />
       </CollapsibleSection>
