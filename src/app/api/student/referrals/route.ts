@@ -4,6 +4,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { serverEnv } from "@/lib/env";
 import { buildReferralUrl } from "@/server/invites";
+import { getReferralsEnabled } from "@/server/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +22,9 @@ export async function GET(req: NextRequest): Promise<Response> {
   const user = await authFromRequest(req);
   if (!hasRole(user, ["student"])) {
     return new Response("forbidden", { status: 403, headers: noStoreHeaders });
+  }
+  if (!(await getReferralsEnabled())) {
+    return Response.json({ enabled: false }, { headers: noStoreHeaders });
   }
   const sb = getServiceRoleClient();
   const { data: row } = await sb
