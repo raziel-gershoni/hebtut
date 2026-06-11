@@ -7,6 +7,7 @@ import { Spinner } from "./Spinner";
 import { Avatar } from "./Avatar";
 import type { SpeakerColorClasses } from "@/lib/speaker-color";
 import { usePlaybackSpeed, formatSpeed } from "@/hooks/usePlaybackSpeed";
+import { isOggOpusSupported } from "@/lib/audio-support";
 import { usePlayback } from "./PlaybackProvider";
 
 export type ThreadMsg = {
@@ -100,7 +101,11 @@ export function MessageBubble({
   const bubble = isIn
     ? `${speakerColors.bubbleBg} border-l-[3px] ${speakerColors.border}`
     : `${speakerColors.bubbleBg} border-r-[3px] ${speakerColors.border}`;
-  const src = `/api/media/${msg.id}?token=${encodeURIComponent(jwt)}`;
+  // Voice is OGG/Opus, which pre-18.4 WebKit can't decode — those clients
+  // request the server's lossless CAF remux instead (see /api/media route).
+  const cafSuffix =
+    msg.kind === "voice" && !isOggOpusSupported() ? "&format=caf" : "";
+  const src = `/api/media/${msg.id}?token=${encodeURIComponent(jwt)}${cafSuffix}`;
   const time = new Date(msg.created_at).toLocaleTimeString("ru-RU", {
     hour: "2-digit",
     minute: "2-digit",
@@ -368,7 +373,11 @@ function VoicePlayer({
       <audio
         ref={audioRef}
         src={src}
-        preload="metadata"
+        // none, not metadata: the duration shown comes from msg.duration
+        // (DB), and now that voice is proxied (not 302'd to the TG CDN) a
+        // metadata preload would fire a full download per bubble on thread
+        // mount. play() loads on demand, including the auto-advance chain.
+        preload="none"
         onPlay={() => {
           setPlaying(true);
           startPlay();
