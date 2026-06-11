@@ -178,9 +178,9 @@ export function MessageBubble({
         )}
 
         {msg.kind === "voice" ? (
-          <VoicePlayer src={src} totalSeconds={msg.duration} messageId={msg.id} />
+          <VoicePlayer src={src} totalSeconds={msg.duration} messageId={msg.id} jwt={jwt} />
         ) : msg.kind === "video_note" ? (
-          <VideoNote src={src} totalSeconds={msg.duration} messageId={msg.id} />
+          <VideoNote src={src} totalSeconds={msg.duration} messageId={msg.id} jwt={jwt} />
         ) : msg.kind === "text" ? (
           <TextContent text={msg.text_content ?? ""} />
         ) : msg.media_library_id != null ? (
@@ -281,10 +281,12 @@ function VoicePlayer({
   src,
   totalSeconds,
   messageId,
+  jwt,
 }: {
   src: string;
   totalSeconds: number;
   messageId: number;
+  jwt: string;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -383,8 +385,39 @@ function VoicePlayer({
           endPlay();
         }}
         onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
+        onError={(e) =>
+          reportMessageMediaError("voice", e.currentTarget.error, messageId, jwt)
+        }
       />
     </div>
+  );
+}
+
+// Shared onError reporter for the voice/video-note players — these failed
+// silently for months (the WebKit webview can't decode some formats and
+// the element just sits dead), which made the voice-playback bug
+// undiagnosable from the journal.
+function reportMessageMediaError(
+  kind: "voice" | "video_note",
+  err: MediaError | null,
+  messageId: number,
+  jwt: string,
+): void {
+  const codes: Record<number, string> = {
+    1: "ABORTED",
+    2: "NETWORK",
+    3: "DECODE",
+    4: "SRC_NOT_SUPPORTED",
+  };
+  void reportClientMediaError(
+    "preview-load",
+    new Error(
+      `${kind} playback load failed: ${
+        err ? `${codes[err.code] ?? "UNKNOWN"} · ${err.message || ""}` : "no error obj"
+      }`,
+    ),
+    { message_id: messageId, surface: `${kind}-bubble` },
+    jwt,
   );
 }
 
@@ -397,10 +430,12 @@ function VideoNote({
   src,
   totalSeconds,
   messageId,
+  jwt,
 }: {
   src: string;
   totalSeconds: number;
   messageId: number;
+  jwt: string;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -486,6 +521,9 @@ function VideoNote({
               endPlay();
             }}
             onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
+            onError={(e) =>
+              reportMessageMediaError("video_note", e.currentTarget.error, messageId, jwt)
+            }
             className="absolute inset-0 w-full h-full object-cover"
           />
           {!playing && (
