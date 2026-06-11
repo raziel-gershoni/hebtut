@@ -147,6 +147,32 @@ export function computePracticeSignals(
   return { daysSinceAnchor, currentWeekS, priorWeekS, streak, median7, median30 };
 }
 
+export interface PendingCandidate {
+  id: number;
+  createdAtMs: number;
+}
+
+/**
+ * Pick the message the tutor-SLA flag should point at: the OLDEST pending
+ * inbound that the tutor has NOT replied past. `status='pending'` alone
+ * lies here — replying flips only the one message the prompt targeted, so
+ * older messages of an already-answered burst stay 'pending' forever. A
+ * pending message older than the latest outbound is conversationally
+ * handled and must not alarm the admin (the first prod run flagged a
+ * 55h-old burst leftover while the tutor had replied hours earlier).
+ */
+export function pickSlaPending(
+  candidates: PendingCandidate[],
+  latestOutMs: number,
+): PendingCandidate | null {
+  let best: PendingCandidate | null = null;
+  for (const c of candidates) {
+    if (c.createdAtMs <= latestOutMs) continue; // superseded by a tutor reply
+    if (!best || c.createdAtMs < best.createdAtMs) best = c;
+  }
+  return best;
+}
+
 export function diffFlagStates(existing: ExistingFlag[], desired: DesiredFlag[]): Transition[] {
   const out: Transition[] = [];
   const desiredByKind = new Map(desired.map((d) => [d.kind, d]));

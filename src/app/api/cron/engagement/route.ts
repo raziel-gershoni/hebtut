@@ -18,6 +18,8 @@ import {
   evaluatePlateau,
   evaluateSlump,
   isGhosting,
+  pickSlaPending,
+  type PendingCandidate,
   type DesiredFlag,
   type ExistingFlag,
   type Transition,
@@ -156,12 +158,14 @@ async function handler(req: NextRequest): Promise<Response> {
         .eq("status", "pending")
         .lt("created_at", slaCutoffIso)
     : { data: [] as { student_id: number; id: number; created_at: string }[] };
-  const oldestPending = new Map<number, { id: number; created_at: string }>();
+  // Keep ALL qualifying pending rows per student — which one (if any)
+  // matters depends on the tutor's latest reply, decided per student via
+  // pickSlaPending at evaluation time.
+  const pendingByStudent = new Map<number, PendingCandidate[]>();
   for (const p of pendingRows ?? []) {
-    const cur = oldestPending.get(p.student_id);
-    if (!cur || p.created_at < cur.created_at) {
-      oldestPending.set(p.student_id, { id: p.id, created_at: p.created_at });
-    }
+    const arr = pendingByStudent.get(p.student_id) ?? [];
+    arr.push({ id: p.id, createdAtMs: new Date(p.created_at).getTime() });
+    pendingByStudent.set(p.student_id, arr);
   }
 
   // Pre-run snapshot: students who had ANY open flag before this run.
@@ -282,16 +286,16 @@ async function handler(req: NextRequest): Promise<Response> {
         });
       }
 
-      const pending = oldestPending.get(s.id);
+      // Only pending messages the tutor hasn't replied PAST count — see
+      // pickSlaPending for why raw status='pending' over-alarms.
+      const pending = pickSlaPending(pendingByStudent.get(s.id) ?? [], outT);
       if (pending) {
         desired.push({
           kind: "tutor_sla",
           tier: null,
           meta: {
             pending_message_id: pending.id,
-            pending_hours: Math.round(
-              (now.getTime() - new Date(pending.created_at).getTime()) / 3600_000,
-            ),
+            pending_hours: Math.round((now.getTime() - pending.createdAtMs) / 3600_000),
           },
         });
       }

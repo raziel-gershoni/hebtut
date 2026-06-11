@@ -6,6 +6,7 @@ import {
   median,
   computePracticeSignals,
   diffFlagStates,
+  pickSlaPending,
   isGhosting,
   type ExistingFlag,
   type DesiredFlag,
@@ -185,5 +186,27 @@ describe("isGhosting", () => {
   it("suppressed when gap is below the threshold", () => {
     // gap = 160 - 100 = 60ms, threshold = 70ms
     expect(isGhosting(100, 50, 160, 70)).toBe(false);
+  });
+});
+
+describe("pickSlaPending", () => {
+  const c = (id: number, ms: number) => ({ id, createdAtMs: ms });
+
+  it("returns null when every pending is superseded by a tutor reply", () => {
+    expect(pickSlaPending([c(1, 1000), c(2, 2000)], 3000)).toBeNull();
+  });
+
+  it("picks the oldest pending the tutor has not replied past", () => {
+    expect(pickSlaPending([c(1, 1000), c(2, 4000), c(3, 5000)], 3000)).toEqual(
+      c(2, 4000),
+    );
+  });
+
+  it("picks the oldest overall when the tutor never replied", () => {
+    expect(pickSlaPending([c(2, 2000), c(1, 1000)], 0)).toEqual(c(1, 1000));
+  });
+
+  it("returns null for no candidates", () => {
+    expect(pickSlaPending([], 0)).toBeNull();
   });
 });
