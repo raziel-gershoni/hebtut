@@ -34,6 +34,7 @@ const SCHEDULES = [
   // Once-a-minute matches the bot's reactive cadence — within ~60s a
   // student who paused 6h ago gets the gentle nudge.
   { path: "/api/cron/onboarding", cron: "*/1 * * * *" },
+  { path: "/api/cron/engagement", cron: "0 6 * * *" }, // daily ~09:00 Israel
 ];
 
 const QSTASH = `${(QSTASH_URL ?? "https://qstash.upstash.io").replace(/\/$/, "")}/v2/schedules`;
