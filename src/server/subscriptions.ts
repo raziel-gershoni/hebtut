@@ -5,10 +5,25 @@ import { recordAudit } from "@/server/audit";
 import { getBot } from "@/lib/tg";
 import { ru } from "@/lib/i18n";
 import { markOnboardingDone } from "@/server/onboarding";
+import { getReferralsEnabled } from "@/server/settings";
 
 const REFERRER_BONUS_CAP_DAYS = 90;
 const REFERRAL_BONUS_PER_SIDE_DAYS = 30;
 export const FREEZE_BUDGET_DAYS_PER_MONTH = 3;
+
+/**
+ * Whether a successful payment should grant the referral bonus. All three
+ * must hold: the program is enabled, this is the referee's first paid
+ * period, and they were attributed to a referrer. Gating this one value
+ * short-circuits BOTH the referee bonus and the referrer credit.
+ */
+export function shouldApplyReferralBonus(
+  referralsEnabled: boolean,
+  wasFirstPaid: boolean,
+  referredByUserId: number | null,
+): boolean {
+  return referralsEnabled && wasFirstPaid && referredByUserId != null;
+}
 
 /**
  * Returns the freeze budget remaining for THIS calendar month, lazily
@@ -255,7 +270,12 @@ export async function applySuccessfulPayment(input: {
   // value the row will hold post-update. Pre-fix this happened in two
   // separate updates with the audit captured between them, leaving a
   // diagnostic mismatch when referral bonus applied.
-  const refereeWillGetReferralBonus = wasFirstPaid && row.referred_by_user_id != null;
+  const referralsEnabled = await getReferralsEnabled();
+  const refereeWillGetReferralBonus = shouldApplyReferralBonus(
+    referralsEnabled,
+    wasFirstPaid,
+    row.referred_by_user_id,
+  );
   const refereeFinalEnd = refereeWillGetReferralBonus
     ? addDays(baseEnd, REFERRAL_BONUS_PER_SIDE_DAYS)
     : baseEnd;
