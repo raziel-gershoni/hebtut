@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Avatar } from "./Avatar";
 import { Spinner } from "./Spinner";
 import { ru } from "@/lib/i18n";
+import { apportionMinutes } from "@/server/tutor-work";
 import { format, startOfWeek, startOfMonth } from "date-fns";
 
 interface DayBucket {
@@ -35,6 +36,18 @@ function fmtDuration(s: number): string {
   if (h === 0) return `${m}м`;
   if (m === 0) return `${h}ч`;
   return `${h}ч ${m}м`;
+}
+
+// Same h/m formatting as fmtDuration, but for an already-whole-minute value.
+// Used for the active/playback/recording breakdown, whose minute counts come
+// from apportionMinutes so they re-sum exactly to fmtDuration(total_s).
+function fmtMinutes(m: number): string {
+  if (m <= 0) return "0м";
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  if (h === 0) return `${mm}м`;
+  if (mm === 0) return `${h}ч`;
+  return `${h}ч ${mm}м`;
 }
 
 export function AdminTutorWorkPanel({ jwt }: { jwt: string }) {
@@ -161,6 +174,14 @@ export function AdminTutorWorkPanel({ jwt }: { jwt: string }) {
           {data.tutors.map((t) => {
             const todayBucket = t.days.find((d) => d.date === today);
             const todayTotal = todayBucket?.total_s ?? 0;
+            // Apportion whole minutes so the breakdown re-sums to the period
+            // total shown on the name line (otherwise independent flooring can
+            // make «актив 0м · прослушка 0м · запись 5м» undershoot «Всего: 7м»).
+            const [activeMin = 0, playbackMin = 0, recordingMin = 0] = apportionMinutes([
+              t.totals.active_s,
+              t.totals.playback_s,
+              t.totals.recording_s,
+            ]);
             return (
               <li
                 key={t.tutor_id}
@@ -188,11 +209,11 @@ export function AdminTutorWorkPanel({ jwt }: { jwt: string }) {
                     </span>
                   </div>
                   <div className="text-[11px] text-tg-text-hint tabular-nums mt-0.5">
-                    ⏱ {ru.admin.tutorWork.bucketActiveLabel} {fmtDuration(t.totals.active_s)}
+                    ⏱ {ru.admin.tutorWork.bucketActiveLabel} {fmtMinutes(activeMin)}
                     {" · "}▶ {ru.admin.tutorWork.bucketPlaybackLabel}{" "}
-                    {fmtDuration(t.totals.playback_s)}
+                    {fmtMinutes(playbackMin)}
                     {" · "}🎙 {ru.admin.tutorWork.bucketRecordingLabel}{" "}
-                    {fmtDuration(t.totals.recording_s)}
+                    {fmtMinutes(recordingMin)}
                   </div>
                   <div className="text-[11px] text-tg-text-hint mt-0.5">
                     {ru.admin.tutorWork.todayTotalLabel}{" "}

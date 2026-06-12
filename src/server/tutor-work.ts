@@ -86,6 +86,31 @@ export function computeWorkBuckets(events: WorkEvent[]): WorkBuckets {
   };
 }
 
+/**
+ * Largest-remainder apportionment of whole display-minutes across buckets.
+ *
+ * The work buckets are disjoint, so their seconds sum exactly to the total.
+ * But flooring each bucket to whole minutes independently drops up to <1min
+ * per bucket, so the displayed parts can undershoot the displayed total by up
+ * to (n-1) minutes — the "⏱ актив 0м · ▶ прослушка 0м · 🎙 запись 5м" line vs
+ * "Сегодня: 7м" mismatch a tutor reported. Instead we floor the TOTAL to
+ * minutes and hand the leftover minutes to the buckets with the largest
+ * leftover seconds, so the parts always re-sum to the displayed total while
+ * staying the closest integer-minute representation. Ties break by index
+ * (stable, left-to-right) so the order matches the rendered breakdown.
+ */
+export function apportionMinutes(partsSeconds: number[]): number[] {
+  const totalMin = Math.floor(partsSeconds.reduce((a, b) => a + b, 0) / 60);
+  const floors = partsSeconds.map((s) => Math.floor(s / 60));
+  const deficit = totalMin - floors.reduce((a, b) => a + b, 0);
+  const byRemainder = partsSeconds
+    .map((s, i) => ({ i, rem: s - Math.floor(s / 60) * 60 }))
+    .sort((a, b) => b.rem - a.rem || a.i - b.i);
+  const out = [...floors];
+  for (let k = 0; k < deficit && k < byRemainder.length; k++) out[byRemainder[k]!.i]!++;
+  return out;
+}
+
 export function applyDailyCap(buckets: WorkBuckets, capSeconds: number): WorkBuckets {
   if (buckets.total_s <= capSeconds) return buckets;
   const ratio = capSeconds / buckets.total_s;
