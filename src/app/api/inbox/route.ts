@@ -5,6 +5,7 @@ import { noStoreHeaders } from "@/lib/no-cache";
 import { resolveDisplay } from "@/server/display";
 import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
 import { getSignedRemainingForManyToday } from "@/server/quota";
+import type { MessageKind } from "@/types/database";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,12 +15,13 @@ interface MessageRow {
   id: number;
   student_id: number;
   direction: "in" | "out";
-  kind: "voice" | "video_note" | "text";
+  kind: MessageKind;
   duration: number;
   status: "pending" | "answered" | "expired" | "orphaned";
   teacher_id: number | null;
   created_at: string;
   text_content: string | null;
+  media_library_id: number | null;
 }
 
 interface InboxChat {
@@ -31,12 +33,15 @@ interface InboxChat {
     | {
         id: number;
         direction: "in" | "out";
-        kind: "voice" | "video_note" | "text";
+        kind: MessageKind;
         duration: number;
         status: "pending" | "answered" | "expired" | "orphaned";
         teacher_id: number | null;
         created_at: string;
         text_content: string | null;
+        /** For a media-library send (kind photo/video/audio), the library item's
+         * title so the chat-list preview can show what was sent. */
+        media_title: string | null;
       }
     | null;
   unread_count: number;
@@ -126,7 +131,7 @@ export async function GET(req: NextRequest) {
   const { data: msgsRaw } = await sb
     .from("messages")
     .select(
-      "id, student_id, direction, kind, duration, status, teacher_id, created_at, text_content",
+      "id, student_id, direction, kind, duration, status, teacher_id, created_at, text_content, media_library_id",
     )
     .in("student_id", studentIds)
     .in("status", ["pending", "answered", "expired"])
@@ -206,6 +211,25 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Titles for any media-library item that is a thread's LAST message, so the
+  // chat-list preview can show "what was sent" instead of a bare icon. Only the
+  // last message per student, so N is tiny.
+  const lastLibIds = Array.from(
+    new Set(
+      [...lastByStudent.values()]
+        .map((m) => m.media_library_id)
+        .filter((v): v is number => v != null),
+    ),
+  );
+  const libTitleById = new Map<number, string | null>();
+  if (lastLibIds.length > 0) {
+    const { data: libRows } = await sb
+      .from("media_library")
+      .select("id, title")
+      .in("id", lastLibIds);
+    for (const l of libRows ?? []) libTitleById.set(l.id, l.title);
+  }
+
   const studentById = new Map(
     (studentRows ?? []).map((s) => [s.id, s]),
   );
@@ -233,6 +257,10 @@ export async function GET(req: NextRequest) {
               teacher_id: last.teacher_id,
               created_at: last.created_at,
               text_content: last.text_content,
+              media_title:
+                last.media_library_id != null
+                  ? libTitleById.get(last.media_library_id) ?? null
+                  : null,
             }
           : null,
         unread_count: unreadByStudent.get(sid) ?? 0,

@@ -14,12 +14,14 @@ import { PAUSE_INACTIVITY_MS } from "@/lib/time";
 type LastMessage = {
   id: number;
   direction: "in" | "out";
-  kind: "voice" | "video_note" | "text";
+  kind: "voice" | "video_note" | "text" | "photo" | "video" | "audio";
   duration: number;
   status: "pending" | "answered" | "expired" | "orphaned";
   teacher_id: number | null;
   created_at: string;
   text_content?: string | null;
+  /** Library-item title for a media-library send (photo/video/audio). */
+  media_title?: string | null;
 };
 
 interface Chat {
@@ -322,12 +324,20 @@ function Preview({ chat, myUserId }: { chat: Chat; myUserId: number }) {
       </span>
     );
   }
-  const icon = m.kind === "voice" ? "🎙️" : "🎥";
-  const dur = formatDuration(m.duration);
+  // Voice / video_note (student practice + tutor circles): icon + duration.
+  // Library sends (photo/video/audio): icon + the item's title, falling back to
+  // a kind label — so a sent photo no longer reads "🎥 0:00".
+  let body: string;
+  if (m.kind === "voice") body = `🎙️ ${formatDuration(m.duration)}`;
+  else if (m.kind === "video_note") body = `🎥 ${formatDuration(m.duration)}`;
+  else if (m.kind === "photo") body = `📷 ${m.media_title || ru.inbox.row.preview.photo}`;
+  else if (m.kind === "video") body = `🎬 ${m.media_title || ru.inbox.row.preview.video}`;
+  else if (m.kind === "audio") body = `🎵 ${m.media_title || ru.inbox.row.preview.audio}`;
+  else body = `📎 ${m.media_title ?? ""}`;
   return (
     <span>
       {prefix}
-      {icon} {dur}
+      {body}
       {tail}
     </span>
   );
