@@ -5,6 +5,7 @@ import { noStoreHeaders } from "@/lib/no-cache";
 import { resolveDisplay } from "@/server/display";
 import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
 import { getSignedRemainingForManyToday } from "@/server/quota";
+import { signedStudentMediaUrl } from "@/server/media-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -119,26 +120,45 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
       });
     }
   }
-  const messages = (rawMessages ?? []).map((m) => ({
-    id: m.id,
-    direction: m.direction,
-    kind: m.kind,
-    duration: m.duration,
-    status: m.status,
-    reply_to_id: m.reply_to_id,
-    created_at: m.created_at,
-    teacher_id: m.teacher_id,
-    teacher: m.teacher_id != null ? teachersById.get(m.teacher_id) ?? null : null,
-    text_content: m.text_content ?? null,
-    media_library_id: m.media_library_id ?? null,
-    media_library: m.media_library_id != null ? libById.get(m.media_library_id) ?? null : null,
-    storage_path: m.storage_path ?? null,
-    storage_caf_path: m.storage_caf_path ?? null,
-    transcript_text: m.transcript_text ?? null,
-    transcript_tg_message_id: m.transcript_tg_message_id ?? null,
-    translation_text: m.translation_text ?? null,
-    translation_tg_message_id: m.translation_tg_message_id ?? null,
-  }));
+  // Mint short-lived presigned R2 URLs for stored media so the client plays
+  // straight from R2 (zero Vercel egress). Signing is local crypto (no network),
+  // so doing it per-row is cheap. If R2 is unconfigured / signing throws, leave
+  // the URLs null and the bubble falls back to the /api/media proxy.
+  const messages = await Promise.all(
+    (rawMessages ?? []).map(async (m) => {
+      let storage_url: string | null = null;
+      let storage_caf_url: string | null = null;
+      if (m.storage_path) {
+        try {
+          storage_url = await signedStudentMediaUrl(m.storage_path);
+          if (m.storage_caf_path) storage_caf_url = await signedStudentMediaUrl(m.storage_caf_path);
+        } catch {
+          storage_url = null;
+          storage_caf_url = null;
+        }
+      }
+      return {
+        id: m.id,
+        direction: m.direction,
+        kind: m.kind,
+        duration: m.duration,
+        status: m.status,
+        reply_to_id: m.reply_to_id,
+        created_at: m.created_at,
+        teacher_id: m.teacher_id,
+        teacher: m.teacher_id != null ? teachersById.get(m.teacher_id) ?? null : null,
+        text_content: m.text_content ?? null,
+        media_library_id: m.media_library_id ?? null,
+        media_library: m.media_library_id != null ? libById.get(m.media_library_id) ?? null : null,
+        storage_url,
+        storage_caf_url,
+        transcript_text: m.transcript_text ?? null,
+        transcript_tg_message_id: m.transcript_tg_message_id ?? null,
+        translation_text: m.translation_text ?? null,
+        translation_tg_message_id: m.translation_tg_message_id ?? null,
+      };
+    }),
+  );
 
   const { data: studentRow } = await sb
     .from("users")

@@ -8,10 +8,7 @@ import { Avatar } from "./Avatar";
 import type { SpeakerColorClasses } from "@/lib/speaker-color";
 import { usePlaybackSpeed, formatSpeed } from "@/hooks/usePlaybackSpeed";
 import { voiceProxyUrl, voiceStoredUrl } from "@/lib/voice-source";
-import { storagePublicUrl, STUDENT_MEDIA_BUCKET } from "@/lib/storage-url";
 import { usePlayback } from "./PlaybackProvider";
-
-const studentMediaUrl = (path: string) => storagePublicUrl(STUDENT_MEDIA_BUCKET, path);
 
 export type ThreadMsg = {
   id: number;
@@ -36,8 +33,11 @@ export type ThreadMsg = {
   transcript_tg_message_id?: number | null;
   translation_text?: string | null;
   translation_tg_message_id?: number | null;
-  storage_path?: string | null;
-  storage_caf_path?: string | null;
+  /** Short-lived presigned R2 URLs minted by the thread API (null = not stored
+   * yet → fall back to the /api/media proxy). storage_caf_url is the voice-only
+   * CAF derivative for pre-18.4 WebKit. */
+  storage_url?: string | null;
+  storage_caf_url?: string | null;
 };
 
 export interface Speaker {
@@ -106,9 +106,7 @@ export function MessageBubble({
   const bubble = isIn
     ? `${speakerColors.bubbleBg} border-l-[3px] ${speakerColors.border}`
     : `${speakerColors.bubbleBg} border-r-[3px] ${speakerColors.border}`;
-  const src = msg.storage_path
-    ? studentMediaUrl(msg.storage_path)
-    : `/api/media/${msg.id}?token=${encodeURIComponent(jwt)}`;
+  const src = msg.storage_url ?? `/api/media/${msg.id}?token=${encodeURIComponent(jwt)}`;
   const time = new Date(msg.created_at).toLocaleTimeString("ru-RU", {
     hour: "2-digit",
     minute: "2-digit",
@@ -190,8 +188,8 @@ export function MessageBubble({
             totalSeconds={msg.duration}
             messageId={msg.id}
             jwt={jwt}
-            storagePath={msg.storage_path}
-            storageCafPath={msg.storage_caf_path}
+            storageUrl={msg.storage_url}
+            storageCafUrl={msg.storage_caf_url}
           />
         ) : msg.kind === "video_note" ? (
           <VideoNote src={src} totalSeconds={msg.duration} messageId={msg.id} jwt={jwt} />
@@ -295,14 +293,14 @@ function VoicePlayer({
   totalSeconds,
   messageId,
   jwt,
-  storagePath,
-  storageCafPath,
+  storageUrl,
+  storageCafUrl,
 }: {
   totalSeconds: number;
   messageId: number;
   jwt: string;
-  storagePath?: string | null;
-  storageCafPath?: string | null;
+  storageUrl?: string | null;
+  storageCafUrl?: string | null;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -396,8 +394,8 @@ function VoicePlayer({
       <audio
         ref={audioRef}
         src={
-          storagePath
-            ? voiceStoredUrl(storagePath, storageCafPath ?? null)
+          storageUrl
+            ? voiceStoredUrl(storageUrl, storageCafUrl ?? null)
             : voiceProxyUrl(messageId, jwt)
         }
         // none, not metadata: duration renders from msg.duration (DB), and

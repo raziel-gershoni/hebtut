@@ -53,13 +53,23 @@ async function handler(req: NextRequest): Promise<Response> {
       stored++;
     } catch (e) {
       failed++;
+      const reason = (e as Error).message;
+      // R2-not-configured isn't the file's fault — don't burn its retry budget,
+      // so once the env vars are set the row stores normally instead of being
+      // stuck past MAX_STORE_ATTEMPTS. (Guards the push-before-env ordering.)
+      if (reason.includes("R2 storage env not configured")) {
+        await logSystem("error", "store-media", "store skipped — R2 not configured", {
+          message_id: r.id,
+        });
+        continue;
+      }
       const attempts = (r.store_attempts ?? 0) + 1;
       await sb.from("messages").update({ store_attempts: attempts }).eq("id", r.id);
       await logSystem(
         "error",
         "store-media",
         attempts >= MAX_STORE_ATTEMPTS ? "store failed — giving up" : "store failed",
-        { message_id: r.id, attempts, reason: (e as Error).message },
+        { message_id: r.id, attempts, reason },
       );
     }
   }

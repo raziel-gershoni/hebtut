@@ -86,6 +86,15 @@ const ServerSchema = z.object({
   // Free tier covers our volume easily (10k commands/day).
   UPSTASH_REDIS_REST_URL: z.string().url(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(20),
+  // Cloudflare R2 (S3-compatible) for student media — private bucket + presigned
+  // URLs. OPTIONAL on purpose: zod parses the whole schema on first serverEnv
+  // access, so requiring these would break every route until they're set. When
+  // unset, the R2 client throws at its call site and media degrades to the
+  // /api/media proxy fallback instead of taking down unrelated routes.
+  R2_ACCOUNT_ID: z.string().min(1).optional(),
+  R2_ACCESS_KEY_ID: z.string().min(1).optional(),
+  R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  R2_BUCKET: z.string().min(1).optional(),
 });
 
 const PublicSchema = z.object({
