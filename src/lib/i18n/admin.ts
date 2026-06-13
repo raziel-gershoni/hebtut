@@ -151,6 +151,14 @@ const engagement = {
   loadError: "Не удалось загрузить",
 };
 
+const systemLogs = {
+  title: "Системные логи",
+  hint: "Временно — вместо логов Vercel",
+  refresh: "Обновить",
+  empty: "Логов пока нет",
+  loadError: "Не удалось загрузить логи",
+};
+
 const admins = {
   addButton: "Добавить админа",
   pickerTitle: "Новый админ",
@@ -486,6 +494,7 @@ const pages = {
     acquisitionSources: "Источники привлечения",
     tutorWork: "Рабочее время тренеров",
     banned: "Заблокированные",
+    systemLogs: "Системные логи",
   },
   // /admin/feedback + /admin/feedback/[userId]
   feedbackPageTitle: "Обратная связь",
@@ -518,4 +527,5 @@ export const admin = {
   pages,
   mediaLibrary,
   userTranscripts,
+  systemLogs,
 };

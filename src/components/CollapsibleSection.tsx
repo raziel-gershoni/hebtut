@@ -16,11 +16,17 @@ export function CollapsibleSection({
   id,
   title,
   defaultOpen = false,
+  onToggle,
   children,
 }: {
   id: string;
   title: string;
   defaultOpen?: boolean;
+  /**
+   * Fires after the internal open/closed state is updated. Lets a child
+   * lazy-load its data on first expand without owning the <details>.
+   */
+  onToggle?: (e: SyntheticEvent<HTMLDetailsElement>) => void;
   children: ReactNode;
 }) {
   const storageKey = `admin-section:${id}`;
@@ -41,6 +47,7 @@ export function CollapsibleSection({
       // localStorage may be unavailable (private mode, embedded webview).
       // The in-memory state still works for the session.
     }
+    onToggle?.(e);
   }
 
   return (

@@ -18,6 +18,7 @@ import { AdminVersionFooter } from "@/components/AdminVersionFooter";
 import { AdminTutorWorkPanel } from "@/components/AdminTutorWorkPanel";
 import { AdminAdminsPanel } from "@/components/AdminAdminsPanel";
 import { AdminEngagementPanel } from "@/components/AdminEngagementPanel";
+import { AdminSystemLogs } from "@/components/AdminSystemLogs";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { ru } from "@/lib/i18n";
 
@@ -137,6 +138,7 @@ function AdminBody({ jwt, selfId }: { jwt: string; selfId: number }) {
       <CollapsibleSection id="tutor-work" title={ru.admin.pages.sections.tutorWork}>
         <AdminTutorWorkPanel jwt={jwt} />
       </CollapsibleSection>
+      <AdminSystemLogs jwt={jwt} />
       <AdminVersionFooter />
     </>
   );
