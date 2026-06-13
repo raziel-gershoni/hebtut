@@ -3,8 +3,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { getBot } from "@/lib/tg";
 import { serverEnv } from "@/lib/env";
 import { recordAudit } from "@/server/audit";
-
-const BUCKET = "media-library";
+import { signedLibraryMediaUrl } from "@/server/media-storage";
 
 export interface SendLibraryItemArgs {
   libraryId: number;
@@ -55,25 +54,16 @@ export async function sendLibraryItemToStudent(
   if (!student) throw new Error("student not found");
   if (student.role !== "student") throw new Error("not a student");
 
-  // On the first send for a library item we forward bytes as multipart
-  // (`InputFile`) rather than handing TG the Supabase public URL. TG used
-  // to reject some URL-based sends with "wrong type of the web page
-  // content" — happens when the storage object's MIME doesn't satisfy
-  // TG's strict per-method check (e.g. octet-stream for a video, or an
-  // HTML error page on intermittent fetch failures). Multipart bypasses
-  // all that. Once TG ingests the bytes it returns a `file_id` which we
-  // cache below for instantaneous subsequent sends.
+  // On the first send for a library item we hand TG a short-lived presigned R2
+  // GET URL; TG fetches the bytes within the URL's TTL, ingests them, and
+  // returns its own `file_id` which we cache below for instantaneous subsequent
+  // sends. R2-only — if presigning fails this throws (no Supabase fallback).
   let sendArg: string | InputFile;
   if (library.tg_file_id) {
     sendArg = library.tg_file_id;
   } else {
-    // Bucket is public — getPublicUrl just constructs the URL.
-    // Works around the broken sign endpoint (see migration 20260521000001).
-    const { data } = sb.storage.from(BUCKET).getPublicUrl(library.storage_path);
-    if (!data.publicUrl) {
-      throw new Error("could not construct public storage URL");
-    }
-    sendArg = new InputFile(new URL(data.publicUrl));
+    const signedUrl = await signedLibraryMediaUrl(library.storage_path);
+    sendArg = new InputFile(new URL(signedUrl));
   }
 
   let newFileId: string | null = null;

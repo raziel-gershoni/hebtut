@@ -5,7 +5,7 @@ import { noStoreHeaders } from "@/lib/no-cache";
 import { resolveDisplay } from "@/server/display";
 import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
 import { getSignedRemainingForManyToday } from "@/server/quota";
-import { signedStudentMediaUrl } from "@/server/media-storage";
+import { signedStudentMediaUrl, signedLibraryMediaUrl } from "@/server/media-storage";
 import { logSystem } from "@/server/system-log";
 
 export const runtime = "nodejs";
@@ -80,18 +80,26 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
       bytes: number;
       kind: "photo" | "video" | "audio";
       storage_path: string;
+      url: string;
     }
   >();
-  for (const l of libRows ?? []) {
-    libById.set(l.id, {
-      title: l.title,
-      description: l.description,
-      original_filename: l.original_filename,
-      bytes: l.bytes,
-      kind: l.kind as "photo" | "video" | "audio",
-      storage_path: l.storage_path,
-    });
-  }
+  // Presign each distinct library object once (it can repeat across messages) so
+  // the chat library bubble plays straight from R2. Signing is local crypto, so
+  // parallel is cheap. R2-only — a presign failure errors the thread load rather
+  // than masking with a Supabase URL (fail-loud by design).
+  await Promise.all(
+    (libRows ?? []).map(async (l) => {
+      libById.set(l.id, {
+        title: l.title,
+        description: l.description,
+        original_filename: l.original_filename,
+        bytes: l.bytes,
+        kind: l.kind as "photo" | "video" | "audio",
+        storage_path: l.storage_path,
+        url: await signedLibraryMediaUrl(l.storage_path),
+      });
+    }),
+  );
 
   // Resolve every distinct teacher referenced by an outbound row in one shot,
   // so the client can render per-bubble avatars/handles without N round-trips.

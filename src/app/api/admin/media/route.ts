@@ -12,6 +12,7 @@ import {
   MAX_TITLE_LEN,
   inferKindOrThrow,
 } from "@/lib/media";
+import { signedLibraryMediaUrl } from "@/server/media-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,9 @@ interface LibraryItem {
   kind: "photo" | "video" | "audio";
   uploaded_by_user_id: number;
   storage_path: string;
+  /** Server-minted presigned R2 GET URL (6h). The client plays from this
+   * directly — no Supabase public URL, no proxy. */
+  url: string;
   mime_type: string;
   original_filename: string;
   title: string | null;
@@ -88,23 +92,30 @@ export async function GET(req: NextRequest): Promise<Response> {
     uploaderName.set(u.id, u.preferred_name ?? u.name);
   }
 
-  const items: LibraryItem[] = (rows ?? []).map((r) => ({
-    id: r.id,
-    kind: r.kind as LibraryItem["kind"],
-    uploaded_by_user_id: r.uploaded_by_user_id,
-    storage_path: r.storage_path,
-    mime_type: r.mime_type,
-    original_filename: r.original_filename,
-    title: r.title,
-    description: r.description,
-    bytes: r.bytes,
-    duration_seconds: r.duration_seconds,
-    tg_file_id: r.tg_file_id,
-    tg_file_unique_id: r.tg_file_unique_id,
-    created_at: r.created_at,
-    tags: tagsByItem.get(r.id) ?? [],
-    uploader_name: uploaderName.get(r.uploaded_by_user_id) ?? null,
-  }));
+  // Presign each object server-side so the client plays straight from R2.
+  // Signing is local crypto (no network round-trip), so per-row in parallel is
+  // cheap. R2-only — if a presign throws (e.g. R2NotConfiguredError) the whole
+  // list 500s rather than masking with a Supabase URL (fail-loud by design).
+  const items: LibraryItem[] = await Promise.all(
+    (rows ?? []).map(async (r) => ({
+      id: r.id,
+      kind: r.kind as LibraryItem["kind"],
+      uploaded_by_user_id: r.uploaded_by_user_id,
+      storage_path: r.storage_path,
+      url: await signedLibraryMediaUrl(r.storage_path),
+      mime_type: r.mime_type,
+      original_filename: r.original_filename,
+      title: r.title,
+      description: r.description,
+      bytes: r.bytes,
+      duration_seconds: r.duration_seconds,
+      tg_file_id: r.tg_file_id,
+      tg_file_unique_id: r.tg_file_unique_id,
+      created_at: r.created_at,
+      tags: tagsByItem.get(r.id) ?? [],
+      uploader_name: uploaderName.get(r.uploaded_by_user_id) ?? null,
+    })),
+  );
 
   const filtered =
     tagSlugs.length > 0

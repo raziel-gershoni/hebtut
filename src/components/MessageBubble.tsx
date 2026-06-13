@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { formatDuration, ru } from "@/lib/i18n";
-import { mediaPublicUrl } from "./MediaPreview";
 import { reportClientMediaError } from "@/lib/diag";
 import { Spinner } from "./Spinner";
 import { Avatar } from "./Avatar";
@@ -28,6 +27,9 @@ export type ThreadMsg = {
     bytes: number;
     kind: "photo" | "video" | "audio";
     storage_path: string;
+    /** Presigned R2 GET URL minted by the thread API — the video/audio bubble
+     * plays from this directly. */
+    url: string;
   } | null;
   transcript_text?: string | null;
   transcript_tg_message_id?: number | null;
@@ -757,11 +759,11 @@ function LibraryMediaBlock({
 
       {kind === "video" && (
         <video
-          // Direct public URL — bypasses our 302-redirect /preview route
-          // because iOS WebKit (TG Mini App webview) is flaky with
-          // `<video>` + 302 + cross-origin range requests. Bucket is
-          // public, no auth needed. Same trick the onboarding panel uses.
-          src={lib?.storage_path ? mediaPublicUrl(lib.storage_path) : previewUrl}
+          // Presigned R2 URL straight from the thread API — bypasses the
+          // 302-redirect /preview route because iOS WebKit (TG Mini App
+          // webview) is flaky with `<video>` + 302 + cross-origin range
+          // requests. Falls back to /preview only if the embed lacks a url.
+          src={lib?.url ?? previewUrl}
           controls
           playsInline
           preload="metadata"
@@ -777,8 +779,8 @@ function LibraryMediaBlock({
           // Same WebKit workaround as video above: `<audio>` ALSO does
           // cross-origin range requests after the redirect and silently
           // reads zero bytes in the TG webview — library audio wouldn't
-          // play at all while videos (already fixed) worked.
-          src={lib?.storage_path ? mediaPublicUrl(lib.storage_path) : previewUrl}
+          // play at all while videos (already fixed) worked. Presigned R2 URL.
+          src={lib?.url ?? previewUrl}
           controls
           preload="metadata"
           onError={(e) =>

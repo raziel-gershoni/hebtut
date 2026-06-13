@@ -2,7 +2,6 @@
 
 import { ru } from "@/lib/i18n";
 import { formatBytes } from "@/lib/media";
-import { publicEnv } from "@/lib/env";
 import { reportClientMediaError } from "@/lib/diag";
 
 export interface MediaLibraryListItem {
@@ -11,6 +10,9 @@ export interface MediaLibraryListItem {
   uploaded_by_user_id: number;
   original_filename: string;
   storage_path: string;
+  /** Server-minted presigned R2 GET URL (6h) — the client plays from this
+   * directly (no Supabase public URL, no proxy). Supplied by /api/admin/media. */
+  url: string;
   title: string | null;
   description: string | null;
   bytes: number;
@@ -18,33 +20,16 @@ export interface MediaLibraryListItem {
   tags: { id: number; name: string; slug: string }[];
 }
 
-const BUCKET = "media-library";
-
 /**
- * Photo path: keep the JWT-protected `/preview` endpoint (302 to
- * Supabase) — fine for `<img>`, which does a plain GET with no range
- * requests. NOT fine for `<audio>`/`<video>`: media elements use
- * cross-origin range requests after the redirect and the TG Mini App
- * WebKit webview silently fails to read any bytes (confirmed for video
- * in the picker tiles, then again for library audio in chat bubbles).
- * Media elements must use mediaPublicUrl below.
+ * Photo path: keep the JWT-protected `/preview` endpoint (302 to a presigned
+ * R2 URL) — fine for `<img>`, which does a plain GET with no range requests.
+ * NOT fine for `<audio>`/`<video>`: media elements use cross-origin range
+ * requests after the redirect and the TG Mini App WebKit webview silently
+ * fails to read any bytes. Media elements use `item.url` (the presigned R2 URL
+ * the server hands back) directly instead.
  */
 export function previewUrl(id: number, jwt: string): string {
   return `/api/admin/media/${id}/preview?token=${encodeURIComponent(jwt)}`;
-}
-
-/**
- * Audio/video path: skip the redirect entirely and hit Supabase Storage
- * directly. iOS WebKit (TG Mini App webview) is flaky with media
- * elements + 302 redirect + cross-origin range requests — the element
- * loads the preview URL, follows the redirect, then never reads any
- * bytes (video tiles stayed blank; library audio wouldn't play at all).
- * The bucket is public (see migration 20260521000001) so this URL needs
- * no auth.
- */
-export function mediaPublicUrl(storagePath: string): string {
-  const base = publicEnv.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "");
-  return `${base}/storage/v1/object/public/${BUCKET}/${storagePath}`;
 }
 
 interface Props {
@@ -88,8 +73,8 @@ export function MediaPreview({ item, jwt, selected, onClick, onKebab }: Props) {
               <video
                 // #t=0.1 nudges iOS Safari into actually rendering the
                 // first frame as a poster — without it the tile is just
-                // black until the user plays.
-                src={`${mediaPublicUrl(item.storage_path)}#t=0.1`}
+                // black until the user plays. Plays from the presigned R2 URL.
+                src={`${item.url}#t=0.1`}
                 preload="metadata"
                 muted
                 playsInline
