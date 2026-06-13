@@ -573,6 +573,167 @@ persistent `failed>0` → check the function logs for the per-message warn.
 
 ---
 
+---
+
+### Task 11: System logs (media-scoped, free-tier stand-in for Vercel logs)
+
+Persist the store-media feature's logs to the DB and show them behind an admin
+button. Generic table, but **only store-media writes to it for now**. Remove /
+ignore once on a paid tier with real log access.
+
+**Files:**
+- Create: `supabase/migrations/20260613000002_system_logs.sql`
+- Modify: `src/types/database.ts` (system_logs Row/Insert)
+- Create: `src/server/system-log.ts`
+- Create: `src/app/api/admin/system-logs/route.ts`
+- Create: `src/components/AdminSystemLogs.tsx`
+- Modify: `src/app/admin/page.tsx` (mount the section)
+- Modify: `src/lib/i18n/admin.ts` (`systemLogs` group + `pages.sections.systemLogs`)
+- Modify: `src/server/store-media.ts` + `src/app/api/cron/store-media/route.ts` (emit logs + prune)
+
+- [ ] **Step 1: Migration**
+
+```sql
+-- Free-tier stand-in for Vercel logs: structured rows we can read from the
+-- admin panel. Generic, but only the store-media feature writes to it for now.
+-- Pruned to 14 days by the store-media cron so it can't grow unbounded.
+create table public.system_logs (
+  id         bigserial primary key,
+  created_at timestamptz not null default now(),
+  level      text not null check (level in ('info','warn','error')),
+  source     text not null,
+  message    text not null,
+  meta       jsonb not null default '{}'::jsonb
+);
+create index system_logs_created_at_idx on public.system_logs (created_at desc);
+create index system_logs_source_idx     on public.system_logs (source, created_at desc);
+alter table public.system_logs enable row level security; -- service-role only, anon denied
+```
+
+- [ ] **Step 2: Types** — add `system_logs` Row/Insert to `database.ts`
+  (`id`, `created_at`, `level`, `source`, `message`, `meta: Json`).
+
+- [ ] **Step 3: `src/server/system-log.ts`**
+
+```ts
+import { getServiceRoleClient } from "@/lib/supabase-server";
+import type { Json } from "@/types/database";
+
+export type SystemLogLevel = "info" | "warn" | "error";
+
+/**
+ * Persist a structured log row readable from the admin panel — a stand-in for
+ * Vercel logs on the free tier. Fail-soft: a logging failure must never break
+ * the caller, so it falls back to console.
+ */
+export async function logSystem(
+  level: SystemLogLevel,
+  source: string,
+  message: string,
+  meta: Record<string, unknown> = {},
+): Promise<void> {
+  try {
+    const sb = getServiceRoleClient();
+    const { error } = await sb
+      .from("system_logs")
+      .insert({ level, source, message, meta: meta as Json });
+    if (error) throw new Error(error.message);
+  } catch (e) {
+    console.warn("[system-log] persist failed", {
+      source,
+      message,
+      reason: (e as Error).message,
+    });
+  }
+}
+
+/** Delete rows older than `days` (called by the store-media cron). Fail-soft. */
+export async function pruneSystemLogs(days: number): Promise<void> {
+  try {
+    const sb = getServiceRoleClient();
+    const cutoff = new Date(Date.now() - days * 86400_000).toISOString();
+    await sb.from("system_logs").delete().lt("created_at", cutoff);
+  } catch (e) {
+    console.warn("[system-log] prune failed", { reason: (e as Error).message });
+  }
+}
+```
+
+- [ ] **Step 4: Wire logs into store-media.** In `src/server/store-media.ts`
+  `storeMessageMedia`, after a successful row update emit:
+
+```ts
+await logSystem("info", "store-media", "stored message media", {
+  message_id: msg.id, kind: msg.kind, path: origPath,
+  bytes: bytes.length, caf: cafPath != null,
+});
+```
+
+  and on the CAF-remux catch, replace the `console.warn` with
+  `await logSystem("warn", "store-media", "caf remux failed; ogg only", { message_id: msg.id, reason: e.message })`.
+  In the cron (`route.ts`): call `await pruneSystemLogs(14)` once at the start;
+  emit `await logSystem("info", "store-media", "run", { scanned, stored, failed })`
+  only when `scanned > 0`; and on each per-item catch emit
+  `await logSystem("error", "store-media", "store failed", { message_id: r.id, reason })`.
+  (Idle runs with `scanned === 0` log nothing — no per-minute heartbeat spam.)
+
+- [ ] **Step 5: Admin API** `src/app/api/admin/system-logs/route.ts`
+
+```ts
+import type { NextRequest } from "next/server";
+import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
+import { getServiceRoleClient } from "@/lib/supabase-server";
+import { noStoreHeaders } from "@/lib/no-cache";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export async function GET(req: NextRequest): Promise<Response> {
+  const me = await authFromRequest(req);
+  if (!isAdminOnly(me)) {
+    return new Response("forbidden", { status: 403, headers: noStoreHeaders });
+  }
+  const url = new URL(req.url);
+  const source = url.searchParams.get("source");
+  const limit = Math.min(Number(url.searchParams.get("limit")) || 200, 500);
+  let q = getServiceRoleClient()
+    .from("system_logs")
+    .select("id, created_at, level, source, message, meta")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (source) q = q.eq("source", source);
+  const { data, error } = await q;
+  if (error) {
+    return new Response(error.message, { status: 500, headers: noStoreHeaders });
+  }
+  return Response.json({ logs: data ?? [] }, { headers: noStoreHeaders });
+}
+```
+
+- [ ] **Step 6: i18n** — add to `src/lib/i18n/admin.ts` a `systemLogs` group:
+  `title: "Системные логи"`, `hint: "Временно — вместо логов Vercel"`,
+  `refresh: "Обновить"`, `empty: "Логов пока нет"`,
+  `loadError: "Не удалось загрузить логи"`. Wire it into the `admin` export and
+  add a `pages.sections.systemLogs` label if that registry is used by the page.
+
+- [ ] **Step 7: UI** `src/components/AdminSystemLogs.tsx` — a `CollapsibleSection`
+  titled `ru.admin.systemLogs.title` that lazy-loads `/api/admin/system-logs?source=store-media`
+  on first expand (cache: no-store, Bearer jwt), with a refresh button. Render
+  each row: `created_at` (ru-RU time), a level badge (info=grey, warn=amber,
+  error=rose), `message`, and `meta` as collapsed JSON (`<details>`/`<pre>`).
+  Follow the existing panel styling (see `AdminEngagementPanel.tsx`). Mount it
+  near the bottom of `src/app/admin/page.tsx`, passing `jwt`.
+
+- [ ] **Step 8: Verify + commit**
+
+```bash
+npx tsc --noEmit && npx vitest run && npx eslint src/server/system-log.ts src/app/api/admin/system-logs/route.ts src/components/AdminSystemLogs.tsx
+git add -A && git commit -m "feat(media): DB-backed system logs + admin viewer (store-media scoped)"
+```
+
+---
+
 ## Self-review notes
 
 - **Spec coverage:** bucket (T1) · schema (T1/T2) · upload seam (T4) + url seam
