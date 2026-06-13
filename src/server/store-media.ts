@@ -42,8 +42,9 @@ export interface StorableMessage {
 /**
  * Download a message's media from Telegram once and persist it in the private
  * R2 bucket. Voice additionally gets a lossless CAF remux for pre-18.4 WebKit.
- * Stamps storage_path/_caf_path/stored_at under a `storage_path IS NULL` guard
- * (idempotent + race-safe). Throws on any failure so the cron can count + log.
+ * Stamps storage_path/_caf_path/stored_at + r2_migrated under an
+ * `r2_migrated = false` guard (idempotent + race-safe). Throws on any failure
+ * so the cron can count + log.
  */
 export async function storeMessageMedia(msg: StorableMessage): Promise<void> {
   const sb = getServiceRoleClient();
@@ -75,15 +76,19 @@ export async function storeMessageMedia(msg: StorableMessage): Promise<void> {
     }
   }
 
+  // Guard on r2_migrated (not storage_path IS NULL): existing rows being
+  // migrated already have a Supabase storage_path, and the flag makes this
+  // idempotent + race-safe whether the row is new or being re-stored.
   const { error } = await sb
     .from("messages")
     .update({
       storage_path: origPath,
       storage_caf_path: cafPath,
       stored_at: new Date().toISOString(),
+      r2_migrated: true,
     })
     .eq("id", msg.id)
-    .is("storage_path", null);
+    .eq("r2_migrated", false);
   if (error) throw new Error(`row update failed: ${error.message}`);
 
   await logSystem("info", "store-media", "stored message media", {

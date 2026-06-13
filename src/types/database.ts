@@ -140,6 +140,7 @@ export interface Database {
           storage_caf_path: string | null;
           stored_at: string | null;
           store_attempts: number;
+          r2_migrated: boolean;
           created_at: string;
         };
         Insert: {
@@ -167,6 +168,7 @@ export interface Database {
           storage_caf_path?: string | null;
           stored_at?: string | null;
           store_attempts?: number;
+          r2_migrated?: boolean;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;

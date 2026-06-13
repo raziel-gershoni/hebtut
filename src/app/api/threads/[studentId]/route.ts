@@ -38,7 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
   const { data: rawMessages, error } = await sb
     .from("messages")
     .select(
-      "id, direction, kind, duration, status, reply_to_id, created_at, teacher_id, text_content, media_library_id, transcript_text, transcript_tg_message_id, translation_text, translation_tg_message_id, storage_path, storage_caf_path",
+      "id, direction, kind, duration, status, reply_to_id, created_at, teacher_id, text_content, media_library_id, transcript_text, transcript_tg_message_id, translation_text, translation_tg_message_id, storage_path, storage_caf_path, r2_migrated",
     )
     .eq("student_id", studentId)
     .in("status", ["pending", "answered", "expired"])
@@ -128,7 +128,9 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
     (rawMessages ?? []).map(async (m) => {
       let storage_url: string | null = null;
       let storage_caf_url: string | null = null;
-      if (m.storage_path) {
+      // Only presign once the object actually lives in R2 (r2_migrated). A row
+      // still on its old Supabase key would 404 in R2, so route it to the proxy.
+      if (m.storage_path && m.r2_migrated) {
         try {
           storage_url = await signedStudentMediaUrl(m.storage_path);
           // Sign the CAF in its own try so a caf-only failure doesn't also drop

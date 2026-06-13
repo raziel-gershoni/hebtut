@@ -26,11 +26,14 @@ async function handler(req: NextRequest): Promise<Response> {
   // Work-queue: un-stored, non-library media (library rows carry a file_id too
   // but already live in the media-library bucket). Oldest first so the backlog
   // — i.e. the one-time migration of existing messages — drains deterministically.
+  // Queue on r2_migrated=false (not storage_path IS NULL): covers brand-new
+  // media AND existing Supabase-stored rows being migrated to R2, and the OLD
+  // Supabase cron — which watches storage_path IS NULL — can't fight over them.
   const { data: rows, error } = await sb
     .from("messages")
     .select("id, student_id, kind, file_id, store_attempts")
     .not("file_id", "is", null)
-    .is("storage_path", null)
+    .eq("r2_migrated", false)
     .is("media_library_id", null)
     .lt("store_attempts", MAX_STORE_ATTEMPTS)
     .order("created_at", { ascending: true })
