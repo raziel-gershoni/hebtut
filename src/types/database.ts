@@ -136,6 +136,9 @@ export interface Database {
           transcript_tg_message_id: number | null;
           translation_text: string | null;
           translation_tg_message_id: number | null;
+          storage_path: string | null;
+          storage_caf_path: string | null;
+          stored_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -159,6 +162,9 @@ export interface Database {
           transcript_tg_message_id?: number | null;
           translation_text?: string | null;
           translation_tg_message_id?: number | null;
+          storage_path?: string | null;
+          storage_caf_path?: string | null;
+          stored_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;
@@ -682,6 +688,26 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["tutor_work_events"]["Insert"]>;
+        Relationships: [];
+      };
+      system_logs: {
+        Row: {
+          id: number;
+          created_at: string;
+          level: string;
+          source: string;
+          message: string;
+          meta: Json;
+        };
+        Insert: {
+          id?: number;
+          created_at?: string;
+          level: string;
+          source: string;
+          message: string;
+          meta?: Json;
+        };
+        Update: Partial<Database["public"]["Tables"]["system_logs"]["Insert"]>;
         Relationships: [];
       };
     };
