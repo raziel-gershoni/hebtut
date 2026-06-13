@@ -48,6 +48,38 @@ export interface UploadOptions {
  * For now, a final failure means clicking "Загрузить" again and starting
  * over.
  */
+/**
+ * Single PUT of a File to a presigned R2 URL (no resume, no proxy hop). The
+ * `Content-Type` sent here MUST match the type the URL was signed with —
+ * R2 rejects a mismatch with a SignatureDoesNotMatch error, and a matching
+ * header is also what makes R2 store the right content-type for playback.
+ *
+ * Uses XMLHttpRequest (not fetch) so `upload.onprogress` can drive a progress
+ * bar. Resolves on a 2xx, rejects otherwise (incl. network errors / aborts).
+ */
+export async function putToPresignedUrl(
+  url: string,
+  file: File,
+  contentType: string,
+  onProgress?: (loaded: number, total: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url, true);
+    xhr.setRequestHeader("Content-Type", contentType);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(e.loaded, e.total);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`PUT failed: HTTP ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error("network error during upload"));
+    xhr.onabort = () => reject(new Error("upload aborted"));
+    xhr.send(file);
+  });
+}
+
 export async function tusUpload(file: File, options: UploadOptions): Promise<void> {
   return new Promise((resolve, reject) => {
     const upload = new tus.Upload(file, {

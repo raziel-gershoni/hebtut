@@ -5,21 +5,21 @@ import { noStoreHeaders } from "@/lib/no-cache";
 import { readJsonBody } from "@/lib/http";
 import { getMediaUploadsTeachersEnabled } from "@/server/settings";
 import { ALLOWED_MIME_TYPES, buildStoragePath } from "@/lib/media";
+import { signedLibraryPutUrl, R2NotConfiguredError } from "@/server/media-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-const BUCKET = "media-library";
 
 const Body = z.object({
   mime_type: z.string(),
 });
 
 /**
- * Returns a fresh storage path for a media-library item. The browser then
- * uploads via TUS (through /api/admin/upload-proxy) to that path and
- * finally posts metadata to /api/admin/media to register the row.
+ * Returns a fresh storage path + a short-lived presigned R2 PUT URL for a
+ * media-library item. The browser PUTs the bytes straight to `url` (sending a
+ * matching `Content-Type` header) and then posts metadata to /api/admin/media
+ * to register the row. R2-only — no Supabase fallback.
  */
 export async function POST(req: NextRequest): Promise<Response> {
   const me = await authFromRequest(req);
@@ -37,5 +37,16 @@ export async function POST(req: NextRequest): Promise<Response> {
     return new Response("unsupported mime", { status: 415, headers: noStoreHeaders });
   }
   const { path } = buildStoragePath(me.id, parsed.data.mime_type);
-  return Response.json({ bucket: BUCKET, path }, { headers: noStoreHeaders });
+  try {
+    const url = await signedLibraryPutUrl(path, parsed.data.mime_type);
+    return Response.json({ url, path }, { headers: noStoreHeaders });
+  } catch (e) {
+    if (e instanceof R2NotConfiguredError) {
+      return new Response("storage not configured", {
+        status: 503,
+        headers: noStoreHeaders,
+      });
+    }
+    throw e;
+  }
 }

@@ -130,8 +130,9 @@ export async function GET(req: NextRequest): Promise<Response> {
   return Response.json({ items: filtered, can_upload }, { headers: noStoreHeaders });
 }
 
-// Registration body. The bytes were already uploaded directly to Supabase
-// via /api/admin/media/upload-url; this endpoint just records the metadata.
+// Registration body. The bytes were already PUT directly to R2 via the
+// presigned URL from /api/admin/media/upload-url; this endpoint just records
+// the metadata.
 const Body = z.object({
   storage_path: z.string().min(1).max(256),
   mime_type: z.string(),
@@ -181,9 +182,10 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const sb = getServiceRoleClient();
 
-  // Trust the upload: TUS's protocol requires per-chunk Upload-Offset
-  // confirmation, so the client's onSuccess fires only after the last
-  // chunk's 204. By the time we get here the file is at `storage_path`.
+  // Trust the upload: the client's PUT resolved on a 2xx from R2, so by the
+  // time we get here the file is at `storage_path` in the R2 library bucket.
+  // r2_migrated=true because the bytes live in R2 from the start — they serve
+  // via presigned GET and must NOT be re-queued by the Supabase→R2 copy cron.
   const { data: inserted, error: insertErr } = await sb
     .from("media_library")
     .insert({
@@ -198,6 +200,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       duration_seconds: body.duration_seconds ?? null,
       width: body.width ?? null,
       height: body.height ?? null,
+      r2_migrated: true,
     })
     .select("id")
     .single();

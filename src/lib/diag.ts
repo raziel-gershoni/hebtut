@@ -19,6 +19,7 @@ export type ClientMediaErrorStep =
   | "compress"
   | "upload-presign"
   | "upload-tus"
+  | "upload-put"
   | "register"
   | "send"
   | "preview-load";

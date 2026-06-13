@@ -7,6 +7,11 @@ import { serverEnv } from "@/lib/env";
 // links to student-voice PII lying around.
 const SIGNED_URL_TTL_SECONDS = 6 * 3600;
 
+// Presigned PUT URLs are minted right before the browser uploads, so a short
+// TTL is plenty — 10 min covers picking + (client-side) compressing + the
+// single PUT without leaving a writable link around longer than needed.
+const PUT_URL_TTL_SECONDS = 10 * 60;
+
 /** Thrown when the R2 env isn't fully set. Typed (not a string match) so the
  * store-media cron can recognise it and skip without burning the retry cap. */
 export class R2NotConfiguredError extends Error {}
@@ -80,6 +85,32 @@ export async function uploadStudentMedia(
 /** Short-lived presigned GET URL for student media — direct R2, no proxy. */
 export async function signedStudentMediaUrl(path: string): Promise<string> {
   return signedR2GetUrl(serverEnv.R2_BUCKET ?? "", path);
+}
+
+/**
+ * Short-lived presigned PUT URL — the browser uploads bytes straight to R2
+ * with no server proxy hop. Signing WITH `contentType` means the PUT MUST
+ * carry a matching `Content-Type` header (intended: it also makes R2 store the
+ * right content-type so presigned GETs serve playable media). Throws
+ * R2NotConfiguredError when the bucket isn't configured.
+ */
+export async function signedR2PutUrl(
+  bucket: string,
+  path: string,
+  contentType: string,
+  ttlSeconds = PUT_URL_TTL_SECONDS,
+): Promise<string> {
+  if (!bucket) throw new R2NotConfiguredError("R2 bucket not configured");
+  return getSignedUrl(
+    r2Client(),
+    new PutObjectCommand({ Bucket: bucket, Key: path, ContentType: contentType }),
+    { expiresIn: ttlSeconds },
+  );
+}
+
+/** Short-lived presigned PUT URL for media-library objects — direct R2, no proxy. */
+export async function signedLibraryPutUrl(path: string, contentType: string): Promise<string> {
+  return signedR2PutUrl(serverEnv.R2_MEDIA_LIBRARY_BUCKET ?? "", path, contentType);
 }
 
 /** Upload bytes to the private media-library bucket (idempotent overwrite). */
