@@ -1,4 +1,5 @@
 import { isOggOpusSupported } from "@/lib/audio-support";
+import { storagePublicUrl, STUDENT_MEDIA_BUCKET } from "@/lib/storage-url";
 
 /**
  * Voice messages are served by our own proxy (/api/media/[messageId]) —
@@ -19,4 +20,14 @@ import { isOggOpusSupported } from "@/lib/audio-support";
 export function voiceProxyUrl(messageId: number, jwt: string): string {
   const caf = isOggOpusSupported() ? "" : "&format=caf";
   return `/api/media/${messageId}?token=${encodeURIComponent(jwt)}${caf}`;
+}
+
+/**
+ * Direct Supabase-CDN URL for a STORED voice message — zero Vercel bytes.
+ * Same "Ogg-capable? ogg : caf" pick as voiceProxyUrl, but pointed at the
+ * public bucket. Falls back to the ogg object if no CAF derivative exists.
+ */
+export function voiceStoredUrl(storagePath: string, cafPath: string | null): string {
+  const path = isOggOpusSupported() ? storagePath : (cafPath ?? storagePath);
+  return storagePublicUrl(STUDENT_MEDIA_BUCKET, path);
 }
