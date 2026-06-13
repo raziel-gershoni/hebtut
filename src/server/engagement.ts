@@ -45,19 +45,28 @@ export type Transition =
   | { type: "resolve"; kind: FlagKind; reason?: string };
 
 /**
- * Completed missed days, with a today-grace mirroring the streak's.
+ * Completed missed days (the reported days_silent), excluding today.
  *
- * `daysSinceAnchor` is the raw calendar gap to the last practiced day, but the
- * cron runs at 06:00 on an in-progress day — the student still has all of today
- * to practice, so today must not be counted as a missed day yet. Subtracting
- * one converts "calendar days since last practice" into "completed days with no
- * practice": last active 11.06 → on the 13.06 cron only 12.06 has fully elapsed
- * (1), and the 2-day sliding alert correctly waits for the 14.06 cron. Feed the
- * result to classifyInactivity and report it as days_silent.
+ * The cron runs at 06:00 on an in-progress day, so today must never count as a
+ * missed day yet. Beyond that, whether the ANCHOR day counts depends on what
+ * the anchor is:
+ *
+ * - Real practice anchor (`anchorIsPractice = true`): the anchor day was an
+ *   active ≥30s day, so it isn't silent. Missed completed days = the days
+ *   strictly between the anchor and today = `daysSinceAnchor − 1`. (Liza
+ *   practiced 11.06 → on 13.06 only 12.06 missed → 1; sliding waits for 14.06.)
+ * - Fallback anchor (`anchorIsPractice = false`): the anchor is trial-start /
+ *   join — itself a day with no ≥30s practice, so it IS silent and must be
+ *   counted. Missed completed days = anchor … yesterday = `daysSinceAnchor`,
+ *   no subtraction. (Shoshana only ever did sub-30s voices since joining 11.06
+ *   → on 13.06 both 11.06 and 12.06 missed → 2 → sliding fires.)
  */
-export function completedInactiveDays(daysSinceAnchor: number | null): number | null {
+export function completedInactiveDays(
+  daysSinceAnchor: number | null,
+  anchorIsPractice: boolean,
+): number | null {
   if (daysSinceAnchor == null) return null;
-  return Math.max(0, daysSinceAnchor - 1);
+  return anchorIsPractice ? Math.max(0, daysSinceAnchor - 1) : daysSinceAnchor;
 }
 
 export function classifyInactivity(daysSinceAnchor: number): InactiveTier | null {
@@ -103,6 +112,10 @@ export function median(xs: number[]): number {
 export interface PracticeSignals {
   /** Full days since last practiced day (or fallback anchor). null = no anchor at all. */
   daysSinceAnchor: number | null;
+  /** True when daysSinceAnchor came from a real ≥30s practice day; false when
+   * it fell back to trial-start/join (which is itself a silent day). Drives the
+   * anchor-day handling in completedInactiveDays. */
+  anchorIsPractice: boolean;
   currentWeekS: number;
   priorWeekS: number;
   streak: number;
@@ -126,13 +139,17 @@ export function computePracticeSignals(
 
   // Anchor: most recent practiced day in the window.
   let daysSinceAnchor: number | null = null;
+  let anchorIsPractice = false;
   for (let n = 0; n <= SIGNAL_WINDOW_DAYS; n++) {
     if (practiced(dateAgo(n))) {
       daysSinceAnchor = n;
+      anchorIsPractice = true;
       break;
     }
   }
   if (daysSinceAnchor == null && fallbackAnchorLocalDate) {
+    // Never practiced ≥30s in the window → measure from trial-start/join. That
+    // day is itself silent, so anchorIsPractice stays false (see callers).
     daysSinceAnchor = Math.max(
       0,
       Math.round((today - Date.parse(`${fallbackAnchorLocalDate}T00:00:00Z`)) / dayMs),
@@ -160,7 +177,7 @@ export function computePracticeSignals(
   const median30 = median(practicedSeconds30);
   const median7 = median(practicedSeconds30.slice(0, 7));
 
-  return { daysSinceAnchor, currentWeekS, priorWeekS, streak, median7, median30 };
+  return { daysSinceAnchor, anchorIsPractice, currentWeekS, priorWeekS, streak, median7, median30 };
 }
 
 export interface PendingCandidate {

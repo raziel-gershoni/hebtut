@@ -248,9 +248,10 @@ async function handler(req: NextRequest): Promise<Response> {
 
       const desired: DesiredFlag[] = [];
 
-      // days_silent counts COMPLETED missed days (today-grace) so the cron's
-      // 06:00 run on an in-progress day doesn't count today as already missed.
-      const daysSilent = completedInactiveDays(signals.daysSinceAnchor);
+      // days_silent counts COMPLETED missed days (excludes today). A real
+      // practice anchor day isn't silent (−1); a fallback anchor (join/trial
+      // start) is itself silent and counts — see completedInactiveDays.
+      const daysSilent = completedInactiveDays(signals.daysSinceAnchor, signals.anchorIsPractice);
       const tier = daysSilent != null ? classifyInactivity(daysSilent) : null;
       if (tier && daysSilent != null) {
         // Onset = the first missed day (todayLocal − days_silent). Shown as the

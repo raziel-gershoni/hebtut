@@ -28,20 +28,24 @@ describe("classifyInactivity", () => {
 
 describe("completedInactiveDays", () => {
   it("null passes through", () => {
-    expect(completedInactiveDays(null)).toBeNull();
+    expect(completedInactiveDays(null, true)).toBeNull();
+    expect(completedInactiveDays(null, false)).toBeNull();
   });
-  it("today-grace: the in-progress day the cron runs on is not yet a missed day", () => {
-    // active today → 0 silent
-    expect(completedInactiveDays(0)).toBe(0);
-    // active yesterday, today just started → 0 completed missed days
-    expect(completedInactiveDays(1)).toBe(0);
-    // active 11.06, cron on 13.06: only 12.06 is a completed missed day
-    expect(completedInactiveDays(2)).toBe(1);
-    // active 11.06, cron on 14.06: 12.06 + 13.06 = 2 → first sliding alert
-    expect(completedInactiveDays(3)).toBe(2);
+  it("real practice anchor: the active anchor day AND today are both excluded (−1)", () => {
+    // Liza practiced ≥30s on 11.06. cron on 13.06 → only 12.06 is a
+    // completed missed day → 1 → below the 2-day bar (not flagged yet).
+    expect(completedInactiveDays(0, true)).toBe(0); // practiced today
+    expect(completedInactiveDays(1, true)).toBe(0); // practiced yesterday
+    expect(completedInactiveDays(2, true)).toBe(1); // 11.06 active → only 12.06 missed
+    expect(completedInactiveDays(3, true)).toBe(2); // sliding fires on 14.06
   });
-  it("never negative", () => {
-    expect(completedInactiveDays(0)).toBeGreaterThanOrEqual(0);
+  it("fallback anchor (never practiced): the anchor day itself is silent → no −1", () => {
+    // Shoshana only ever did sub-30s voices, anchor = trial-start/join ~11.06.
+    // On 13.06 BOTH 11.06 and 12.06 are missed → 2 → sliding fires.
+    expect(completedInactiveDays(0, false)).toBe(0); // joined today
+    expect(completedInactiveDays(1, false)).toBe(1); // joined yesterday, missed it
+    expect(completedInactiveDays(2, false)).toBe(2); // joined 11.06 → 11+12 missed
+    expect(completedInactiveDays(3, false)).toBe(3);
   });
 });
 
@@ -126,26 +130,39 @@ describe("computePracticeSignals", () => {
   it("computes daysSinceAnchor from the last practiced day", () => {
     const s = computePracticeSignals(days([[3, 120]]), today, null);
     expect(s.daysSinceAnchor).toBe(3);
+    expect(s.anchorIsPractice).toBe(true);
   });
 
   it("ignores sub-threshold days for the anchor", () => {
     const s = computePracticeSignals(days([[1, 10], [4, 120]]), today, null);
     expect(s.daysSinceAnchor).toBe(4);
+    expect(s.anchorIsPractice).toBe(true);
   });
 
-  it("falls back to the provided anchor when never practiced", () => {
+  it("falls back to the provided anchor when never practiced (anchorIsPractice false)", () => {
     const s = computePracticeSignals(days([]), today, "2026-06-08");
     expect(s.daysSinceAnchor).toBe(3);
+    expect(s.anchorIsPractice).toBe(false);
+  });
+
+  it("a sub-30s-only history falls back, not to the tiny day", () => {
+    // 2s on 11.06 (d0) + 1s on 12.06 would be d-? here today=11.06 so use
+    // tiny values within window: no day clears 30s → fallback, not practice.
+    const s = computePracticeSignals(days([[0, 2], [1, 1]]), today, "2026-06-09");
+    expect(s.daysSinceAnchor).toBe(2);
+    expect(s.anchorIsPractice).toBe(false);
   });
 
   it("returns null daysSinceAnchor with no practice and no fallback", () => {
     const s = computePracticeSignals(days([]), today, null);
     expect(s.daysSinceAnchor).toBeNull();
+    expect(s.anchorIsPractice).toBe(false);
   });
 
   it("practiced today yields daysSinceAnchor === 0", () => {
     const s = computePracticeSignals(days([[0, 120]]), today, null);
     expect(s.daysSinceAnchor).toBe(0);
+    expect(s.anchorIsPractice).toBe(true);
   });
 
   it("sums current (d0..d6) and prior (d7..d13) week seconds", () => {
