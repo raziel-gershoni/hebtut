@@ -25,9 +25,9 @@ const CONTENT_TYPE: Record<string, string> = {
   webp: "image/webp",
 };
 
-/** Supabase serves objects with the content-type they were uploaded with, so
- * setting this correctly is what fixes WebKit's "won't sniff octet-stream"
- * problem that forced the proxy. */
+/** R2 serves objects (incl. via presigned GET) with the content-type they were
+ * uploaded with, so setting this correctly is what fixes WebKit's "won't sniff
+ * octet-stream" problem that forced the proxy. */
 export function contentTypeForExt(ext: string): string {
   return CONTENT_TYPE[ext] ?? "application/octet-stream";
 }
@@ -40,8 +40,8 @@ export interface StorableMessage {
 }
 
 /**
- * Download a message's media from Telegram once and persist it in the public
- * bucket. Voice additionally gets a lossless CAF remux for pre-18.4 WebKit.
+ * Download a message's media from Telegram once and persist it in the private
+ * R2 bucket. Voice additionally gets a lossless CAF remux for pre-18.4 WebKit.
  * Stamps storage_path/_caf_path/stored_at under a `storage_path IS NULL` guard
  * (idempotent + race-safe). Throws on any failure so the cron can count + log.
  */

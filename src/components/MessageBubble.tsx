@@ -106,7 +106,6 @@ export function MessageBubble({
   const bubble = isIn
     ? `${speakerColors.bubbleBg} border-l-[3px] ${speakerColors.border}`
     : `${speakerColors.bubbleBg} border-r-[3px] ${speakerColors.border}`;
-  const src = msg.storage_url ?? `/api/media/${msg.id}?token=${encodeURIComponent(jwt)}`;
   const time = new Date(msg.created_at).toLocaleTimeString("ru-RU", {
     hour: "2-digit",
     minute: "2-digit",
@@ -192,7 +191,12 @@ export function MessageBubble({
             storageCafUrl={msg.storage_caf_url}
           />
         ) : msg.kind === "video_note" ? (
-          <VideoNote src={src} totalSeconds={msg.duration} messageId={msg.id} jwt={jwt} />
+          <VideoNote
+            storageUrl={msg.storage_url ?? null}
+            totalSeconds={msg.duration}
+            messageId={msg.id}
+            jwt={jwt}
+          />
         ) : msg.kind === "text" ? (
           <TextContent text={msg.text_content ?? ""} />
         ) : msg.media_library_id != null ? (
@@ -308,6 +312,22 @@ function VoicePlayer({
   const { speed, cycle } = usePlaybackSpeed();
   const { isMyTurn, startPlay, endPlay, userPaused } = usePlayback(messageId);
 
+  // A presigned R2 URL can expire (6h) or hit a transient error; the null-URL
+  // fallback is decided at render time only, so a failed stored load would die
+  // silently. On such an error switch this player to the proxy and resume;
+  // reset when a fresh presigned URL arrives (thread refetch).
+  const [useProxy, setUseProxy] = useState(false);
+  useEffect(() => {
+    setUseProxy(false);
+  }, [storageUrl, storageCafUrl]);
+  useEffect(() => {
+    if (!useProxy) return;
+    const a = audioRef.current;
+    if (!a) return;
+    a.load();
+    void a.play().catch(() => {});
+  }, [useProxy]);
+
   // Mirror the cycle-button choice onto the live element. Browsers honour
   // playbackRate mutation on a playing element, so cycling mid-play takes
   // effect immediately.
@@ -394,7 +414,7 @@ function VoicePlayer({
       <audio
         ref={audioRef}
         src={
-          storageUrl
+          storageUrl && !useProxy
             ? voiceStoredUrl(storageUrl, storageCafUrl ?? null)
             : voiceProxyUrl(messageId, jwt)
         }
@@ -418,9 +438,14 @@ function VoicePlayer({
           endPlay();
         }}
         onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
-        onError={(e) =>
-          reportMessageMediaError("voice", e.currentTarget.error, messageId, jwt)
-        }
+        onError={(e) => {
+          // Stored (R2 presigned) URL failed/expired — retry once via the proxy.
+          if (storageUrl && !useProxy) {
+            setUseProxy(true);
+            return;
+          }
+          reportMessageMediaError("voice", e.currentTarget.error, messageId, jwt);
+        }}
       />
     </div>
   );
@@ -460,12 +485,12 @@ function reportMessageMediaError(
  * Duration label sits below the circle (TG-style understated meta).
  */
 function VideoNote({
-  src,
+  storageUrl,
   totalSeconds,
   messageId,
   jwt,
 }: {
-  src: string;
+  storageUrl: string | null;
   totalSeconds: number;
   messageId: number;
   jwt: string;
@@ -475,6 +500,22 @@ function VideoNote({
   const [current, setCurrent] = useState(0);
   const { speed, cycle } = usePlaybackSpeed();
   const { isMyTurn, startPlay, endPlay, userPaused } = usePlayback(messageId);
+
+  // Prefer the stored (R2 presigned) URL; fall back to the proxy on null OR on
+  // a failed/expired stored load (see VoicePlayer for the same pattern).
+  const proxySrc = `/api/media/${messageId}?token=${encodeURIComponent(jwt)}`;
+  const [useProxy, setUseProxy] = useState(false);
+  useEffect(() => {
+    setUseProxy(false);
+  }, [storageUrl]);
+  useEffect(() => {
+    if (!useProxy) return;
+    const v = videoRef.current;
+    if (!v) return;
+    v.load();
+    void v.play().catch(() => {});
+  }, [useProxy]);
+  const videoSrc = storageUrl && !useProxy ? storageUrl : proxySrc;
 
   // Mirror onto the live element. Same `<video>` is used both inline and
   // when lifted to the fullscreen overlay, so the rate persists across modes.
@@ -537,7 +578,7 @@ function VideoNote({
         <div className="absolute inset-0 rounded-full overflow-hidden bg-black">
           <video
             ref={videoRef}
-            src={src}
+            src={videoSrc}
             preload="metadata"
             playsInline
             onPlay={() => {
@@ -554,9 +595,13 @@ function VideoNote({
               endPlay();
             }}
             onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
-            onError={(e) =>
-              reportMessageMediaError("video_note", e.currentTarget.error, messageId, jwt)
-            }
+            onError={(e) => {
+              if (storageUrl && !useProxy) {
+                setUseProxy(true);
+                return;
+              }
+              reportMessageMediaError("video_note", e.currentTarget.error, messageId, jwt);
+            }}
             className="absolute inset-0 w-full h-full object-cover"
           />
           {!playing && (

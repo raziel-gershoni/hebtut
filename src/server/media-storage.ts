@@ -7,6 +7,10 @@ import { serverEnv } from "@/lib/env";
 // links to student-voice PII lying around.
 const SIGNED_URL_TTL_SECONDS = 6 * 3600;
 
+/** Thrown when the R2 env isn't fully set. Typed (not a string match) so the
+ * store-media cron can recognise it and skip without burning the retry cap. */
+export class R2NotConfiguredError extends Error {}
+
 let cached: { client: S3Client; bucket: string } | null = null;
 
 /**
@@ -22,7 +26,7 @@ function r2(): { client: S3Client; bucket: string } {
   if (cached) return cached;
   const { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET } = serverEnv;
   if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET) {
-    throw new Error("R2 storage env not configured");
+    throw new R2NotConfiguredError("R2 storage env not configured");
   }
   cached = {
     client: new S3Client({

@@ -131,7 +131,15 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
       if (m.storage_path) {
         try {
           storage_url = await signedStudentMediaUrl(m.storage_path);
-          if (m.storage_caf_path) storage_caf_url = await signedStudentMediaUrl(m.storage_caf_path);
+          // Sign the CAF in its own try so a caf-only failure doesn't also drop
+          // the (working) ogg URL — old WebKit keeps a playable ogg.
+          if (m.storage_caf_path) {
+            try {
+              storage_caf_url = await signedStudentMediaUrl(m.storage_caf_path);
+            } catch {
+              storage_caf_url = null;
+            }
+          }
         } catch {
           storage_url = null;
           storage_caf_url = null;

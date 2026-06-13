@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { serverEnv } from "@/lib/env";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { storeMessageMedia } from "@/server/store-media";
+import { R2NotConfiguredError } from "@/server/media-storage";
 import { logSystem, pruneSystemLogs } from "@/server/system-log";
 
 export const runtime = "nodejs";
@@ -57,8 +58,10 @@ async function handler(req: NextRequest): Promise<Response> {
       // R2-not-configured isn't the file's fault — don't burn its retry budget,
       // so once the env vars are set the row stores normally instead of being
       // stuck past MAX_STORE_ATTEMPTS. (Guards the push-before-env ordering.)
-      if (reason.includes("R2 storage env not configured")) {
-        await logSystem("error", "store-media", "store skipped — R2 not configured", {
+      // Typed check, not a substring match, so rewording the message can't
+      // silently re-arm the footgun.
+      if (e instanceof R2NotConfiguredError) {
+        await logSystem("warn", "store-media", "store skipped — R2 not configured", {
           message_id: r.id,
         });
         continue;
