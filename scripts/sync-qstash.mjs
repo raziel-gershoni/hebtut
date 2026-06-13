@@ -34,6 +34,11 @@ const SCHEDULES = [
   // Once-a-minute matches the bot's reactive cadence — within ~60s a
   // student who paused 6h ago gets the gentle nudge.
   { path: "/api/cron/onboarding", cron: "*/1 * * * *" },
+  // Store-once media: downloads un-stored inbound voice/video_note from TG into
+  // Supabase so the client serves them straight from the CDN (zero Vercel
+  // egress). First runs after deploy drain the existing backlog; steady-state
+  // stores new media within ~60s (proxy fallback covers the gap).
+  { path: "/api/cron/store-media", cron: "*/1 * * * *" },
   { path: "/api/cron/engagement", cron: "0 6 * * *" }, // daily ~09:00 Israel
 ];
 
