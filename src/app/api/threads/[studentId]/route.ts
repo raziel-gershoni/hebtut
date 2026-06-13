@@ -80,7 +80,7 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
       bytes: number;
       kind: "photo" | "video" | "audio";
       storage_path: string;
-      url: string;
+      url?: string;
     }
   >();
   // Presign each distinct library object once (it can repeat across messages) so
@@ -89,6 +89,16 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
   // than masking with a Supabase URL (fail-loud by design).
   await Promise.all(
     (libRows ?? []).map(async (l) => {
+      // Per-item try/catch: one bad presign must NOT reject the whole Promise.all
+      // and 500 the entire thread. On failure leave url undefined — the bubble
+      // falls back to the /preview endpoint (also R2, also fail-loud), so it's
+      // still no-Supabase, just scoped to the one item instead of the conversation.
+      let url: string | undefined;
+      try {
+        url = await signedLibraryMediaUrl(l.storage_path);
+      } catch {
+        url = undefined;
+      }
       libById.set(l.id, {
         title: l.title,
         description: l.description,
@@ -96,7 +106,7 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
         bytes: l.bytes,
         kind: l.kind as "photo" | "video" | "audio",
         storage_path: l.storage_path,
-        url: await signedLibraryMediaUrl(l.storage_path),
+        url,
       });
     }),
   );

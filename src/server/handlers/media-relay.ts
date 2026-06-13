@@ -19,10 +19,10 @@ export interface SendLibraryItemResult {
  * Sends a media-library item to the given student's TG chat and writes a
  * mirroring `messages` row.
  *
- * First send of a library item: passes a short-lived signed Supabase URL to
+ * First send of a library item: passes a short-lived presigned R2 URL to
  * TG's send* endpoint. TG fetches it, ingests it, and returns its own
  * `file_id`. We cache that `file_id` on the library row so every subsequent
- * send (to any student) is a single TG-internal reference — no Supabase
+ * send (to any student) is a single TG-internal reference — no R2
  * round-trip, no re-upload.
  *
  * Mirrors the structure of `teacher-reply.ts`'s relay block: insert the

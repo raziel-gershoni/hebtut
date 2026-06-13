@@ -39,8 +39,6 @@ interface LibraryItem {
   uploader_name: string | null;
 }
 
-const BUCKET = "media-library";
-
 export async function GET(req: NextRequest): Promise<Response> {
   const me = await authFromRequest(req);
   if (!canTeachOrReadAsAdmin(me)) {

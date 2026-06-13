@@ -28,8 +28,9 @@ export type ThreadMsg = {
     kind: "photo" | "video" | "audio";
     storage_path: string;
     /** Presigned R2 GET URL minted by the thread API — the video/audio bubble
-     * plays from this directly. */
-    url: string;
+     * plays from this directly; undefined if its presign failed → the bubble
+     * falls back to the /preview endpoint (also R2). */
+    url?: string;
   } | null;
   transcript_text?: string | null;
   transcript_tg_message_id?: number | null;

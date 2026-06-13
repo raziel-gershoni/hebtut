@@ -1,20 +1,17 @@
 "use client";
 
-// Direct-to-Supabase-Storage uploads via the TUS resumable protocol.
+// Browser upload helpers. Two paths:
 //
-// Why TUS: Supabase officially recommends it for files >6 MB. The previous
-// signed-upload-URL pattern (single PUT) was fragile on iOS WebKit +
-// cellular — fetch could resolve "ok" without actually transmitting the
-// bytes, leaving ghost storage.objects rows. TUS chunks the upload (4 MB
-// each, kept under Vercel's 4.5 MB function body limit) and explicitly
-// confirms each chunk's offset, so there's no false-success failure mode.
-// On a network blip TUS resumes from the last confirmed chunk instead of
-// restarting from zero.
+// 1. putToPresignedUrl — single PUT straight to a presigned URL (Cloudflare R2).
+//    Used by the media-library uploader: the browser talks directly to R2 (CORS
+//    must allow the PUT), no Vercel hop, so it sidesteps the 4.5 MB function
+//    body limit. No resume (single shot) — accepted for ≤50 MB admin uploads.
 //
-// The browser never talks to Supabase directly — it goes through our
-// /api/admin/upload-proxy route, which validates admin via OUR JWT and
-// then forwards each chunk to Supabase with the service-role key. That
-// avoids needing any Supabase auth on the client.
+// 2. tusUpload — Supabase TUS resumable upload, still used by onboarding-videos.
+//    Why TUS there: Supabase recommends it for files >6 MB; it chunks (4 MB,
+//    under Vercel's 4.5 MB body limit) through our /api/admin/upload-proxy route
+//    (which validates admin via OUR JWT, then forwards each chunk with the
+//    service-role key), and resumes from the last confirmed chunk on a blip.
 
 import * as tus from "tus-js-client";
 

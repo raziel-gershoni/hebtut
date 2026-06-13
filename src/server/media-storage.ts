@@ -42,6 +42,12 @@ function r2Client(): S3Client {
       accessKeyId: R2_ACCESS_KEY_ID,
       secretAccessKey: R2_SECRET_ACCESS_KEY,
     },
+    // aws-sdk-js v3 defaults to WHEN_SUPPORTED, which bakes an
+    // x-amz-checksum-crc32 (computed over an EMPTY body at presign time) into a
+    // presigned PUT URL — the browser then PUTs the real file and R2 rejects it
+    // on checksum mismatch. WHEN_REQUIRED disables that; PutObject doesn't
+    // require a checksum, and server-side uploads (real bytes) are unaffected.
+    requestChecksumCalculation: "WHEN_REQUIRED",
   });
   return cachedClient;
 }
