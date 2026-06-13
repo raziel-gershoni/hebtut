@@ -60,7 +60,7 @@ export function MediaPreview({ item, jwt, selected, onClick, onKebab }: Props) {
         aria-pressed={selected}
         aria-label={ru.inbox.mediaPreview.selectAriaLabel(title)}
       >
-        <div className="aspect-square w-full rounded-xl overflow-hidden bg-black/5 dark:bg-white/5 flex items-center justify-center">
+        <div className="relative aspect-square w-full rounded-xl overflow-hidden bg-black/5 dark:bg-white/5 flex items-center justify-center">
           {item.kind === "photo" ? (
             <img
               src={previewUrl(item.id, jwt)}
@@ -69,57 +69,49 @@ export function MediaPreview({ item, jwt, selected, onClick, onKebab }: Props) {
               loading="lazy"
             />
           ) : item.kind === "video" ? (
-            <div className="relative w-full h-full">
-              <video
-                // #t=0.1 nudges iOS Safari into actually rendering the
-                // first frame as a poster — without it the tile is just
-                // black until the user plays. Plays from the presigned R2 URL.
-                src={`${item.url}#t=0.1`}
-                preload="metadata"
-                muted
-                playsInline
-                disablePictureInPicture
-                onError={(e) => {
-                  const err = e.currentTarget.error;
-                  const codes: Record<number, string> = {
-                    1: "ABORTED",
-                    2: "NETWORK",
-                    3: "DECODE",
-                    4: "SRC_NOT_SUPPORTED",
-                  };
-                  void reportClientMediaError(
-                    "preview-load",
-                    new Error(
-                      `picker tile video load failed: ${
-                        err
-                          ? `${codes[err.code] ?? "UNKNOWN"} · ${err.message || ""}`
-                          : "no error obj"
-                      }`,
-                    ),
-                    {
-                      library_id: item.id,
-                      storage_path: item.storage_path,
-                      mime: item.original_filename,
-                      surface: "picker-tile",
-                    },
-                    jwt,
-                  );
-                }}
-                className="absolute inset-0 w-full h-full object-cover"
-              />
-              {/* Corner film marker — signals "this is a video" without the
-                  centered play-button look that read as "tap to preview" (the
-                  tile is select-only; it doesn't play inline). */}
-              <div
-                className="absolute bottom-1.5 left-1.5 inline-flex items-center justify-center rounded-md bg-black/55 px-1 py-0.5 pointer-events-none"
-                aria-hidden
-              >
-                <FilmIcon />
-              </div>
-            </div>
+            <video
+              // #t=0.1 nudges iOS Safari into rendering the first frame as a
+              // poster — without it the tile is black until the user plays.
+              src={`${item.url}#t=0.1`}
+              preload="metadata"
+              muted
+              playsInline
+              disablePictureInPicture
+              onError={(e) => {
+                const err = e.currentTarget.error;
+                const codes: Record<number, string> = {
+                  1: "ABORTED",
+                  2: "NETWORK",
+                  3: "DECODE",
+                  4: "SRC_NOT_SUPPORTED",
+                };
+                void reportClientMediaError(
+                  "preview-load",
+                  new Error(
+                    `picker tile video load failed: ${
+                      err
+                        ? `${codes[err.code] ?? "UNKNOWN"} · ${err.message || ""}`
+                        : "no error obj"
+                    }`,
+                  ),
+                  {
+                    library_id: item.id,
+                    storage_path: item.storage_path,
+                    mime: item.original_filename,
+                    surface: "picker-tile",
+                  },
+                  jwt,
+                );
+              }}
+              className="w-full h-full object-cover"
+            />
           ) : (
-            <AudioIcon />
+            <WaveBars />
           )}
+          {/* Corner type marker — consistent passive "what kind of file" label
+              across photo / video / audio; not a play affordance (tiles are
+              select-only, no inline player). */}
+          <TypeBadge kind={item.kind} />
         </div>
         <div className="mt-2 text-xs">
           <div className="font-semibold text-tg-text truncate" title={title}>
@@ -190,21 +182,79 @@ function FilmIcon() {
   );
 }
 
-function AudioIcon() {
+/** Shared corner chip — same spot/style on every tile, icon per file kind. */
+function TypeBadge({ kind }: { kind: "photo" | "video" | "audio" }) {
+  return (
+    <div
+      className="absolute bottom-1.5 left-1.5 inline-flex items-center justify-center rounded-md bg-black/55 px-1 py-0.5 pointer-events-none"
+      aria-hidden
+    >
+      {kind === "video" ? <FilmIcon /> : kind === "photo" ? <ImageIcon /> : <NoteIcon />}
+    </div>
+  );
+}
+
+function ImageIcon() {
+  // Framed-picture glyph (mountain + sun) — the "image file" marker.
   return (
     <svg
+      width={14}
+      height={14}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.5}
+      strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="w-12 h-12 text-tg-text-hint"
+      className="text-white"
+      aria-hidden
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="8.5" cy="9.5" r="1.5" />
+      <path d="M21 15l-5-5L5 20" />
+    </svg>
+  );
+}
+
+function NoteIcon() {
+  // Music-note glyph — the "audio file" marker.
+  return (
+    <svg
+      width={14}
+      height={14}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="text-white"
       aria-hidden
     >
       <path d="M9 18V5l12-2v13" />
       <circle cx="6" cy="18" r="3" />
       <circle cx="18" cy="16" r="3" />
+    </svg>
+  );
+}
+
+function WaveBars() {
+  // Centered equalizer motif — audio has no thumbnail, so this is the tile art
+  // (the corner NoteIcon is the type marker, matching photo/video tiles).
+  return (
+    <svg
+      width={48}
+      height={48}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className="text-tg-text-hint"
+      aria-hidden
+    >
+      <rect x="2.5" y="9" width="2.5" height="6" rx="1.25" />
+      <rect x="7" y="6" width="2.5" height="12" rx="1.25" />
+      <rect x="11.5" y="3" width="2.5" height="18" rx="1.25" />
+      <rect x="16" y="7" width="2.5" height="10" rx="1.25" />
+      <rect x="20.5" y="10" width="2.5" height="4" rx="1.25" />
     </svg>
   );
 }
