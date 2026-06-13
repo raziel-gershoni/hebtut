@@ -11,6 +11,10 @@ export const revalidate = 0;
 export const maxDuration = 60;
 
 const BATCH = 25;
+// After this many failed stores a row is abandoned (stays on the proxy
+// fallback) so it can't sit at the head of the oldest-first queue forever —
+// the realistic trigger is a video_note over TG's ~20 MB getFile ceiling.
+const MAX_STORE_ATTEMPTS = 5;
 
 async function handler(req: NextRequest): Promise<Response> {
   if (req.headers.get("authorization") !== `Bearer ${serverEnv.CRON_SECRET}`) {
@@ -23,10 +27,11 @@ async function handler(req: NextRequest): Promise<Response> {
   // — i.e. the one-time migration of existing messages — drains deterministically.
   const { data: rows, error } = await sb
     .from("messages")
-    .select("id, student_id, kind, file_id")
+    .select("id, student_id, kind, file_id, store_attempts")
     .not("file_id", "is", null)
     .is("storage_path", null)
     .is("media_library_id", null)
+    .lt("store_attempts", MAX_STORE_ATTEMPTS)
     .order("created_at", { ascending: true })
     .limit(BATCH);
   if (error) {
@@ -48,10 +53,14 @@ async function handler(req: NextRequest): Promise<Response> {
       stored++;
     } catch (e) {
       failed++;
-      await logSystem("error", "store-media", "store failed", {
-        message_id: r.id,
-        reason: (e as Error).message,
-      });
+      const attempts = (r.store_attempts ?? 0) + 1;
+      await sb.from("messages").update({ store_attempts: attempts }).eq("id", r.id);
+      await logSystem(
+        "error",
+        "store-media",
+        attempts >= MAX_STORE_ATTEMPTS ? "store failed — giving up" : "store failed",
+        { message_id: r.id, attempts, reason: (e as Error).message },
+      );
     }
   }
   const scanned = rows?.length ?? 0;

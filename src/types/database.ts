@@ -139,6 +139,7 @@ export interface Database {
           storage_path: string | null;
           storage_caf_path: string | null;
           stored_at: string | null;
+          store_attempts: number;
           created_at: string;
         };
         Insert: {
@@ -165,6 +166,7 @@ export interface Database {
           storage_path?: string | null;
           storage_caf_path?: string | null;
           stored_at?: string | null;
+          store_attempts?: number;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;
