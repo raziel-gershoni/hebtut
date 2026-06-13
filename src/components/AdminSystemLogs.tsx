@@ -43,7 +43,9 @@ export function AdminSystemLogs({ jwt }: { jwt: string }) {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch("/api/admin/system-logs?source=store-media&limit=200", {
+      // No source filter — show every source (store-media writes, media-read
+      // routing, media-proxy fallback) so the panel covers the whole pipeline.
+      const r = await fetch("/api/admin/system-logs?limit=200", {
         cache: "no-store",
         headers: { Authorization: `Bearer ${jwt}` },
       });
@@ -114,6 +116,9 @@ export function AdminSystemLogs({ jwt }: { jwt: string }) {
                     className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${LEVEL_BADGE[row.level]}`}
                   >
                     {row.level}
+                  </span>
+                  <span className="shrink-0 rounded-full bg-tg-bg-secondary px-2 py-0.5 text-[10px] font-medium text-tg-text-hint">
+                    {row.source}
                   </span>
                 </div>
                 <div className="mt-1 text-sm break-words">{row.message}</div>

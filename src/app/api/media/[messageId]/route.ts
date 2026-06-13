@@ -4,6 +4,7 @@ import { getServiceRoleClient } from "@/lib/supabase-server";
 import { getBot } from "@/lib/tg";
 import { serverEnv } from "@/lib/env";
 import { oggOpusToCaf, OggCafError } from "@/lib/ogg-to-caf";
+import { logSystem } from "@/server/system-log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,20 +48,20 @@ export async function GET(req: NextRequest, { params }: { params: { messageId: s
   if (!file.file_path) return new Response("no path", { status: 502 });
   const tgUrl = `https://api.telegram.org/file/bot${serverEnv.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
 
-  // VOICE: always proxied. The zero-traffic alternatives are PROVEN dead:
-  // - native <audio> on the 302 fails — TG's CDN serves voice as
+  // VOICE FALLBACK. Primary delivery is now a presigned R2 URL the client plays
+  // directly (zero Vercel egress); this path runs only when the row isn't on R2
+  // yet or its presigned URL failed. Direct alternatives are PROVEN dead, which
+  // is why the fallback proxies bytes rather than redirecting:
+  // - native <audio> on a 302 to TG fails — TG's CDN serves voice as
   //   application/octet-stream and WebKit's AVFoundation won't sniff Ogg
   //   (MP4 video notes survive the same redirect because ftyp IS sniffed);
   // - client-side fetch of the bytes fails — TG file responses carry NO
   //   Access-Control-Allow-Origin at all (journal-verified in prod,
-  //   2026-06-11: media.fallback_served meta showed acao=null), so a
-  //   browser can never read them cross-origin.
-  // So we serve the bytes ourselves: explicit audio/ogg + Range support,
-  // plus ?format=caf for pre-18.4 WebKit (lossless Opus→CAF remux —
-  // those engines can't decode Ogg in any form). Voice files are tiny
-  // (Opus mono ~25-30 kbps), so whole-file buffering is fine. The planned
-  // zero-Vercel-traffic follow-up is store-once-in-Supabase (decision
-  // pending — see docs/superpowers/specs/2026-06-11-voice-client-blob-design.md).
+  //   2026-06-11: acao=null), so a browser can never read them cross-origin.
+  // So we serve the bytes ourselves: explicit audio/ogg + Range support, plus
+  // ?format=caf for pre-18.4 WebKit (lossless Opus→CAF remux — those engines
+  // can't decode Ogg in any form). Voice files are tiny (Opus mono ~25-30 kbps),
+  // so whole-file buffering is fine.
   const q = new URL(req.url).searchParams;
   if (msg.kind === "voice") {
     let bytes: Uint8Array<ArrayBuffer>;
@@ -93,6 +94,17 @@ export async function GET(req: NextRequest, { params }: { params: { messageId: s
         });
       }
     }
+    // Observability: this path means bytes flowed THROUGH Vercel (the fallback
+    // for un-stored / R2-failed media). Log once per play (initial request, not
+    // every seek-range) so the panel shows residual proxy traffic — an empty
+    // media-proxy stream = everything is being served straight from R2.
+    const rng = req.headers.get("range");
+    if (!rng || /^bytes=0-/.test(rng.trim())) {
+      await logSystem("info", "media-proxy", "served voice via proxy", {
+        message_id: messageId,
+        format: contentType === "audio/x-caf" ? "caf" : "ogg",
+      });
+    }
     return rangeResponse(req, bytes, contentType);
   }
 
@@ -101,6 +113,10 @@ export async function GET(req: NextRequest, { params }: { params: { messageId: s
   // PoC's accepted trade-off. Cacheable for the same window TG guarantees
   // file_path validity (≥1h) so a replay skips the auth+getFile round-trip;
   // Response.redirect() can't carry headers.
+  await logSystem("info", "media-proxy", "served via proxy (302→tg)", {
+    message_id: messageId,
+    kind: msg.kind,
+  });
   return new Response(null, {
     status: 302,
     headers: { Location: tgUrl, "Cache-Control": "private, max-age=3600" },

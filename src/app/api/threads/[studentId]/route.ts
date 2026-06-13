@@ -6,6 +6,7 @@ import { resolveDisplay } from "@/server/display";
 import { getDisplayAnonymousHandlesEnabled } from "@/server/settings";
 import { getSignedRemainingForManyToday } from "@/server/quota";
 import { signedStudentMediaUrl } from "@/server/media-storage";
+import { logSystem } from "@/server/system-log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -169,6 +170,19 @@ export async function GET(req: NextRequest, { params }: { params: { studentId: s
       };
     }),
   );
+
+  // Read-routing observability: how this thread's media will be served. r2 =
+  // played straight from R2 (zero Vercel egress); proxy = will fall back through
+  // /api/media (un-stored or R2-failed). proxy:0 across loads = pure R2.
+  const mediaRows = messages.filter((m) => m.kind === "voice" || m.kind === "video_note");
+  if (mediaRows.length > 0) {
+    const r2 = mediaRows.filter((m) => m.storage_url != null).length;
+    await logSystem("info", "media-read", "thread media", {
+      student_id: studentId,
+      r2,
+      proxy: mediaRows.length - r2,
+    });
+  }
 
   const { data: studentRow } = await sb
     .from("users")
