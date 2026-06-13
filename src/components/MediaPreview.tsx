@@ -107,11 +107,14 @@ export function MediaPreview({ item, jwt, selected, onClick, onKebab }: Props) {
                 }}
                 className="absolute inset-0 w-full h-full object-cover"
               />
+              {/* Corner film marker — signals "this is a video" without the
+                  centered play-button look that read as "tap to preview" (the
+                  tile is select-only; it doesn't play inline). */}
               <div
-                className="absolute inset-0 flex items-center justify-center bg-black/15 pointer-events-none"
+                className="absolute bottom-1.5 left-1.5 inline-flex items-center justify-center rounded-md bg-black/55 px-1 py-0.5 pointer-events-none"
                 aria-hidden
               >
-                <PlayBadge />
+                <FilmIcon />
               </div>
             </div>
           ) : (
@@ -166,19 +169,24 @@ export function MediaPreview({ item, jwt, selected, onClick, onKebab }: Props) {
   );
 }
 
-function PlayBadge() {
+function FilmIcon() {
+  // Film-strip glyph — a non-interactive "video file" marker (no play triangle).
   return (
-    <div className="w-10 h-10 rounded-full bg-black/55 backdrop-blur-sm flex items-center justify-center text-white shadow-lg">
-      <svg
-        width={16}
-        height={16}
-        viewBox="0 0 14 14"
-        fill="currentColor"
-        aria-hidden
-      >
-        <path d="M3 1.5L12 7L3 12.5z" />
-      </svg>
-    </div>
+    <svg
+      width={14}
+      height={14}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="text-white"
+      aria-hidden
+    >
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="M7 4v16M17 4v16M2 9h5M2 15h5M17 9h5M17 15h5" />
+    </svg>
   );
 }
 

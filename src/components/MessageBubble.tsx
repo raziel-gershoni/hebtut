@@ -764,7 +764,9 @@ function LibraryMediaBlock({
           // 302-redirect /preview route because iOS WebKit (TG Mini App
           // webview) is flaky with `<video>` + 302 + cross-origin range
           // requests. Falls back to /preview only if the embed lacks a url.
-          src={lib?.url ?? previewUrl}
+          // #t=0.1 makes iOS paint the first frame as a poster instead of a
+          // black box before play (negligible ~0.1s start offset on play).
+          src={`${lib?.url ?? previewUrl}#t=0.1`}
           controls
           playsInline
           preload="metadata"

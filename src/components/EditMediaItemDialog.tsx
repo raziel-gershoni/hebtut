@@ -76,9 +76,12 @@ export function EditMediaItemDialog({ open, jwt, item, onClose, onSaved }: Props
               />
             ) : item.kind === "video" ? (
               <video
-                src={previewUrl(item.id, jwt)}
+                // Direct presigned R2 URL (not the 302 /preview) + #t=0.1 so iOS
+                // paints the first frame instead of a black box.
+                src={`${item.url}#t=0.1`}
                 preload="metadata"
                 muted
+                playsInline
                 className="w-full h-full object-cover"
               />
             ) : (
