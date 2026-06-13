@@ -44,6 +44,22 @@ export type Transition =
   | { type: "escalate"; kind: FlagKind; tier: InactiveTier | null; meta: Record<string, unknown> }
   | { type: "resolve"; kind: FlagKind; reason?: string };
 
+/**
+ * Completed missed days, with a today-grace mirroring the streak's.
+ *
+ * `daysSinceAnchor` is the raw calendar gap to the last practiced day, but the
+ * cron runs at 06:00 on an in-progress day — the student still has all of today
+ * to practice, so today must not be counted as a missed day yet. Subtracting
+ * one converts "calendar days since last practice" into "completed days with no
+ * practice": last active 11.06 → on the 13.06 cron only 12.06 has fully elapsed
+ * (1), and the 2-day sliding alert correctly waits for the 14.06 cron. Feed the
+ * result to classifyInactivity and report it as days_silent.
+ */
+export function completedInactiveDays(daysSinceAnchor: number | null): number | null {
+  if (daysSinceAnchor == null) return null;
+  return Math.max(0, daysSinceAnchor - 1);
+}
+
 export function classifyInactivity(daysSinceAnchor: number): InactiveTier | null {
   if (daysSinceAnchor >= INACTIVE_DORMANT_DAYS) return "dormant";
   if (daysSinceAnchor >= INACTIVE_AT_RISK_DAYS) return "at_risk";

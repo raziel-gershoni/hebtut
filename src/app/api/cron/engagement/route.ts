@@ -13,6 +13,7 @@ import {
   SIGNAL_WINDOW_DAYS,
   TUTOR_SLA_HOURS,
   classifyInactivity,
+  completedInactiveDays,
   computePracticeSignals,
   diffFlagStates,
   evaluatePlateau,
@@ -247,13 +248,21 @@ async function handler(req: NextRequest): Promise<Response> {
 
       const desired: DesiredFlag[] = [];
 
-      const tier =
-        signals.daysSinceAnchor != null ? classifyInactivity(signals.daysSinceAnchor) : null;
-      if (tier) {
+      // days_silent counts COMPLETED missed days (today-grace) so the cron's
+      // 06:00 run on an in-progress day doesn't count today as already missed.
+      const daysSilent = completedInactiveDays(signals.daysSinceAnchor);
+      const tier = daysSilent != null ? classifyInactivity(daysSilent) : null;
+      if (tier && daysSilent != null) {
+        // Onset = the first missed day (todayLocal − days_silent). Shown as the
+        // «с» date so the row reads "не занимается N дней · с <first missed>"
+        // instead of opened_at (= when the monitor first noticed).
+        const sinceDate = new Date(Date.parse(`${todayLocal}T00:00:00Z`) - daysSilent * 86400_000)
+          .toISOString()
+          .slice(0, 10);
         desired.push({
           kind: "inactive",
           tier,
-          meta: { days_silent: signals.daysSinceAnchor },
+          meta: { days_silent: daysSilent, since_date: sinceDate },
         });
       }
 

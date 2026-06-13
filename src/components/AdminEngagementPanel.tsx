@@ -26,6 +26,19 @@ function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
 }
 
+// For the inactive flag the cron stamps meta.since_date (YYYY-MM-DD, the first
+// missed day in the student's tz) — show that as the «с» date rather than
+// opened_at (= when the monitor first noticed). Sliced, not Date-parsed, to
+// avoid the admin browser's tz shifting a date-only value across midnight.
+function sinceFor(f: FlagRow): string {
+  const since = f.meta.since_date;
+  if (typeof since === "string" && /^\d{4}-\d{2}-\d{2}$/.test(since)) {
+    const [, m, d] = since.split("-");
+    return `${d}.${m}`;
+  }
+  return fmtDate(f.opened_at);
+}
+
 export function AdminEngagementPanel({ jwt }: { jwt: string }) {
   const [rows, setRows] = useState<FlagRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +115,7 @@ export function AdminEngagementPanel({ jwt }: { jwt: string }) {
                     </div>
                   </div>
                   <span className="shrink-0 text-[11px] text-tg-text-hint tabular-nums">
-                    {ru.admin.engagement.sinceDate(fmtDate(f.opened_at))}
+                    {ru.admin.engagement.sinceDate(sinceFor(f))}
                   </span>
                 </li>
               ))}

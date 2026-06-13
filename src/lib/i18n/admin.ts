@@ -139,7 +139,7 @@ const engagement = {
   groupPlateau: "Плато",
   sinceDate: (date: string) => `с ${date}`,
   metricInactive: (days: number) =>
-    `молчит ${days} ${pluralDay(days)}`,
+    `не занимается ${days} ${pluralDay(days)}`,
   metricSlump: (pct: number) => `минус ${pct}% за неделю`,
   metricPlateau: (streak: number, medianS: number) =>
     `серия ${streak} ${pluralDay(streak)}, по ~${medianS}с в день`,

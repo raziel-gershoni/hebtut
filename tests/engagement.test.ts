@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   classifyInactivity,
+  completedInactiveDays,
   evaluateSlump,
   evaluatePlateau,
   median,
@@ -22,6 +23,25 @@ describe("classifyInactivity", () => {
     expect(classifyInactivity(29)).toBe("at_risk");
     expect(classifyInactivity(30)).toBe("dormant");
     expect(classifyInactivity(365)).toBe("dormant");
+  });
+});
+
+describe("completedInactiveDays", () => {
+  it("null passes through", () => {
+    expect(completedInactiveDays(null)).toBeNull();
+  });
+  it("today-grace: the in-progress day the cron runs on is not yet a missed day", () => {
+    // active today → 0 silent
+    expect(completedInactiveDays(0)).toBe(0);
+    // active yesterday, today just started → 0 completed missed days
+    expect(completedInactiveDays(1)).toBe(0);
+    // active 11.06, cron on 13.06: only 12.06 is a completed missed day
+    expect(completedInactiveDays(2)).toBe(1);
+    // active 11.06, cron on 14.06: 12.06 + 13.06 = 2 → first sliding alert
+    expect(completedInactiveDays(3)).toBe(2);
+  });
+  it("never negative", () => {
+    expect(completedInactiveDays(0)).toBeGreaterThanOrEqual(0);
   });
 });
 
