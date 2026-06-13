@@ -11,35 +11,61 @@ const SIGNED_URL_TTL_SECONDS = 6 * 3600;
  * store-media cron can recognise it and skip without burning the retry cap. */
 export class R2NotConfiguredError extends Error {}
 
-let cached: { client: S3Client; bucket: string } | null = null;
+let cachedClient: S3Client | null = null;
 
 /**
- * Storage seam — Cloudflare R2 (S3-compatible), PRIVATE bucket + presigned
- * URLs: zero egress, and student media is never publicly addressable. Swapping
+ * Storage seam — Cloudflare R2 (S3-compatible), PRIVATE buckets + presigned
+ * URLs: zero egress, and media is never publicly addressable. Swapping
  * providers (back to Supabase, or to plain S3) is contained to this file.
  *
+ * The S3 client is shared across buckets (student-media + media-library) — only
+ * the credentials/endpoint are per-account, the bucket is a per-call param.
  * Throws if the R2 env is unset so callers degrade to the /api/media proxy
  * fallback rather than silently mis-serving. Client is memoised across warm
  * invocations.
  */
-function r2(): { client: S3Client; bucket: string } {
-  if (cached) return cached;
-  const { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET } = serverEnv;
-  if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET) {
+function r2Client(): S3Client {
+  if (cachedClient) return cachedClient;
+  const { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY } = serverEnv;
+  if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
     throw new R2NotConfiguredError("R2 storage env not configured");
   }
-  cached = {
-    client: new S3Client({
-      region: "auto",
-      endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: R2_ACCESS_KEY_ID,
-        secretAccessKey: R2_SECRET_ACCESS_KEY,
-      },
-    }),
-    bucket: R2_BUCKET,
-  };
-  return cached;
+  cachedClient = new S3Client({
+    region: "auto",
+    endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: R2_ACCESS_KEY_ID,
+      secretAccessKey: R2_SECRET_ACCESS_KEY,
+    },
+  });
+  return cachedClient;
+}
+
+/** Upload bytes to a private R2 bucket (idempotent overwrite). Throws
+ * R2NotConfiguredError when the bucket isn't configured. */
+export async function uploadToR2(
+  bucket: string,
+  path: string,
+  bytes: Uint8Array,
+  contentType: string,
+): Promise<void> {
+  if (!bucket) throw new R2NotConfiguredError("R2 bucket not configured");
+  await r2Client().send(
+    new PutObjectCommand({ Bucket: bucket, Key: path, Body: bytes, ContentType: contentType }),
+  );
+}
+
+/** Short-lived presigned GET URL — the client plays directly from R2, no proxy.
+ * Throws R2NotConfiguredError when the bucket isn't configured. */
+export async function signedR2GetUrl(
+  bucket: string,
+  path: string,
+  ttlSeconds = SIGNED_URL_TTL_SECONDS,
+): Promise<string> {
+  if (!bucket) throw new R2NotConfiguredError("R2 bucket not configured");
+  return getSignedUrl(r2Client(), new GetObjectCommand({ Bucket: bucket, Key: path }), {
+    expiresIn: ttlSeconds,
+  });
 }
 
 /** Upload bytes to the private student-media bucket (idempotent overwrite). */
@@ -48,16 +74,24 @@ export async function uploadStudentMedia(
   bytes: Uint8Array,
   contentType: string,
 ): Promise<void> {
-  const { client, bucket } = r2();
-  await client.send(
-    new PutObjectCommand({ Bucket: bucket, Key: path, Body: bytes, ContentType: contentType }),
-  );
+  return uploadToR2(serverEnv.R2_BUCKET ?? "", path, bytes, contentType);
 }
 
-/** Short-lived presigned GET URL — the client plays directly from R2, no proxy. */
+/** Short-lived presigned GET URL for student media — direct R2, no proxy. */
 export async function signedStudentMediaUrl(path: string): Promise<string> {
-  const { client, bucket } = r2();
-  return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: path }), {
-    expiresIn: SIGNED_URL_TTL_SECONDS,
-  });
+  return signedR2GetUrl(serverEnv.R2_BUCKET ?? "", path);
+}
+
+/** Upload bytes to the private media-library bucket (idempotent overwrite). */
+export async function uploadLibraryMedia(
+  path: string,
+  bytes: Uint8Array,
+  contentType: string,
+): Promise<void> {
+  return uploadToR2(serverEnv.R2_MEDIA_LIBRARY_BUCKET ?? "", path, bytes, contentType);
+}
+
+/** Short-lived presigned GET URL for media-library objects — direct R2, no proxy. */
+export async function signedLibraryMediaUrl(path: string): Promise<string> {
+  return signedR2GetUrl(serverEnv.R2_MEDIA_LIBRARY_BUCKET ?? "", path);
 }

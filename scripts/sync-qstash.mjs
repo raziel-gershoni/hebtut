@@ -39,6 +39,10 @@ const SCHEDULES = [
   // egress). First runs after deploy drain the existing backlog; steady-state
   // stores new media within ~60s (proxy fallback covers the gap).
   { path: "/api/cron/store-media", cron: "*/1 * * * *" },
+  // Copy-once: moves existing media-library objects Supabase→R2 (additive — the
+  // Supabase original is kept for a soak window). Drains the one-time backlog,
+  // then idles once every row is r2_migrated. */5 is plenty for a backfill.
+  { path: "/api/cron/migrate-library-r2", cron: "*/5 * * * *" },
   { path: "/api/cron/engagement", cron: "0 6 * * *" }, // daily ~09:00 Israel
 ];
 

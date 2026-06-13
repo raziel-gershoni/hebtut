@@ -580,6 +580,7 @@ export interface Database {
           height: number | null;
           tg_file_id: string | null;
           tg_file_unique_id: string | null;
+          r2_migrated: boolean;
           created_at: string;
         };
         Insert: {
@@ -597,6 +598,7 @@ export interface Database {
           height?: number | null;
           tg_file_id?: string | null;
           tg_file_unique_id?: string | null;
+          r2_migrated?: boolean;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["media_library"]["Insert"]>;
