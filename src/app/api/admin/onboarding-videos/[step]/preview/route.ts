@@ -2,12 +2,12 @@ import type { NextRequest } from "next/server";
 import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
+import { signedLibraryMediaUrl } from "@/server/media-storage";
 import type { OnboardingVideoStep } from "@/types/database";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const BUCKET = "media-library";
 const VALID: ReadonlySet<OnboardingVideoStep> = new Set([
   "video1",
   "video2",
@@ -16,7 +16,7 @@ const VALID: ReadonlySet<OnboardingVideoStep> = new Set([
 
 /**
  * Two modes:
- * - default: 302 redirect to the Supabase signed URL — used by `<img>` and
+ * - default: 302 redirect to the presigned R2 URL — used by `<img>` and
  *   `<audio>` tags where one round-trip is preferable.
  * - `?as=json`: returns `{ signedUrl }` instead. iOS WebKit (Mini App
  *   webview) is flaky with `<video>` + 302 redirect + cross-origin range
@@ -44,20 +44,22 @@ export async function GET(
     .maybeSingle();
   if (!row) return new Response("not found", { status: 404 });
 
-  // Bucket is public (see 20260521000001_media_bucket_public.sql).
-  // getPublicUrl just constructs the URL — no lookup, no failure mode,
-  // works around the broken sign endpoint.
-  const { data } = sb.storage.from(BUCKET).getPublicUrl(row.storage_path);
-  const publicUrl = data.publicUrl;
-  if (!publicUrl) return new Response("no url", { status: 502 });
+  // Presigned R2 GET URL (6h TTL). R2-only — no Supabase fallback: a presign
+  // throw 502s rather than silently mis-serving.
+  let signedUrl: string;
+  try {
+    signedUrl = await signedLibraryMediaUrl(row.storage_path);
+  } catch {
+    return new Response("no url", { status: 502 });
+  }
 
   if (asJson) {
-    return Response.json({ signedUrl: publicUrl }, { headers: noStoreHeaders });
+    return Response.json({ signedUrl }, { headers: noStoreHeaders });
   }
   return new Response(null, {
     status: 302,
     headers: {
-      Location: publicUrl,
+      Location: signedUrl,
       "Cache-Control": "private, max-age=600",
     },
   });

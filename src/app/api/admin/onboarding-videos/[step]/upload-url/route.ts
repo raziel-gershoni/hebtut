@@ -4,13 +4,13 @@ import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { readJsonBody } from "@/lib/http";
 import { extFromMime } from "@/lib/media";
+import { signedLibraryPutUrl, R2NotConfiguredError } from "@/server/media-storage";
 import type { OnboardingVideoStep } from "@/types/database";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const BUCKET = "media-library";
 const MAX_CLIPS_PER_STEP = 10;
 const VALID_STEPS: ReadonlySet<OnboardingVideoStep> = new Set([
   "video1",
@@ -25,9 +25,10 @@ const Body = z.object({
 });
 
 /**
- * Returns a fresh storage path for an onboarding video clip slot. The browser
- * then uploads via TUS (through /api/admin/upload-proxy) to that path
- * and finally posts metadata to the parent POST route to register the row.
+ * Returns a fresh storage path + a short-lived presigned R2 PUT URL for an
+ * onboarding video clip slot. The browser PUTs the bytes straight to `url`
+ * (sending a matching `Content-Type` header) and finally posts metadata to the
+ * parent POST route to register the row. R2-only — no Supabase fallback.
  *
  * Path layout: `onboarding/<step>-<position>-<uuid>.<ext>`. The parent
  * POST route validates the prefix against the same (step, position) tuple.
@@ -57,5 +58,16 @@ export async function POST(
   const positionPart =
     parsed.data.position != null ? String(parsed.data.position) : "x";
   const path = `onboarding/${step}-${positionPart}-${crypto.randomUUID()}.${ext}`;
-  return Response.json({ bucket: BUCKET, path }, { headers: noStoreHeaders });
+  try {
+    const url = await signedLibraryPutUrl(path, parsed.data.mime_type);
+    return Response.json({ url, path }, { headers: noStoreHeaders });
+  } catch (e) {
+    if (e instanceof R2NotConfiguredError) {
+      return new Response("storage not configured", {
+        status: 503,
+        headers: noStoreHeaders,
+      });
+    }
+    throw e;
+  }
 }

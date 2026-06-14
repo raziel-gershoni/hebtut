@@ -6,6 +6,7 @@ import { noStoreHeaders } from "@/lib/no-cache";
 import { readJsonBody } from "@/lib/http";
 import { recordAudit } from "@/server/audit";
 import { MAX_BYTES } from "@/lib/media";
+import { deleteLibraryMedia } from "@/server/media-storage";
 import type { OnboardingVideoStep } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -27,10 +28,10 @@ function parseStep(raw: string): OnboardingVideoStep | null {
     : null;
 }
 
-// Registration body. The bytes were already uploaded directly to Supabase
-// via /upload-url; the server's job here is just to record where they live,
-// pick a position if the client didn't, and clean up any prior object for
-// the same (step, position) slot if this is a Replace.
+// Registration body. The bytes were already PUT directly to R2 via the
+// presigned URL from /upload-url; the server's job here is just to record where
+// they live, pick a position if the client didn't, and clean up any prior
+// object for the same (step, position) slot if this is a Replace.
 const Body = z.object({
   storage_path: z.string().min(1).max(256),
   mime_type: z.string(),
@@ -116,6 +117,19 @@ export async function POST(
       return new Response(updateErr.message, { status: 500, headers: noStoreHeaders });
     }
     if (existing.storage_path !== storage_path) {
+      // Drop the prior object from R2 (the live backend). Best-effort: a
+      // storage hiccup shouldn't block the replace — a leftover object is
+      // recoverable cleanup, not a correctness issue.
+      try {
+        await deleteLibraryMedia(existing.storage_path);
+      } catch (e) {
+        console.warn("[onboarding.video_upload] R2 object remove failed", {
+          storage_path: existing.storage_path,
+          reason: (e as Error).message,
+        });
+      }
+      // Also clear the migration soak-copy from the old Supabase bucket (no-op
+      // once that bucket is deleted).
       await sb.storage.from(BUCKET).remove([existing.storage_path]);
     }
   } else {
@@ -127,6 +141,8 @@ export async function POST(
     if ((count ?? 0) >= MAX_CLIPS_PER_STEP) {
       return new Response("max clips reached", { status: 409, headers: noStoreHeaders });
     }
+    // r2_migrated=true because the bytes live in R2 from the start — they serve
+    // via presigned GET and must NOT be re-queued by the Supabase→R2 copy cron.
     const { error: insertErr } = await sb.from("onboarding_videos").insert({
       step,
       position,
@@ -138,6 +154,7 @@ export async function POST(
       tg_file_unique_id: null,
       uploaded_by_user_id: me.id,
       uploaded_at: new Date().toISOString(),
+      r2_migrated: true,
     });
     if (insertErr) {
       return new Response(insertErr.message, { status: 500, headers: noStoreHeaders });

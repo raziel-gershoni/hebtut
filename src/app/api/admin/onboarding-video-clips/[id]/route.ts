@@ -3,6 +3,7 @@ import { authFromRequest, isAdminOnly } from "@/lib/auth-server";
 import { getServiceRoleClient } from "@/lib/supabase-server";
 import { noStoreHeaders } from "@/lib/no-cache";
 import { recordAudit } from "@/server/audit";
+import { deleteLibraryMedia } from "@/server/media-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,6 +42,19 @@ export async function DELETE(
   if (!row) {
     return Response.json({ ok: true }, { headers: noStoreHeaders });
   }
+  // Remove the object from R2 (the live backend). Best-effort: a storage hiccup
+  // shouldn't block the row deletion — a leftover object is recoverable cleanup,
+  // not a correctness issue.
+  try {
+    await deleteLibraryMedia(row.storage_path);
+  } catch (e) {
+    console.warn("[onboarding.video_delete] R2 object remove failed", {
+      storage_path: row.storage_path,
+      reason: (e as Error).message,
+    });
+  }
+  // Also clear the migration soak-copy from the old Supabase bucket (no-op once
+  // that bucket is deleted).
   await sb.storage.from(BUCKET).remove([row.storage_path]);
   const { error } = await sb.from("onboarding_videos").delete().eq("id", id);
   if (error) {

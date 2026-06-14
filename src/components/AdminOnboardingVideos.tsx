@@ -11,24 +11,21 @@ import {
   probeVideoMetadata,
   type CompressProgress,
 } from "@/lib/video-compress";
-import { tusUpload } from "@/lib/direct-upload";
-import { publicEnv } from "@/lib/env";
+import { putToPresignedUrl } from "@/lib/direct-upload";
 import { ru } from "@/lib/i18n";
 import { extractFfmpegLogTail, reportClientMediaError } from "@/lib/diag";
 import type { OnboardingVideoStep } from "@/types/database";
 
-const BUCKET = "media-library";
 const MAX_CLIPS_PER_STEP = 10;
-
-function publicUrlFor(storagePath: string): string {
-  const base = publicEnv.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "");
-  return `${base}/storage/v1/object/public/${BUCKET}/${storagePath}`;
-}
 
 interface Clip {
   id: number;
   position: number;
   storage_path: string;
+  /** Server-minted presigned R2 GET URL (6h) — the preview plays from this
+   * directly (no Supabase public URL, no proxy). Supplied by the list API;
+   * may be undefined if that one clip's presign threw server-side. */
+  url?: string;
   original_filename: string;
   mime_type: string;
   bytes: number;
@@ -159,7 +156,11 @@ export function AdminOnboardingVideos({ jwt }: Props) {
       setError(ru.admin.onboardingVideos.stillTooLarge(formatBytes(fileToSend.size)));
       return;
     }
-    let bucket: string;
+    // 1. Ask the server for a fresh storage path + a presigned R2 PUT URL.
+    //    2. PUT the bytes straight to R2 — no proxy hop, no Supabase. The
+    //    Content-Type MUST match the type the URL was signed with
+    //    (fileToSend.type), or R2 rejects the PUT. 3. POST metadata below.
+    let putUrl: string;
     let path: string;
     {
       const urlRes = await fetch(
@@ -199,24 +200,21 @@ export function AdminOnboardingVideos({ jwt }: Props) {
         );
         return;
       }
-      const d = (await urlRes.json()) as { bucket: string; path: string };
-      bucket = d.bucket;
+      const d = (await urlRes.json()) as { url: string; path: string };
+      putUrl = d.url;
       path = d.path;
     }
     setUploading({ loaded: 0, total: fileToSend.size });
     try {
-      await tusUpload(fileToSend, {
-        bucket,
-        path,
-        jwt,
-        onProgress: (loaded, total) => setUploading({ loaded, total }),
-      });
+      await putToPresignedUrl(putUrl, fileToSend, fileToSend.type, (loaded, total) =>
+        setUploading({ loaded, total }),
+      );
     } catch (e) {
       setBusy(null);
       setUploadingStep(null);
       setUploading(null);
       void reportClientMediaError(
-        "upload-tus",
+        "upload-put",
         e,
         {
           size_bytes: fileToSend.size,
@@ -487,7 +485,10 @@ function ClipCard({
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
-  const signedSrc = publicUrlFor(clip.storage_path);
+  // Server-provided presigned R2 GET URL (no Supabase public URL). Undefined
+  // only if this clip's presign threw server-side — the <video> then renders
+  // empty and surfaces the load-failed hint.
+  const signedSrc = clip.url;
 
   function pickReplace() {
     setLocalError(null);
@@ -531,9 +532,13 @@ function ClipCard({
 
       <video
         key={signedSrc}
-        src={signedSrc}
+        // #t=0.1 nudges iOS Safari into rendering the first frame as a poster
+        // — without it the preview is black until the user plays (matches the
+        // media-library tiles).
+        src={signedSrc ? `${signedSrc}#t=0.1` : undefined}
         controls
         playsInline
+        muted
         preload="metadata"
         onError={(e) => {
           const err = e.currentTarget.error;
@@ -561,14 +566,16 @@ function ClipCard({
           {clip.original_filename} · {formatBytes(clip.bytes)}
           {clip.duration_seconds != null && ` · ${clip.duration_seconds}s`}
         </span>
-        <a
-          href={signedSrc}
-          target="_blank"
-          rel="noreferrer"
-          className="text-tg-text-link shrink-0"
-        >
-          {ru.admin.onboardingVideos.openInBrowser}
-        </a>
+        {signedSrc && (
+          <a
+            href={signedSrc}
+            target="_blank"
+            rel="noreferrer"
+            className="text-tg-text-link shrink-0"
+          >
+            {ru.admin.onboardingVideos.openInBrowser}
+          </a>
+        )}
       </div>
 
       <ProgressBars compressing={compressing} uploading={uploading} />

@@ -5,13 +5,12 @@ import { getBot } from "@/lib/tg";
 import { recordAudit } from "@/server/audit";
 import { ru } from "@/lib/i18n";
 import { serverEnv } from "@/lib/env";
+import { signedLibraryMediaUrl } from "@/server/media-storage";
 import { scheduleTimer } from "@/server/onboarding";
 import type {
   OnboardingState,
   OnboardingVideoStep,
 } from "@/types/database";
-
-const BUCKET = "media-library";
 
 export interface OnboardingFallback {
   text: string;
@@ -168,10 +167,10 @@ export async function sendOnboardingVideoSequence(
  * let the cron try the next clip).
  *
  * Behaviour matches the original single-clip helper: cached `tg_file_id`
- * is used when present; otherwise `InputFile` fetches bytes from Supabase
- * Storage and forwards them as multipart (TG `sendVideoNote` doesn't take
- * URLs). On success the captured `file_id` is persisted back to the row for
- * subsequent students.
+ * is used when present; otherwise `InputFile` fetches bytes from a presigned
+ * R2 GET URL and forwards them as multipart (TG `sendVideoNote` doesn't take
+ * URLs). TG fetches synchronously, well within the 6h presign TTL. On success
+ * the captured `file_id` is persisted back to the row for subsequent students.
  */
 export async function sendOneClip(args: {
   studentId: number;
@@ -188,16 +187,19 @@ export async function sendOneClip(args: {
   if (row.tg_file_id) {
     videoNoteArg = row.tg_file_id;
   } else {
-    const { data } = sb.storage.from(BUCKET).getPublicUrl(row.storage_path);
-    if (!data.publicUrl) {
-      console.warn("onboarding video public-url construction failed", {
+    let signedUrl: string;
+    try {
+      signedUrl = await signedLibraryMediaUrl(row.storage_path);
+    } catch (e) {
+      console.warn("onboarding video presigned-url construction failed", {
         student_id: studentId,
         step,
         position: row.position,
+        reason: (e as Error).message,
       });
       return false;
     }
-    videoNoteArg = new InputFile(new URL(data.publicUrl));
+    videoNoteArg = new InputFile(new URL(signedUrl));
   }
 
   try {
