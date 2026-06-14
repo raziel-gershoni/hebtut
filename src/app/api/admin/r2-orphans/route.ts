@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { serverEnv } from "@/lib/env";
 import { getServiceRoleClient } from "@/lib/supabase-server";
-import { listAllR2Objects } from "@/server/media-storage";
+import { listAllR2Objects, deleteManyFromR2 } from "@/server/media-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,6 +77,43 @@ async function handler(req: NextRequest): Promise<Response> {
   const sb = getServiceRoleClient();
   const sum = (a: { size: number }[]) => a.reduce((s, o) => s + o.size, 0);
   const mb = (n: number) => Math.round((n / (1024 * 1024)) * 100) / 100;
+
+  // `?delete=1` switches from dry-run (report only) to actually deleting the
+  // age-eligible orphans. Deletion is computed and executed in THIS request off
+  // the freshly-listed orphan set, so nothing can shift between a list call and
+  // a delete call.
+  const doDelete = new URL(req.url).searchParams.get("delete") === "1";
+  const MIN_DELETE_AGE_MS = 60 * 60 * 1000; // never delete an object younger
+  const now = Date.now(); //               than 1h — could be an in-flight upload
+  type Obj = { key: string; size: number; lastModified: Date | null };
+  const isEligible = (o: Obj) =>
+    o.lastModified != null && now - o.lastModified.getTime() >= MIN_DELETE_AGE_MS;
+
+  /** Plan (+ optionally execute) deletion of a bucket's orphans. */
+  async function runDelete(bucket: string, orphans: Obj[], referenced: number, total: number) {
+    const eligible = orphans.filter(isEligible);
+    const base = {
+      mode: doDelete ? "delete" : "dry-run",
+      delete_eligible: eligible.length,
+      delete_eligible_mb: mb(sum(eligible)),
+      too_recent: orphans.length - eligible.length, // < 1h old → skipped
+    };
+    if (!doDelete) return base;
+    // Catastrophe guard: a non-empty bucket with ZERO referenced objects almost
+    // certainly means the DB read returned empty (and EVERYTHING looks orphaned).
+    // Refuse to delete rather than wipe the bucket.
+    if (total > 0 && referenced === 0) {
+      return { ...base, mode: "aborted", aborted: "referenced=0 — refusing to delete (suspected DB read failure)" };
+    }
+    const { deleted, errors } = await deleteManyFromR2(bucket, eligible.map((o) => o.key));
+    const erroredKeys = new Set(errors.map((e) => e.key));
+    return {
+      ...base,
+      deleted,
+      deleted_mb: mb(sum(eligible.filter((o) => !erroredKeys.has(o.key)))),
+      delete_errors: errors.slice(0, 25),
+    };
+  }
 
   try {
     // === student-media bucket ================================================
@@ -196,9 +233,26 @@ async function handler(req: NextRequest): Promise<Response> {
     const libClass = classifyMissing(libRows);
     const onbClass = classifyMissing(onbRows);
 
+    // Plan / execute orphan deletion (no-op in dry-run).
+    const studentDeletion = await runDelete(
+      studentBucket,
+      studentOrphans,
+      studentObjs.length - studentOrphans.length,
+      studentObjs.length,
+    );
+    const libDeletion = await runDelete(
+      libBucket,
+      libOrphans,
+      libObjs.length - libOrphans.length,
+      libObjs.length,
+    );
+
     return Response.json({
+      mode: doDelete ? "delete" : "dry-run",
       notes: [
-        "read-only audit; nothing deleted or mutated",
+        doDelete
+          ? "DELETE mode: age-eligible (>1h) orphans removed from R2; reverse-direction rows untouched"
+          : "dry-run: nothing deleted — pass ?delete=1 to remove age-eligible orphans",
         "R2 listed before DB read → orphans are safe-to-delete; dangling/unstored may include ~1 cron-cycle of in-flight rows",
       ],
       student_media: {
@@ -209,6 +263,7 @@ async function handler(req: NextRequest): Promise<Response> {
         orphans: studentOrphans.length,
         orphan_mb: mb(sum(studentOrphans)),
         orphan_sample: studentOrphans.slice(0, 25).map((o) => o.key),
+        deletion: studentDeletion,
         // reverse (DB → R2) — messages degrade to the TG proxy (soft)
         dangling_refs: danglingRefs.length,
         dangling_sample: danglingRefs.slice(0, 25),
@@ -227,6 +282,7 @@ async function handler(req: NextRequest): Promise<Response> {
         orphans: libOrphans.length,
         orphan_mb: mb(sum(libOrphans)),
         orphan_sample: libOrphans.slice(0, 25).map((o) => o.key),
+        deletion: libDeletion,
         // reverse (DB → R2)
         dangling_broken: libClass.dangling_broken.length, // no tg cache → unserveable everywhere
         dangling_cached: libClass.dangling_cached.length, // tg cache → only Mini App preview breaks

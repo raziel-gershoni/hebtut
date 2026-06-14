@@ -152,22 +152,51 @@ export async function deleteLibraryMedia(path: string): Promise<void> {
 }
 
 /** List every object in a bucket (paginated). Read-only — used by the orphan
- * audit. Throws R2NotConfiguredError when the bucket isn't configured. */
+ * audit. `lastModified` lets the audit skip very recent objects (an in-flight
+ * upload not yet committed to the DB). Throws R2NotConfiguredError when the
+ * bucket isn't configured. */
 export async function listAllR2Objects(
   bucket: string,
-): Promise<{ key: string; size: number }[]> {
+): Promise<{ key: string; size: number; lastModified: Date | null }[]> {
   if (!bucket) throw new R2NotConfiguredError("R2 bucket not configured");
   const client = r2Client();
-  const out: { key: string; size: number }[] = [];
+  const out: { key: string; size: number; lastModified: Date | null }[] = [];
   let token: string | undefined;
   do {
     const resp = await client.send(
       new ListObjectsV2Command({ Bucket: bucket, ContinuationToken: token, MaxKeys: 1000 }),
     );
     for (const o of resp.Contents ?? []) {
-      if (o.Key) out.push({ key: o.Key, size: o.Size ?? 0 });
+      if (o.Key) out.push({ key: o.Key, size: o.Size ?? 0, lastModified: o.LastModified ?? null });
     }
     token = resp.IsTruncated ? resp.NextContinuationToken : undefined;
   } while (token);
   return out;
+}
+
+/** Delete many objects from a private R2 bucket, with bounded concurrency.
+ * Reuses the single-object DeleteObjectCommand (already proven against R2) per
+ * key rather than the batch DeleteObjects API, to sidestep R2's S3 checksum
+ * quirks on a destructive call. Returns per-key outcome counts. Throws
+ * R2NotConfiguredError when the bucket isn't configured. */
+export async function deleteManyFromR2(
+  bucket: string,
+  keys: string[],
+): Promise<{ deleted: number; errors: { key: string; message: string }[] }> {
+  if (!bucket) throw new R2NotConfiguredError("R2 bucket not configured");
+  const client = r2Client();
+  let deleted = 0;
+  const errors: { key: string; message: string }[] = [];
+  const CONCURRENCY = 10;
+  for (let i = 0; i < keys.length; i += CONCURRENCY) {
+    const chunk = keys.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(
+      chunk.map((Key) => client.send(new DeleteObjectCommand({ Bucket: bucket, Key }))),
+    );
+    results.forEach((r, j) => {
+      if (r.status === "fulfilled") deleted++;
+      else errors.push({ key: chunk[j] ?? "?", message: (r.reason as Error).message });
+    });
+  }
+  return { deleted, errors };
 }
