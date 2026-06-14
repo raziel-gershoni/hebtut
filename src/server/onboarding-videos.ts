@@ -187,6 +187,10 @@ export async function sendOneClip(args: {
   if (row.tg_file_id) {
     videoNoteArg = row.tg_file_id;
   } else {
+    // Assumes the object is in R2 (Phase A backfill complete; new uploads insert
+    // r2_migrated=true). A stray un-migrated clip would presign fine but TG's
+    // fetch would 404 → caught below → text fallback for the student (no hard
+    // break, no tg_file_id cached so it retries next time).
     let signedUrl: string;
     try {
       signedUrl = await signedLibraryMediaUrl(row.storage_path);
