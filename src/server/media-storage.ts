@@ -1,4 +1,9 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { serverEnv } from "@/lib/env";
 
@@ -131,4 +136,16 @@ export async function uploadLibraryMedia(
 /** Short-lived presigned GET URL for media-library objects — direct R2, no proxy. */
 export async function signedLibraryMediaUrl(path: string): Promise<string> {
   return signedR2GetUrl(serverEnv.R2_MEDIA_LIBRARY_BUCKET ?? "", path);
+}
+
+/** Delete an object from a private R2 bucket. Throws R2NotConfiguredError when
+ * the bucket isn't configured. */
+export async function deleteFromR2(bucket: string, path: string): Promise<void> {
+  if (!bucket) throw new R2NotConfiguredError("R2 bucket not configured");
+  await r2Client().send(new DeleteObjectCommand({ Bucket: bucket, Key: path }));
+}
+
+/** Delete a media-library object from R2 (called when a library item is removed). */
+export async function deleteLibraryMedia(path: string): Promise<void> {
+  return deleteFromR2(serverEnv.R2_MEDIA_LIBRARY_BUCKET ?? "", path);
 }

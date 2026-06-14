@@ -6,6 +6,7 @@ import { noStoreHeaders } from "@/lib/no-cache";
 import { readJsonBody } from "@/lib/http";
 import { recordAudit } from "@/server/audit";
 import { MAX_TITLE_LEN } from "@/lib/media";
+import { deleteLibraryMedia } from "@/server/media-storage";
 import type { Database } from "@/types/database";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -139,6 +140,19 @@ export async function DELETE(
   if (owned.kind === "error") return owned.response;
   const { me, row, sb } = owned;
 
+  // Remove the object from R2 (the live backend). Best-effort: a storage hiccup
+  // shouldn't block the row deletion — a leftover object is recoverable cleanup,
+  // not a correctness issue.
+  try {
+    await deleteLibraryMedia(row.storage_path);
+  } catch (e) {
+    console.warn("[media.delete] R2 object remove failed", {
+      storage_path: row.storage_path,
+      reason: (e as Error).message,
+    });
+  }
+  // Also clear the migration soak-copy from the old Supabase bucket (no-op once
+  // that bucket is deleted).
   await sb.storage.from(BUCKET).remove([row.storage_path]);
   const { error } = await sb.from("media_library").delete().eq("id", id);
   if (error) return new Response(error.message, { status: 500, headers: noStoreHeaders });
