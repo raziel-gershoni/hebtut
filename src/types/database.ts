@@ -652,6 +652,7 @@ export interface Database {
           tg_file_unique_id: string | null;
           uploaded_by_user_id: number;
           uploaded_at: string;
+          r2_migrated: boolean;
         };
         Insert: {
           id?: number;
@@ -666,6 +667,7 @@ export interface Database {
           tg_file_unique_id?: string | null;
           uploaded_by_user_id: number;
           uploaded_at?: string;
+          r2_migrated?: boolean;
         };
         Update: Partial<Database["public"]["Tables"]["onboarding_videos"]["Insert"]>;
         Relationships: [];
