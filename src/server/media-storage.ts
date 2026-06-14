@@ -3,6 +3,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { serverEnv } from "@/lib/env";
@@ -148,4 +149,25 @@ export async function deleteFromR2(bucket: string, path: string): Promise<void> 
 /** Delete a media-library object from R2 (called when a library item is removed). */
 export async function deleteLibraryMedia(path: string): Promise<void> {
   return deleteFromR2(serverEnv.R2_MEDIA_LIBRARY_BUCKET ?? "", path);
+}
+
+/** List every object in a bucket (paginated). Read-only — used by the orphan
+ * audit. Throws R2NotConfiguredError when the bucket isn't configured. */
+export async function listAllR2Objects(
+  bucket: string,
+): Promise<{ key: string; size: number }[]> {
+  if (!bucket) throw new R2NotConfiguredError("R2 bucket not configured");
+  const client = r2Client();
+  const out: { key: string; size: number }[] = [];
+  let token: string | undefined;
+  do {
+    const resp = await client.send(
+      new ListObjectsV2Command({ Bucket: bucket, ContinuationToken: token, MaxKeys: 1000 }),
+    );
+    for (const o of resp.Contents ?? []) {
+      if (o.Key) out.push({ key: o.Key, size: o.Size ?? 0 });
+    }
+    token = resp.IsTruncated ? resp.NextContinuationToken : undefined;
+  } while (token);
+  return out;
 }
